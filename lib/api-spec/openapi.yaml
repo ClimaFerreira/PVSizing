@@ -3,13 +3,32 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PV Sizing Tool API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: customers
+    description: Customer management
+  - name: panels
+    description: Solar panel equipment
+  - name: inverters
+    description: Inverter equipment
+  - name: batteries
+    description: Battery equipment
+  - name: systems
+    description: PV system configurations
+  - name: pvgis
+    description: PVGIS solar production data
+  - name: financial
+    description: Financial calculations
+  - name: compatibility
+    description: System compatibility checks
+  - name: dashboard
+    description: Dashboard summaries
+
 paths:
   /healthz:
     get:
@@ -24,6 +43,572 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # --- Customers ---
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [customers]
+      summary: List all customers
+      responses:
+        "200":
+          description: List of customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerBody"
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          description: Validation error
+
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      summary: Get a customer by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateCustomer
+      tags: [customers]
+      summary: Update a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerBody"
+      responses:
+        "200":
+          description: Updated customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteCustomer
+      tags: [customers]
+      summary: Delete a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # --- Solar Panels ---
+  /panels:
+    get:
+      operationId: listPanels
+      tags: [panels]
+      summary: List all solar panels
+      responses:
+        "200":
+          description: List of panels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SolarPanel"
+    post:
+      operationId: createPanel
+      tags: [panels]
+      summary: Create a solar panel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSolarPanelBody"
+      responses:
+        "201":
+          description: Panel created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SolarPanel"
+        "400":
+          description: Validation error
+
+  /panels/{id}:
+    get:
+      operationId: getPanel
+      tags: [panels]
+      summary: Get a solar panel by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Solar panel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SolarPanel"
+        "404":
+          description: Not found
+    patch:
+      operationId: updatePanel
+      tags: [panels]
+      summary: Update a solar panel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSolarPanelBody"
+      responses:
+        "200":
+          description: Updated panel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SolarPanel"
+        "404":
+          description: Not found
+    delete:
+      operationId: deletePanel
+      tags: [panels]
+      summary: Delete a solar panel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # --- Inverters ---
+  /inverters:
+    get:
+      operationId: listInverters
+      tags: [inverters]
+      summary: List all inverters
+      responses:
+        "200":
+          description: List of inverters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Inverter"
+    post:
+      operationId: createInverter
+      tags: [inverters]
+      summary: Create an inverter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInverterBody"
+      responses:
+        "201":
+          description: Inverter created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inverter"
+        "400":
+          description: Validation error
+
+  /inverters/{id}:
+    get:
+      operationId: getInverter
+      tags: [inverters]
+      summary: Get an inverter by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inverter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inverter"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateInverter
+      tags: [inverters]
+      summary: Update an inverter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInverterBody"
+      responses:
+        "200":
+          description: Updated inverter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inverter"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteInverter
+      tags: [inverters]
+      summary: Delete an inverter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # --- Batteries ---
+  /batteries:
+    get:
+      operationId: listBatteries
+      tags: [batteries]
+      summary: List all batteries
+      responses:
+        "200":
+          description: List of batteries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Battery"
+    post:
+      operationId: createBattery
+      tags: [batteries]
+      summary: Create a battery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBatteryBody"
+      responses:
+        "201":
+          description: Battery created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Battery"
+        "400":
+          description: Validation error
+
+  /batteries/{id}:
+    get:
+      operationId: getBattery
+      tags: [batteries]
+      summary: Get a battery by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Battery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Battery"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateBattery
+      tags: [batteries]
+      summary: Update a battery
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBatteryBody"
+      responses:
+        "200":
+          description: Updated battery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Battery"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteBattery
+      tags: [batteries]
+      summary: Delete a battery
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # --- PV Systems ---
+  /systems:
+    get:
+      operationId: listSystems
+      tags: [systems]
+      summary: List all PV system configurations
+      responses:
+        "200":
+          description: List of systems
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PvSystem"
+    post:
+      operationId: createSystem
+      tags: [systems]
+      summary: Create a PV system configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePvSystemBody"
+      responses:
+        "201":
+          description: System created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PvSystem"
+        "400":
+          description: Validation error
+
+  /systems/{id}:
+    get:
+      operationId: getSystem
+      tags: [systems]
+      summary: Get a PV system by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: PV system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PvSystem"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSystem
+      tags: [systems]
+      summary: Update a PV system
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePvSystemBody"
+      responses:
+        "200":
+          description: Updated system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PvSystem"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSystem
+      tags: [systems]
+      summary: Delete a PV system
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /systems/{id}/compatibility:
+    get:
+      operationId: checkSystemCompatibility
+      tags: [compatibility]
+      summary: Check system component compatibility
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Compatibility result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompatibilityResult"
+        "404":
+          description: Not found
+
+  /systems/{id}/pvgis:
+    get:
+      operationId: getSystemPvgis
+      tags: [pvgis]
+      summary: Get PVGIS solar production data for a system
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: PVGIS production data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PvgisResult"
+        "404":
+          description: Not found
+        "502":
+          description: PVGIS API error
+
+  /systems/{id}/financial:
+    post:
+      operationId: calculateFinancial
+      tags: [financial]
+      summary: Calculate financial analysis for a system
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinancialInputBody"
+      responses:
+        "200":
+          description: Financial result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialResult"
+        "404":
+          description: Not found
+
+  # --- Dashboard / summary ---
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +619,592 @@ components:
       required:
         - status
 
+    # --- Customer ---
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        morada:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        tipoCliente:
+          type: string
+          enum: [Residencial, Comercial, Industrial]
+        precoEletricidade:
+          type: number
+        potenciaContratada:
+          type: number
+        perfilConsumo:
+          type: string
+          enum: [Diurno, Noturno, Personalizado]
+        consumoMensal:
+          type: ["number", "null"]
+        consumoAnual:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - nome
+        - morada
+        - latitude
+        - longitude
+        - tipoCliente
+        - precoEletricidade
+        - potenciaContratada
+        - perfilConsumo
+        - consumoMensal
+        - consumoAnual
+        - createdAt
+
+    CreateCustomerBody:
+      type: object
+      properties:
+        nome:
+          type: string
+        morada:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        tipoCliente:
+          type: string
+          enum: [Residencial, Comercial, Industrial]
+        precoEletricidade:
+          type: number
+        potenciaContratada:
+          type: number
+        perfilConsumo:
+          type: string
+          enum: [Diurno, Noturno, Personalizado]
+        consumoMensal:
+          type: ["number", "null"]
+        consumoAnual:
+          type: ["number", "null"]
+      required:
+        - nome
+        - morada
+        - latitude
+        - longitude
+        - tipoCliente
+        - precoEletricidade
+        - potenciaContratada
+        - perfilConsumo
+
+    UpdateCustomerBody:
+      type: object
+      properties:
+        nome:
+          type: string
+        morada:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        tipoCliente:
+          type: string
+          enum: [Residencial, Comercial, Industrial]
+        precoEletricidade:
+          type: number
+        potenciaContratada:
+          type: number
+        perfilConsumo:
+          type: string
+          enum: [Diurno, Noturno, Personalizado]
+        consumoMensal:
+          type: ["number", "null"]
+        consumoAnual:
+          type: ["number", "null"]
+
+    # --- Solar Panel ---
+    SolarPanel:
+      type: object
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        fabricante:
+          type: string
+        potencia:
+          type: number
+        voc:
+          type: number
+        vmp:
+          type: number
+        isc:
+          type: number
+        imp:
+          type: number
+        coeficienteTemperatura:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - nome
+        - fabricante
+        - potencia
+        - voc
+        - vmp
+        - isc
+        - imp
+        - coeficienteTemperatura
+        - createdAt
+
+    CreateSolarPanelBody:
+      type: object
+      properties:
+        nome:
+          type: string
+        fabricante:
+          type: string
+        potencia:
+          type: number
+        voc:
+          type: number
+        vmp:
+          type: number
+        isc:
+          type: number
+        imp:
+          type: number
+        coeficienteTemperatura:
+          type: number
+      required:
+        - nome
+        - fabricante
+        - potencia
+        - voc
+        - vmp
+        - isc
+        - imp
+        - coeficienteTemperatura
+
+    UpdateSolarPanelBody:
+      type: object
+      properties:
+        nome:
+          type: string
+        fabricante:
+          type: string
+        potencia:
+          type: number
+        voc:
+          type: number
+        vmp:
+          type: number
+        isc:
+          type: number
+        imp:
+          type: number
+        coeficienteTemperatura:
+          type: number
+
+    # --- Inverter ---
+    Inverter:
+      type: object
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        fabricante:
+          type: string
+        potenciaAc:
+          type: number
+        potenciaDcMax:
+          type: number
+        mpptMin:
+          type: number
+        mpptMax:
+          type: number
+        corrMaxMppt:
+          type: number
+        numMppt:
+          type: integer
+        stringsPorMppt:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - nome
+        - fabricante
+        - potenciaAc
+        - potenciaDcMax
+        - mpptMin
+        - mpptMax
+        - corrMaxMppt
+        - numMppt
+        - stringsPorMppt
+        - createdAt
+
+    CreateInverterBody:
+      type: object
+      properties:
+        nome:
+          type: string
+        fabricante:
+          type: string
+        potenciaAc:
+          type: number
+        potenciaDcMax:
+          type: number
+        mpptMin:
+          type: number
+        mpptMax:
+          type: number
+        corrMaxMppt:
+          type: number
+        numMppt:
+          type: integer
+        stringsPorMppt:
+          type: integer
+      required:
+        - nome
+        - fabricante
+        - potenciaAc
+        - potenciaDcMax
+        - mpptMin
+        - mpptMax
+        - corrMaxMppt
+        - numMppt
+        - stringsPorMppt
+
+    UpdateInverterBody:
+      type: object
+      properties:
+        nome:
+          type: string
+        fabricante:
+          type: string
+        potenciaAc:
+          type: number
+        potenciaDcMax:
+          type: number
+        mpptMin:
+          type: number
+        mpptMax:
+          type: number
+        corrMaxMppt:
+          type: number
+        numMppt:
+          type: integer
+        stringsPorMppt:
+          type: integer
+
+    # --- Battery ---
+    Battery:
+      type: object
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        fabricante:
+          type: string
+        capacidade:
+          type: number
+        tensaoNominal:
+          type: number
+        potenciaCarga:
+          type: number
+        potenciaDescarga:
+          type: number
+        profundidadeDescarga:
+          type: number
+        compatibilidade:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - nome
+        - fabricante
+        - capacidade
+        - tensaoNominal
+        - potenciaCarga
+        - potenciaDescarga
+        - profundidadeDescarga
+        - compatibilidade
+        - createdAt
+
+    CreateBatteryBody:
+      type: object
+      properties:
+        nome:
+          type: string
+        fabricante:
+          type: string
+        capacidade:
+          type: number
+        tensaoNominal:
+          type: number
+        potenciaCarga:
+          type: number
+        potenciaDescarga:
+          type: number
+        profundidadeDescarga:
+          type: number
+        compatibilidade:
+          type: ["string", "null"]
+      required:
+        - nome
+        - fabricante
+        - capacidade
+        - tensaoNominal
+        - potenciaCarga
+        - potenciaDescarga
+        - profundidadeDescarga
+
+    UpdateBatteryBody:
+      type: object
+      properties:
+        nome:
+          type: string
+        fabricante:
+          type: string
+        capacidade:
+          type: number
+        tensaoNominal:
+          type: number
+        potenciaCarga:
+          type: number
+        potenciaDescarga:
+          type: number
+        profundidadeDescarga:
+          type: number
+        compatibilidade:
+          type: ["string", "null"]
+
+    # --- PV System ---
+    PvSystem:
+      type: object
+      properties:
+        id:
+          type: integer
+        customerId:
+          type: integer
+        panelId:
+          type: integer
+        inverterId:
+          type: integer
+        batteryId:
+          type: ["integer", "null"]
+        numPaineis:
+          type: integer
+        paineisporstring:
+          type: integer
+        numStrings:
+          type: integer
+        inclinacao:
+          type: number
+        azimute:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - customerId
+        - panelId
+        - inverterId
+        - batteryId
+        - numPaineis
+        - paineisporstring
+        - numStrings
+        - inclinacao
+        - azimute
+        - createdAt
+
+    CreatePvSystemBody:
+      type: object
+      properties:
+        customerId:
+          type: integer
+        panelId:
+          type: integer
+        inverterId:
+          type: integer
+        batteryId:
+          type: ["integer", "null"]
+        numPaineis:
+          type: integer
+        paineisporstring:
+          type: integer
+        numStrings:
+          type: integer
+        inclinacao:
+          type: number
+        azimute:
+          type: number
+      required:
+        - customerId
+        - panelId
+        - inverterId
+        - numPaineis
+        - paineisporstring
+        - numStrings
+        - inclinacao
+        - azimute
+
+    UpdatePvSystemBody:
+      type: object
+      properties:
+        customerId:
+          type: integer
+        panelId:
+          type: integer
+        inverterId:
+          type: integer
+        batteryId:
+          type: ["integer", "null"]
+        numPaineis:
+          type: integer
+        paineisporstring:
+          type: integer
+        numStrings:
+          type: integer
+        inclinacao:
+          type: number
+        azimute:
+          type: number
+
+    # --- Compatibility ---
+    CompatibilityResult:
+      type: object
+      properties:
+        estado:
+          type: string
+          enum: [Válido, Inválido]
+        erros:
+          type: array
+          items:
+            type: string
+        avisos:
+          type: array
+          items:
+            type: string
+      required:
+        - estado
+        - erros
+        - avisos
+
+    # --- PVGIS ---
+    PvgisResult:
+      type: object
+      properties:
+        producaoAnual:
+          type: number
+        producaoEspecifica:
+          type: number
+        producaoMensal:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthlyProduction"
+      required:
+        - producaoAnual
+        - producaoEspecifica
+        - producaoMensal
+
+    MonthlyProduction:
+      type: object
+      properties:
+        mes:
+          type: integer
+        nomeMes:
+          type: string
+        producao:
+          type: number
+      required:
+        - mes
+        - nomeMes
+        - producao
+
+    # --- Financial ---
+    FinancialInputBody:
+      type: object
+      properties:
+        custodoSistema:
+          type: number
+        percentagemAutoconsumo:
+          type: number
+        precoVendaExcedente:
+          type: number
+      required:
+        - custodoSistema
+        - percentagemAutoconsumo
+        - precoVendaExcedente
+
+    FinancialResult:
+      type: object
+      properties:
+        producaoAnual:
+          type: number
+        autoconsumo:
+          type: number
+        excedente:
+          type: number
+        poupancaAnual:
+          type: number
+        receitaExcedente:
+          type: number
+        payback:
+          type: number
+      required:
+        - producaoAnual
+        - autoconsumo
+        - excedente
+        - poupancaAnual
+        - receitaExcedente
+        - payback
+
+    # --- Dashboard ---
+    DashboardSummary:
+      type: object
+      properties:
+        totalClientes:
+          type: integer
+        totalSistemas:
+          type: integer
+        totalPaineis:
+          type: integer
+        totalInversores:
+          type: integer
+        totalBaterias:
+          type: integer
+        clientesPorTipo:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByLabel"
+      required:
+        - totalClientes
+        - totalSistemas
+        - totalPaineis
+        - totalInversores
+        - totalBaterias
+        - clientesPorTipo
+
+    CountByLabel:
+      type: object
+      properties:
+        label:
+          type: string
+        count:
+          type: integer
+      required:
+        - label
+        - count

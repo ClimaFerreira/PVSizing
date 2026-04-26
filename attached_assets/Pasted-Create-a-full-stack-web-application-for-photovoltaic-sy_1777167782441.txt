@@ -1,0 +1,237 @@
+Create a full-stack web application for photovoltaic system sizing and financial analysis.
+
+Tech Stack
+
+- Frontend: React + Tailwind CSS
+- Backend: Python + FastAPI
+- Database: PostgreSQL
+- Use clean modular architecture
+- REST API structure
+- Use environment variables
+
+---
+
+UI Language
+
+All user interface (labels, forms, buttons, messages) must be in Portuguese (Portugal).
+
+---
+
+Core Features
+
+1. Customer Management (Gestão de Clientes)
+
+Create CRUD for customers with fields (in Portuguese UI):
+
+- Nome
+- Morada
+- Latitude
+- Longitude
+- Tipo de cliente (Residencial, Comercial, Industrial)
+- Preço da eletricidade (€/kWh)
+- Potência contratada (kVA)
+- Perfil de consumo (Diurno, Noturno, Personalizado)
+
+---
+
+2. Electricity Consumption (Consumo)
+
+Allow:
+
+- Manual input:
+  
+  - Consumo mensal (kWh)
+  - Consumo anual (kWh)
+
+- File upload:
+  
+  - Upload de fatura (PDF ou imagem)
+
+Backend service:
+
+- Extract:
+  - Consumo total
+  - Período de faturação
+  - Potência contratada
+  - Preço da energia
+
+Keep parsing simple for MVP.
+
+---
+
+3. Equipment Database (Base de Dados de Equipamentos)
+
+Painéis Solares
+
+- Nome
+- Fabricante
+- Potência (Wp)
+- Voc, Vmp
+- Isc, Imp
+- Coeficiente de temperatura
+
+Inversores
+
+- Nome
+- Fabricante
+- Potência AC
+- Potência DC máxima
+- Intervalo MPPT (mín/max)
+- Corrente máxima MPPT
+- Número de MPPT
+- Strings por MPPT
+
+Baterias
+
+- Nome
+- Fabricante
+- Capacidade (kWh)
+- Tensão nominal
+- Potência carga/descarga
+- Profundidade de descarga
+- Compatibilidade
+
+Provide full CRUD.
+
+---
+
+4. PV System Configuration (Configuração do Sistema)
+
+Allow user to:
+
+- Selecionar cliente
+- Selecionar painel, inversor e bateria
+- Definir:
+  - Número de painéis
+  - Painéis por string
+  - Número de strings
+  - Inclinação (graus)
+  - Azimute (graus)
+
+---
+
+5. Compatibility Engine (Compatibilidade)
+
+Backend service must validate:
+
+- String voltage within MPPT range
+- Voc under inverter max voltage
+- Current under MPPT limits
+- DC/AC ratio acceptable
+- Basic battery compatibility
+
+Return:
+
+- Estado: "Válido" ou "Inválido"
+- Lista de erros
+- Lista de avisos
+
+---
+
+6. PVGIS Integration
+
+Create backend service to call PVGIS API.
+
+Inputs:
+
+- Latitude
+- Longitude
+- System size (kWp)
+- Tilt
+- Azimuth
+
+Outputs:
+
+- Produção anual (kWh)
+- Produção mensal
+- Produção específica (kWh/kWp)
+
+---
+
+7. Financial Module (Cálculo Financeiro)
+
+Calculate:
+
+- Produção anual
+
+- Autoconsumo (usar percentagem simples configurável)
+
+- Excedente
+
+- Poupança anual:
+  savings = self_consumption * electricity_price
+
+- Payback:
+  payback = system_cost / savings
+
+Inputs:
+
+- Custo do sistema
+- Preço de venda do excedente
+
+---
+
+8. Dashboard (Resultados)
+
+Display:
+
+- Resumo do sistema
+- Produção anual
+- Gráfico de produção mensal
+- Poupança anual
+- Payback
+
+---
+
+UI Requirements
+
+- Clean modern UI
+- Use cards and tables
+- Form validation
+- Responsive layout
+- Charts (monthly production)
+
+---
+
+Backend Structure
+
+- /models
+- /schemas
+- /routes
+- /services
+  - bill_parser.py
+  - pvgis_service.py
+  - compatibility_service.py
+  - financial_service.py
+
+---
+
+Frontend Structure
+
+- /components
+- /pages
+- /services
+
+---
+
+Development Guidelines
+
+- Keep code modular and reusable
+- Add comments in English
+- Keep business logic in backend services
+- Focus on MVP first
+- Avoid overengineering
+
+---
+
+Final Goal
+
+The app must allow a user to:
+
+1. Criar cliente
+2. Inserir consumo
+3. Selecionar equipamentos
+4. Configurar sistema fotovoltaico
+5. Validar compatibilidade
+6. Calcular produção com PVGIS
+7. Ver poupança e payback

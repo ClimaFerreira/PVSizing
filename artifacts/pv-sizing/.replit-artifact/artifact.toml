@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "PV Sizing Tool"
+version = "1.0.0"
+id = "artifacts/pv-sizing"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21603
+
+[services.development]
+run = "pnpm --filter @workspace/pv-sizing run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pv-sizing", "run", "build" ]
+publicDir = "artifacts/pv-sizing/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21603"
+BASE_PATH = "/"
