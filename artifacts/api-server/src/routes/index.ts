@@ -9,6 +9,8 @@ import compatibilityRouter from "./compatibility";
 import pvgisRouter from "./pvgis";
 import financialRouter from "./financial";
 import dashboardRouter from "./dashboard";
+import stringSizingRouter from "./string-sizing";
+import locationsRouter from "./locations";
 
 const router: IRouter = Router();
 
@@ -22,5 +24,7 @@ router.use(compatibilityRouter);
 router.use(pvgisRouter);
 router.use(financialRouter);
 router.use(dashboardRouter);
+router.use(stringSizingRouter);
+router.use(locationsRouter);
 
 export default router;

@@ -5,17 +5,14 @@
  * PV Sizing Tool API
  * OpenAPI spec version: 0.1.0
  */
+import type { BatteryTecnologia } from "./batteryTecnologia";
 
 export interface Battery {
   id: number;
   nome: string;
   fabricante: string;
   capacidade: number;
-  tensaoNominal: number;
-  potenciaCarga: number;
-  potenciaDescarga: number;
-  profundidadeDescarga: number;
-  /** @nullable */
-  compatibilidade: string | null;
+  tensao: number;
+  tecnologia: BatteryTecnologia;
   createdAt: Date;
 }

@@ -11,4 +11,9 @@ export interface PvgisResult {
   producaoAnual: number;
   producaoEspecifica: number;
   producaoMensal: MonthlyProduction[];
+  /** @nullable */
+  inclinacaoOtima: number | null;
+  /** @nullable */
+  orientacaoOtima: number | null;
+  temDuasOrientacoes: boolean;
 }

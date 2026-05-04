@@ -6,11 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./anoCashFlow";
 export * from "./battery";
+export * from "./batteryTecnologia";
 export * from "./compatibilityResult";
 export * from "./compatibilityResultEstado";
 export * from "./countByLabel";
 export * from "./createBatteryBody";
+export * from "./createBatteryBodyTecnologia";
 export * from "./createCustomerBody";
 export * from "./createCustomerBodyPerfilConsumo";
 export * from "./createCustomerBodyTipoCliente";
@@ -22,14 +25,22 @@ export * from "./customerPerfilConsumo";
 export * from "./customerTipoCliente";
 export * from "./dashboardSummary";
 export * from "./financialInputBody";
+export * from "./financialInputBodyTipoTarifa";
 export * from "./financialResult";
+export * from "./getSystemPvgisParams";
 export * from "./healthStatus";
 export * from "./inverter";
+export * from "./location";
 export * from "./monthlyProduction";
 export * from "./pvgisResult";
 export * from "./pvSystem";
 export * from "./solarPanel";
+export * from "./stringSizingBody";
+export * from "./stringSizingResult";
+export * from "./stringThermalRow";
+export * from "./stringThermalRowEstado";
 export * from "./updateBatteryBody";
+export * from "./updateBatteryBodyTecnologia";
 export * from "./updateCustomerBody";
 export * from "./updateCustomerBodyPerfilConsumo";
 export * from "./updateCustomerBodyTipoCliente";

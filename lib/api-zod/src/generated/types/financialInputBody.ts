@@ -5,9 +5,61 @@
  * PV Sizing Tool API
  * OpenAPI spec version: 0.1.0
  */
+import type { FinancialInputBodyTipoTarifa } from "./financialInputBodyTipoTarifa";
 
 export interface FinancialInputBody {
-  custodoSistema: number;
-  percentagemAutoconsumo: number;
+  /** Total system cost in EUR */
+  custoSistema: number;
+  /** Electricity tariff type */
+  tipoTarifa: FinancialInputBodyTipoTarifa;
+  /** Daily consumption in kWh */
+  consumoDiario: number;
+  /** Percentage of consumption during solar hours (0-100) */
+  percHorasSol: number;
+  /** Simple tariff price EUR/kWh */
+  precoSimples: number;
+  /** Off-peak price EUR/kWh (bi-horaria) */
+  precoForaVazio?: number;
+  /** Off-peak (vazio) price EUR/kWh */
+  precoVazio?: number;
+  /** Mid-peak (cheia) price EUR/kWh */
+  precoCheia?: number;
+  /** Peak (ponta) price EUR/kWh */
+  precoPonta?: number;
+  /** Super off-peak price EUR/kWh (tetra-horaria) */
+  precoSuperVazio?: number;
+  /** Percentage of consumption in ponta period (0-100) */
+  percPonta?: number;
+  /** Percentage of consumption in cheia period (0-100) */
+  percCheia?: number;
+  /** Percentage of consumption in vazio period (0-100) */
+  percVazio?: number;
+  /** Percentage of consumption in super-vazio period (0-100) */
+  percSuperVazio?: number;
+  /** Surplus energy sale price EUR/kWh (OMIE) */
   precoVendaExcedente: number;
+  /**
+   * Battery capacity in kWh (0 = no battery)
+   * @nullable
+   */
+  capacidadeBateria?: number | null;
+  /** System lifetime in years (default 25) */
+  vidaUtil?: number;
+  /** Annual energy price increase percentage (default 2) */
+  escaladaEnergia?: number;
+  /**
+   * Second MPPT tilt angle (optional dual orientation)
+   * @nullable
+   */
+  inclinacao2?: number | null;
+  /**
+   * Second MPPT azimuth in degrees from South (optional)
+   * @nullable
+   */
+  azimute2?: number | null;
+  /**
+   * Number of panels on second MPPT (optional)
+   * @nullable
+   */
+  numPaineis2?: number | null;
 }

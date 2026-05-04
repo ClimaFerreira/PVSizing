@@ -28,11 +28,15 @@ import type {
   DashboardSummary,
   FinancialInputBody,
   FinancialResult,
+  GetSystemPvgisParams,
   HealthStatus,
   Inverter,
+  Location,
   PvSystem,
   PvgisResult,
   SolarPanel,
+  StringSizingBody,
+  StringSizingResult,
   UpdateBatteryBody,
   UpdateCustomerBody,
   UpdateInverterBody,
@@ -2308,22 +2312,41 @@ export function useCheckSystemCompatibility<
 /**
  * @summary Get PVGIS solar production data for a system
  */
-export const getGetSystemPvgisUrl = (id: number) => {
-  return `/api/systems/${id}/pvgis`;
+export const getGetSystemPvgisUrl = (
+  id: number,
+  params?: GetSystemPvgisParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/systems/${id}/pvgis?${stringifiedParams}`
+    : `/api/systems/${id}/pvgis`;
 };
 
 export const getSystemPvgis = async (
   id: number,
+  params?: GetSystemPvgisParams,
   options?: RequestInit,
 ): Promise<PvgisResult> => {
-  return customFetch<PvgisResult>(getGetSystemPvgisUrl(id), {
+  return customFetch<PvgisResult>(getGetSystemPvgisUrl(id, params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetSystemPvgisQueryKey = (id: number) => {
-  return [`/api/systems/${id}/pvgis`] as const;
+export const getGetSystemPvgisQueryKey = (
+  id: number,
+  params?: GetSystemPvgisParams,
+) => {
+  return [`/api/systems/${id}/pvgis`, ...(params ? [params] : [])] as const;
 };
 
 export const getGetSystemPvgisQueryOptions = <
@@ -2331,6 +2354,7 @@ export const getGetSystemPvgisQueryOptions = <
   TError = ErrorType<void>,
 >(
   id: number,
+  params?: GetSystemPvgisParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getSystemPvgis>>,
@@ -2342,11 +2366,12 @@ export const getGetSystemPvgisQueryOptions = <
 ) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetSystemPvgisQueryKey(id);
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSystemPvgisQueryKey(id, params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getSystemPvgis>>> = ({
     signal,
-  }) => getSystemPvgis(id, { signal, ...requestOptions });
+  }) => getSystemPvgis(id, params, { signal, ...requestOptions });
 
   return {
     queryKey,
@@ -2374,6 +2399,7 @@ export function useGetSystemPvgis<
   TError = ErrorType<void>,
 >(
   id: number,
+  params?: GetSystemPvgisParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getSystemPvgis>>,
@@ -2383,7 +2409,7 @@ export function useGetSystemPvgis<
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetSystemPvgisQueryOptions(id, options);
+  const queryOptions = getGetSystemPvgisQueryOptions(id, params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -2393,7 +2419,7 @@ export function useGetSystemPvgis<
 }
 
 /**
- * @summary Calculate financial analysis for a system
+ * @summary Calculate full 25-year financial analysis for a system
  */
 export const getCalculateFinancialUrl = (id: number) => {
   return `/api/systems/${id}/financial`;
@@ -2457,7 +2483,7 @@ export type CalculateFinancialMutationBody = BodyType<FinancialInputBody>;
 export type CalculateFinancialMutationError = ErrorType<void>;
 
 /**
- * @summary Calculate financial analysis for a system
+ * @summary Calculate full 25-year financial analysis for a system
  */
 export const useCalculateFinancial = <
   TError = ErrorType<void>,
@@ -2478,6 +2504,167 @@ export const useCalculateFinancial = <
 > => {
   return useMutation(getCalculateFinancialMutationOptions(options));
 };
+
+/**
+ * @summary Calculate string sizing with thermal analysis
+ */
+export const getCalculateStringSizingUrl = () => {
+  return `/api/tools/string-sizing`;
+};
+
+export const calculateStringSizing = async (
+  stringSizingBody: StringSizingBody,
+  options?: RequestInit,
+): Promise<StringSizingResult> => {
+  return customFetch<StringSizingResult>(getCalculateStringSizingUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(stringSizingBody),
+  });
+};
+
+export const getCalculateStringSizingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof calculateStringSizing>>,
+    TError,
+    { data: BodyType<StringSizingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof calculateStringSizing>>,
+  TError,
+  { data: BodyType<StringSizingBody> },
+  TContext
+> => {
+  const mutationKey = ["calculateStringSizing"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof calculateStringSizing>>,
+    { data: BodyType<StringSizingBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return calculateStringSizing(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CalculateStringSizingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof calculateStringSizing>>
+>;
+export type CalculateStringSizingMutationBody = BodyType<StringSizingBody>;
+export type CalculateStringSizingMutationError = ErrorType<void>;
+
+/**
+ * @summary Calculate string sizing with thermal analysis
+ */
+export const useCalculateStringSizing = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof calculateStringSizing>>,
+    TError,
+    { data: BodyType<StringSizingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof calculateStringSizing>>,
+  TError,
+  { data: BodyType<StringSizingBody> },
+  TContext
+> => {
+  return useMutation(getCalculateStringSizingMutationOptions(options));
+};
+
+/**
+ * @summary List Portuguese locations with coordinates
+ */
+export const getListLocationsUrl = () => {
+  return `/api/tools/locations`;
+};
+
+export const listLocations = async (
+  options?: RequestInit,
+): Promise<Location[]> => {
+  return customFetch<Location[]>(getListLocationsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListLocationsQueryKey = () => {
+  return [`/api/tools/locations`] as const;
+};
+
+export const getListLocationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listLocations>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listLocations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListLocationsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listLocations>>> = ({
+    signal,
+  }) => listLocations({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listLocations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListLocationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listLocations>>
+>;
+export type ListLocationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List Portuguese locations with coordinates
+ */
+
+export function useListLocations<
+  TData = Awaited<ReturnType<typeof listLocations>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listLocations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListLocationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get dashboard summary stats

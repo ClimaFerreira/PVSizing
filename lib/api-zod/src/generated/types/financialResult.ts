@@ -5,12 +5,25 @@
  * PV Sizing Tool API
  * OpenAPI spec version: 0.1.0
  */
+import type { AnoCashFlow } from "./anoCashFlow";
+import type { MonthlyProduction } from "./monthlyProduction";
 
 export interface FinancialResult {
   producaoAnual: number;
+  consumoAnual: number;
+  potenciaPico: number;
   autoconsumo: number;
   excedente: number;
+  taxaAutoconsumo: number;
+  taxaCobertura: number;
   poupancaAnual: number;
   receitaExcedente: number;
+  beneficioTotal: number;
   payback: number;
+  tir: number;
+  lucroTotal: number;
+  emissoesCO2Evitadas: number;
+  arvoresEquivalentes: number;
+  cashFlowAnual: AnoCashFlow[];
+  producaoMensal: MonthlyProduction[];
 }

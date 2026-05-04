@@ -305,11 +305,8 @@ export const ListBatteriesResponseItem = zod.object({
   nome: zod.string(),
   fabricante: zod.string(),
   capacidade: zod.number(),
-  tensaoNominal: zod.number(),
-  potenciaCarga: zod.number(),
-  potenciaDescarga: zod.number(),
-  profundidadeDescarga: zod.number(),
-  compatibilidade: zod.string().nullable(),
+  tensao: zod.number(),
+  tecnologia: zod.enum(["LiFePO4", "Li-ion", "AGM", "Gel"]),
   createdAt: zod.coerce.date(),
 });
 export const ListBatteriesResponse = zod.array(ListBatteriesResponseItem);
@@ -321,11 +318,8 @@ export const CreateBatteryBody = zod.object({
   nome: zod.string(),
   fabricante: zod.string(),
   capacidade: zod.number(),
-  tensaoNominal: zod.number(),
-  potenciaCarga: zod.number(),
-  potenciaDescarga: zod.number(),
-  profundidadeDescarga: zod.number(),
-  compatibilidade: zod.string().nullish(),
+  tensao: zod.number(),
+  tecnologia: zod.enum(["LiFePO4", "Li-ion", "AGM", "Gel"]),
 });
 
 /**
@@ -340,11 +334,8 @@ export const GetBatteryResponse = zod.object({
   nome: zod.string(),
   fabricante: zod.string(),
   capacidade: zod.number(),
-  tensaoNominal: zod.number(),
-  potenciaCarga: zod.number(),
-  potenciaDescarga: zod.number(),
-  profundidadeDescarga: zod.number(),
-  compatibilidade: zod.string().nullable(),
+  tensao: zod.number(),
+  tecnologia: zod.enum(["LiFePO4", "Li-ion", "AGM", "Gel"]),
   createdAt: zod.coerce.date(),
 });
 
@@ -359,11 +350,8 @@ export const UpdateBatteryBody = zod.object({
   nome: zod.string().optional(),
   fabricante: zod.string().optional(),
   capacidade: zod.number().optional(),
-  tensaoNominal: zod.number().optional(),
-  potenciaCarga: zod.number().optional(),
-  potenciaDescarga: zod.number().optional(),
-  profundidadeDescarga: zod.number().optional(),
-  compatibilidade: zod.string().nullish(),
+  tensao: zod.number().optional(),
+  tecnologia: zod.enum(["LiFePO4", "Li-ion", "AGM", "Gel"]).optional(),
 });
 
 export const UpdateBatteryResponse = zod.object({
@@ -371,11 +359,8 @@ export const UpdateBatteryResponse = zod.object({
   nome: zod.string(),
   fabricante: zod.string(),
   capacidade: zod.number(),
-  tensaoNominal: zod.number(),
-  potenciaCarga: zod.number(),
-  potenciaDescarga: zod.number(),
-  profundidadeDescarga: zod.number(),
-  compatibilidade: zod.string().nullable(),
+  tensao: zod.number(),
+  tecnologia: zod.enum(["LiFePO4", "Li-ion", "AGM", "Gel"]),
   createdAt: zod.coerce.date(),
 });
 
@@ -500,6 +485,21 @@ export const GetSystemPvgisParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const GetSystemPvgisQueryParams = zod.object({
+  inclinacao2: zod.coerce
+    .number()
+    .optional()
+    .describe("Second MPPT tilt angle (degrees)"),
+  azimute2: zod.coerce
+    .number()
+    .optional()
+    .describe("Second MPPT azimuth (degrees from South)"),
+  numPaineis2: zod.coerce
+    .number()
+    .optional()
+    .describe("Number of panels on second MPPT"),
+});
+
 export const GetSystemPvgisResponse = zod.object({
   producaoAnual: zod.number(),
   producaoEspecifica: zod.number(),
@@ -508,31 +508,191 @@ export const GetSystemPvgisResponse = zod.object({
       mes: zod.number(),
       nomeMes: zod.string(),
       producao: zod.number(),
+      producaoOr1: zod.number().nullable(),
+      producaoOr2: zod.number().nullable(),
     }),
   ),
+  inclinacaoOtima: zod.number().nullable(),
+  orientacaoOtima: zod.number().nullable(),
+  temDuasOrientacoes: zod.boolean(),
 });
 
 /**
- * @summary Calculate financial analysis for a system
+ * @summary Calculate full 25-year financial analysis for a system
  */
 export const CalculateFinancialParams = zod.object({
   id: zod.coerce.number(),
 });
 
 export const CalculateFinancialBody = zod.object({
-  custodoSistema: zod.number(),
-  percentagemAutoconsumo: zod.number(),
-  precoVendaExcedente: zod.number(),
+  custoSistema: zod.number().describe("Total system cost in EUR"),
+  tipoTarifa: zod
+    .enum(["simples", "bi-horaria", "tri-horaria", "tetra-horaria"])
+    .describe("Electricity tariff type"),
+  consumoDiario: zod.number().describe("Daily consumption in kWh"),
+  percHorasSol: zod
+    .number()
+    .describe("Percentage of consumption during solar hours (0-100)"),
+  precoSimples: zod.number().describe("Simple tariff price EUR\/kWh"),
+  precoForaVazio: zod
+    .number()
+    .optional()
+    .describe("Off-peak price EUR\/kWh (bi-horaria)"),
+  precoVazio: zod
+    .number()
+    .optional()
+    .describe("Off-peak (vazio) price EUR\/kWh"),
+  precoCheia: zod
+    .number()
+    .optional()
+    .describe("Mid-peak (cheia) price EUR\/kWh"),
+  precoPonta: zod.number().optional().describe("Peak (ponta) price EUR\/kWh"),
+  precoSuperVazio: zod
+    .number()
+    .optional()
+    .describe("Super off-peak price EUR\/kWh (tetra-horaria)"),
+  percPonta: zod
+    .number()
+    .optional()
+    .describe("Percentage of consumption in ponta period (0-100)"),
+  percCheia: zod
+    .number()
+    .optional()
+    .describe("Percentage of consumption in cheia period (0-100)"),
+  percVazio: zod
+    .number()
+    .optional()
+    .describe("Percentage of consumption in vazio period (0-100)"),
+  percSuperVazio: zod
+    .number()
+    .optional()
+    .describe("Percentage of consumption in super-vazio period (0-100)"),
+  precoVendaExcedente: zod
+    .number()
+    .describe("Surplus energy sale price EUR\/kWh (OMIE)"),
+  capacidadeBateria: zod
+    .number()
+    .nullish()
+    .describe("Battery capacity in kWh (0 = no battery)"),
+  vidaUtil: zod
+    .number()
+    .optional()
+    .describe("System lifetime in years (default 25)"),
+  escaladaEnergia: zod
+    .number()
+    .optional()
+    .describe("Annual energy price increase percentage (default 2)"),
+  inclinacao2: zod
+    .number()
+    .nullish()
+    .describe("Second MPPT tilt angle (optional dual orientation)"),
+  azimute2: zod
+    .number()
+    .nullish()
+    .describe("Second MPPT azimuth in degrees from South (optional)"),
+  numPaineis2: zod
+    .number()
+    .nullish()
+    .describe("Number of panels on second MPPT (optional)"),
 });
 
 export const CalculateFinancialResponse = zod.object({
   producaoAnual: zod.number(),
+  consumoAnual: zod.number(),
+  potenciaPico: zod.number(),
   autoconsumo: zod.number(),
   excedente: zod.number(),
+  taxaAutoconsumo: zod.number(),
+  taxaCobertura: zod.number(),
   poupancaAnual: zod.number(),
   receitaExcedente: zod.number(),
+  beneficioTotal: zod.number(),
   payback: zod.number(),
+  tir: zod.number(),
+  lucroTotal: zod.number(),
+  emissoesCO2Evitadas: zod.number(),
+  arvoresEquivalentes: zod.number(),
+  cashFlowAnual: zod.array(
+    zod.object({
+      ano: zod.number(),
+      producao: zod.number(),
+      poupanca: zod.number(),
+      receitaExcedente: zod.number(),
+      beneficio: zod.number(),
+      cashFlow: zod.number(),
+      cashFlowAcumulado: zod.number(),
+    }),
+  ),
+  producaoMensal: zod.array(
+    zod.object({
+      mes: zod.number(),
+      nomeMes: zod.string(),
+      producao: zod.number(),
+      producaoOr1: zod.number().nullable(),
+      producaoOr2: zod.number().nullable(),
+    }),
+  ),
 });
+
+/**
+ * @summary Calculate string sizing with thermal analysis
+ */
+export const CalculateStringSizingBody = zod.object({
+  tipoModulo: zod.string().optional().describe("Panel model name"),
+  voc: zod.number().describe("Open circuit voltage at STC (V)"),
+  vmp: zod.number().describe("Maximum power point voltage (V)"),
+  isc: zod.number().describe("Short circuit current (A)"),
+  imp: zod.number().describe("Maximum power point current (A)"),
+  coefTensao: zod.number().describe("Temperature coefficient of Voc (%\/°C)"),
+  coefCorrente: zod.number().describe("Temperature coefficient of Isc (%\/°C)"),
+  noct: zod.number().describe("Nominal operating cell temperature (°C)"),
+  tipoInversor: zod.string().optional().describe("Inverter model name"),
+  vmpptMin: zod.number().describe("Inverter MPPT minimum voltage (V)"),
+  vmpptMax: zod.number().describe("Inverter MPPT maximum voltage (V)"),
+  vdcMax: zod.number().describe("Inverter absolute maximum DC voltage (V)"),
+  impptMax: zod.number().describe("Inverter maximum MPPT current (A)"),
+  ipviscMax: zod.number().describe("Inverter maximum PV Isc current (A)"),
+  irradiancia: zod
+    .number()
+    .optional()
+    .describe("Irradiance for calculation W\/m2 (default 1000)"),
+  ganhosBifacial: zod
+    .number()
+    .optional()
+    .describe("Bifacial gain percentage (0-30)"),
+});
+
+export const CalculateStringSizingResponse = zod.object({
+  nMinArranque: zod.number().describe("Minimum panels for inverter start-up"),
+  nMaxString: zod.number().describe("Maximum panels per string"),
+  nRecomendado: zod.number().describe("Recommended panels per string"),
+  tabelaTermica: zod.array(
+    zod.object({
+      tAmb: zod.number().describe("Ambient temperature (°C)"),
+      tCelula: zod.number().describe("Cell temperature (°C)"),
+      voc: zod.number().describe("String Voc at this temperature (V)"),
+      vmp: zod.number().describe("String Vmp at this temperature (V)"),
+      isc: zod.number().describe("String Isc at this temperature (A)"),
+      imp: zod.number().describe("String Imp at this temperature (A)"),
+      nPaineis: zod.number().describe("Number of panels in this string"),
+      estado: zod.enum(["OK", "CLIPPING", "ERRO_TENSAO", "ERRO_CORRENTE"]),
+      mensagem: zod.string(),
+    }),
+  ),
+  avisos: zod.array(zod.string()),
+  erros: zod.array(zod.string()),
+});
+
+/**
+ * @summary List Portuguese locations with coordinates
+ */
+export const ListLocationsResponseItem = zod.object({
+  nome: zod.string(),
+  latitude: zod.number(),
+  longitude: zod.number(),
+  regiao: zod.string(),
+});
+export const ListLocationsResponse = zod.array(ListLocationsResponseItem);
 
 /**
  * @summary Get dashboard summary stats

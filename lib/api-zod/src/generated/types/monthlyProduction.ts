@@ -10,4 +10,8 @@ export interface MonthlyProduction {
   mes: number;
   nomeMes: string;
   producao: number;
+  /** @nullable */
+  producaoOr1: number | null;
+  /** @nullable */
+  producaoOr2: number | null;
 }

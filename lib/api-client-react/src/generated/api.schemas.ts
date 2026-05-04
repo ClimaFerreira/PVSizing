@@ -183,42 +183,60 @@ export interface UpdateInverterBody {
   stringsPorMppt?: number;
 }
 
+export type BatteryTecnologia =
+  (typeof BatteryTecnologia)[keyof typeof BatteryTecnologia];
+
+export const BatteryTecnologia = {
+  LiFePO4: "LiFePO4",
+  "Li-ion": "Li-ion",
+  AGM: "AGM",
+  Gel: "Gel",
+} as const;
+
 export interface Battery {
   id: number;
   nome: string;
   fabricante: string;
   capacidade: number;
-  tensaoNominal: number;
-  potenciaCarga: number;
-  potenciaDescarga: number;
-  profundidadeDescarga: number;
-  /** @nullable */
-  compatibilidade: string | null;
+  tensao: number;
+  tecnologia: BatteryTecnologia;
   createdAt: string;
 }
+
+export type CreateBatteryBodyTecnologia =
+  (typeof CreateBatteryBodyTecnologia)[keyof typeof CreateBatteryBodyTecnologia];
+
+export const CreateBatteryBodyTecnologia = {
+  LiFePO4: "LiFePO4",
+  "Li-ion": "Li-ion",
+  AGM: "AGM",
+  Gel: "Gel",
+} as const;
 
 export interface CreateBatteryBody {
   nome: string;
   fabricante: string;
   capacidade: number;
-  tensaoNominal: number;
-  potenciaCarga: number;
-  potenciaDescarga: number;
-  profundidadeDescarga: number;
-  /** @nullable */
-  compatibilidade?: string | null;
+  tensao: number;
+  tecnologia: CreateBatteryBodyTecnologia;
 }
+
+export type UpdateBatteryBodyTecnologia =
+  (typeof UpdateBatteryBodyTecnologia)[keyof typeof UpdateBatteryBodyTecnologia];
+
+export const UpdateBatteryBodyTecnologia = {
+  LiFePO4: "LiFePO4",
+  "Li-ion": "Li-ion",
+  AGM: "AGM",
+  Gel: "Gel",
+} as const;
 
 export interface UpdateBatteryBody {
   nome?: string;
   fabricante?: string;
   capacidade?: number;
-  tensaoNominal?: number;
-  potenciaCarga?: number;
-  potenciaDescarga?: number;
-  profundidadeDescarga?: number;
-  /** @nullable */
-  compatibilidade?: string | null;
+  tensao?: number;
+  tecnologia?: UpdateBatteryBodyTecnologia;
 }
 
 export interface PvSystem {
@@ -280,27 +298,204 @@ export interface MonthlyProduction {
   mes: number;
   nomeMes: string;
   producao: number;
+  /** @nullable */
+  producaoOr1: number | null;
+  /** @nullable */
+  producaoOr2: number | null;
 }
 
 export interface PvgisResult {
   producaoAnual: number;
   producaoEspecifica: number;
   producaoMensal: MonthlyProduction[];
+  /** @nullable */
+  inclinacaoOtima: number | null;
+  /** @nullable */
+  orientacaoOtima: number | null;
+  temDuasOrientacoes: boolean;
 }
 
+/**
+ * Electricity tariff type
+ */
+export type FinancialInputBodyTipoTarifa =
+  (typeof FinancialInputBodyTipoTarifa)[keyof typeof FinancialInputBodyTipoTarifa];
+
+export const FinancialInputBodyTipoTarifa = {
+  simples: "simples",
+  "bi-horaria": "bi-horaria",
+  "tri-horaria": "tri-horaria",
+  "tetra-horaria": "tetra-horaria",
+} as const;
+
 export interface FinancialInputBody {
-  custodoSistema: number;
-  percentagemAutoconsumo: number;
+  /** Total system cost in EUR */
+  custoSistema: number;
+  /** Electricity tariff type */
+  tipoTarifa: FinancialInputBodyTipoTarifa;
+  /** Daily consumption in kWh */
+  consumoDiario: number;
+  /** Percentage of consumption during solar hours (0-100) */
+  percHorasSol: number;
+  /** Simple tariff price EUR/kWh */
+  precoSimples: number;
+  /** Off-peak price EUR/kWh (bi-horaria) */
+  precoForaVazio?: number;
+  /** Off-peak (vazio) price EUR/kWh */
+  precoVazio?: number;
+  /** Mid-peak (cheia) price EUR/kWh */
+  precoCheia?: number;
+  /** Peak (ponta) price EUR/kWh */
+  precoPonta?: number;
+  /** Super off-peak price EUR/kWh (tetra-horaria) */
+  precoSuperVazio?: number;
+  /** Percentage of consumption in ponta period (0-100) */
+  percPonta?: number;
+  /** Percentage of consumption in cheia period (0-100) */
+  percCheia?: number;
+  /** Percentage of consumption in vazio period (0-100) */
+  percVazio?: number;
+  /** Percentage of consumption in super-vazio period (0-100) */
+  percSuperVazio?: number;
+  /** Surplus energy sale price EUR/kWh (OMIE) */
   precoVendaExcedente: number;
+  /**
+   * Battery capacity in kWh (0 = no battery)
+   * @nullable
+   */
+  capacidadeBateria?: number | null;
+  /** System lifetime in years (default 25) */
+  vidaUtil?: number;
+  /** Annual energy price increase percentage (default 2) */
+  escaladaEnergia?: number;
+  /**
+   * Second MPPT tilt angle (optional dual orientation)
+   * @nullable
+   */
+  inclinacao2?: number | null;
+  /**
+   * Second MPPT azimuth in degrees from South (optional)
+   * @nullable
+   */
+  azimute2?: number | null;
+  /**
+   * Number of panels on second MPPT (optional)
+   * @nullable
+   */
+  numPaineis2?: number | null;
+}
+
+export interface AnoCashFlow {
+  ano: number;
+  producao: number;
+  poupanca: number;
+  receitaExcedente: number;
+  beneficio: number;
+  cashFlow: number;
+  cashFlowAcumulado: number;
 }
 
 export interface FinancialResult {
   producaoAnual: number;
+  consumoAnual: number;
+  potenciaPico: number;
   autoconsumo: number;
   excedente: number;
+  taxaAutoconsumo: number;
+  taxaCobertura: number;
   poupancaAnual: number;
   receitaExcedente: number;
+  beneficioTotal: number;
   payback: number;
+  tir: number;
+  lucroTotal: number;
+  emissoesCO2Evitadas: number;
+  arvoresEquivalentes: number;
+  cashFlowAnual: AnoCashFlow[];
+  producaoMensal: MonthlyProduction[];
+}
+
+export interface StringSizingBody {
+  /** Panel model name */
+  tipoModulo?: string;
+  /** Open circuit voltage at STC (V) */
+  voc: number;
+  /** Maximum power point voltage (V) */
+  vmp: number;
+  /** Short circuit current (A) */
+  isc: number;
+  /** Maximum power point current (A) */
+  imp: number;
+  /** Temperature coefficient of Voc (%/°C) */
+  coefTensao: number;
+  /** Temperature coefficient of Isc (%/°C) */
+  coefCorrente: number;
+  /** Nominal operating cell temperature (°C) */
+  noct: number;
+  /** Inverter model name */
+  tipoInversor?: string;
+  /** Inverter MPPT minimum voltage (V) */
+  vmpptMin: number;
+  /** Inverter MPPT maximum voltage (V) */
+  vmpptMax: number;
+  /** Inverter absolute maximum DC voltage (V) */
+  vdcMax: number;
+  /** Inverter maximum MPPT current (A) */
+  impptMax: number;
+  /** Inverter maximum PV Isc current (A) */
+  ipviscMax: number;
+  /** Irradiance for calculation W/m2 (default 1000) */
+  irradiancia?: number;
+  /** Bifacial gain percentage (0-30) */
+  ganhosBifacial?: number;
+}
+
+export type StringThermalRowEstado =
+  (typeof StringThermalRowEstado)[keyof typeof StringThermalRowEstado];
+
+export const StringThermalRowEstado = {
+  OK: "OK",
+  CLIPPING: "CLIPPING",
+  ERRO_TENSAO: "ERRO_TENSAO",
+  ERRO_CORRENTE: "ERRO_CORRENTE",
+} as const;
+
+export interface StringThermalRow {
+  /** Ambient temperature (°C) */
+  tAmb: number;
+  /** Cell temperature (°C) */
+  tCelula: number;
+  /** String Voc at this temperature (V) */
+  voc: number;
+  /** String Vmp at this temperature (V) */
+  vmp: number;
+  /** String Isc at this temperature (A) */
+  isc: number;
+  /** String Imp at this temperature (A) */
+  imp: number;
+  /** Number of panels in this string */
+  nPaineis: number;
+  estado: StringThermalRowEstado;
+  mensagem: string;
+}
+
+export interface StringSizingResult {
+  /** Minimum panels for inverter start-up */
+  nMinArranque: number;
+  /** Maximum panels per string */
+  nMaxString: number;
+  /** Recommended panels per string */
+  nRecomendado: number;
+  tabelaTermica: StringThermalRow[];
+  avisos: string[];
+  erros: string[];
+}
+
+export interface Location {
+  nome: string;
+  latitude: number;
+  longitude: number;
+  regiao: string;
 }
 
 export interface CountByLabel {
@@ -316,3 +511,18 @@ export interface DashboardSummary {
   totalBaterias: number;
   clientesPorTipo: CountByLabel[];
 }
+
+export type GetSystemPvgisParams = {
+  /**
+   * Second MPPT tilt angle (degrees)
+   */
+  inclinacao2?: number;
+  /**
+   * Second MPPT azimuth (degrees from South)
+   */
+  azimute2?: number;
+  /**
+   * Number of panels on second MPPT
+   */
+  numPaineis2?: number;
+};

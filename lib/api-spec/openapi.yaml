@@ -28,6 +28,8 @@ tags:
     description: System compatibility checks
   - name: dashboard
     description: Dashboard summaries
+  - name: tools
+    description: Engineering tools (string sizing, cable sizing, locations)
 
 paths:
   /healthz:
@@ -556,6 +558,24 @@ paths:
           required: true
           schema:
             type: integer
+        - name: inclinacao2
+          in: query
+          required: false
+          schema:
+            type: number
+          description: Second MPPT tilt angle (degrees)
+        - name: azimute2
+          in: query
+          required: false
+          schema:
+            type: number
+          description: Second MPPT azimuth (degrees from South)
+        - name: numPaineis2
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Number of panels on second MPPT
       responses:
         "200":
           description: PVGIS production data
@@ -572,7 +592,7 @@ paths:
     post:
       operationId: calculateFinancial
       tags: [financial]
-      summary: Calculate financial analysis for a system
+      summary: Calculate full 25-year financial analysis for a system
       parameters:
         - name: id
           in: path
@@ -594,6 +614,43 @@ paths:
                 $ref: "#/components/schemas/FinancialResult"
         "404":
           description: Not found
+
+  # --- Tools ---
+  /tools/string-sizing:
+    post:
+      operationId: calculateStringSizing
+      tags: [tools]
+      summary: Calculate string sizing with thermal analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StringSizingBody"
+      responses:
+        "200":
+          description: String sizing result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StringSizingResult"
+        "400":
+          description: Validation error
+
+  /tools/locations:
+    get:
+      operationId: listLocations
+      tags: [tools]
+      summary: List Portuguese locations with coordinates
+      responses:
+        "200":
+          description: List of locations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Location"
 
   # --- Dashboard / summary ---
   /dashboard/summary:
@@ -917,16 +974,11 @@ components:
           type: string
         capacidade:
           type: number
-        tensaoNominal:
+        tensao:
           type: number
-        potenciaCarga:
-          type: number
-        potenciaDescarga:
-          type: number
-        profundidadeDescarga:
-          type: number
-        compatibilidade:
-          type: ["string", "null"]
+        tecnologia:
+          type: string
+          enum: [LiFePO4, Li-ion, AGM, Gel]
         createdAt:
           type: string
           format: date-time
@@ -935,11 +987,8 @@ components:
         - nome
         - fabricante
         - capacidade
-        - tensaoNominal
-        - potenciaCarga
-        - potenciaDescarga
-        - profundidadeDescarga
-        - compatibilidade
+        - tensao
+        - tecnologia
         - createdAt
 
     CreateBatteryBody:
@@ -951,24 +1000,17 @@ components:
           type: string
         capacidade:
           type: number
-        tensaoNominal:
+        tensao:
           type: number
-        potenciaCarga:
-          type: number
-        potenciaDescarga:
-          type: number
-        profundidadeDescarga:
-          type: number
-        compatibilidade:
-          type: ["string", "null"]
+        tecnologia:
+          type: string
+          enum: [LiFePO4, Li-ion, AGM, Gel]
       required:
         - nome
         - fabricante
         - capacidade
-        - tensaoNominal
-        - potenciaCarga
-        - potenciaDescarga
-        - profundidadeDescarga
+        - tensao
+        - tecnologia
 
     UpdateBatteryBody:
       type: object
@@ -979,16 +1021,11 @@ components:
           type: string
         capacidade:
           type: number
-        tensaoNominal:
+        tensao:
           type: number
-        potenciaCarga:
-          type: number
-        potenciaDescarga:
-          type: number
-        profundidadeDescarga:
-          type: number
-        compatibilidade:
-          type: ["string", "null"]
+        tecnologia:
+          type: string
+          enum: [LiFePO4, Li-ion, AGM, Gel]
 
     # --- PV System ---
     PvSystem:
@@ -1115,10 +1152,19 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MonthlyProduction"
+        inclinacaoOtima:
+          type: ["number", "null"]
+        orientacaoOtima:
+          type: ["number", "null"]
+        temDuasOrientacoes:
+          type: boolean
       required:
         - producaoAnual
         - producaoEspecifica
         - producaoMensal
+        - inclinacaoOtima
+        - orientacaoOtima
+        - temDuasOrientacoes
 
     MonthlyProduction:
       type: object
@@ -1129,24 +1175,91 @@ components:
           type: string
         producao:
           type: number
+        producaoOr1:
+          type: ["number", "null"]
+        producaoOr2:
+          type: ["number", "null"]
       required:
         - mes
         - nomeMes
         - producao
+        - producaoOr1
+        - producaoOr2
 
     # --- Financial ---
     FinancialInputBody:
       type: object
       properties:
-        custodoSistema:
+        custoSistema:
           type: number
-        percentagemAutoconsumo:
+          description: Total system cost in EUR
+        tipoTarifa:
+          type: string
+          enum: [simples, bi-horaria, tri-horaria, tetra-horaria]
+          description: Electricity tariff type
+        consumoDiario:
           type: number
+          description: Daily consumption in kWh
+        percHorasSol:
+          type: number
+          description: Percentage of consumption during solar hours (0-100)
+        precoSimples:
+          type: number
+          description: Simple tariff price EUR/kWh
+        precoForaVazio:
+          type: number
+          description: Off-peak price EUR/kWh (bi-horaria)
+        precoVazio:
+          type: number
+          description: Off-peak (vazio) price EUR/kWh
+        precoCheia:
+          type: number
+          description: Mid-peak (cheia) price EUR/kWh
+        precoPonta:
+          type: number
+          description: Peak (ponta) price EUR/kWh
+        precoSuperVazio:
+          type: number
+          description: Super off-peak price EUR/kWh (tetra-horaria)
+        percPonta:
+          type: number
+          description: Percentage of consumption in ponta period (0-100)
+        percCheia:
+          type: number
+          description: Percentage of consumption in cheia period (0-100)
+        percVazio:
+          type: number
+          description: Percentage of consumption in vazio period (0-100)
+        percSuperVazio:
+          type: number
+          description: Percentage of consumption in super-vazio period (0-100)
         precoVendaExcedente:
           type: number
+          description: Surplus energy sale price EUR/kWh (OMIE)
+        capacidadeBateria:
+          type: ["number", "null"]
+          description: Battery capacity in kWh (0 = no battery)
+        vidaUtil:
+          type: integer
+          description: System lifetime in years (default 25)
+        escaladaEnergia:
+          type: number
+          description: Annual energy price increase percentage (default 2)
+        inclinacao2:
+          type: ["number", "null"]
+          description: Second MPPT tilt angle (optional dual orientation)
+        azimute2:
+          type: ["number", "null"]
+          description: Second MPPT azimuth in degrees from South (optional)
+        numPaineis2:
+          type: ["integer", "null"]
+          description: Number of panels on second MPPT (optional)
       required:
-        - custodoSistema
-        - percentagemAutoconsumo
+        - custoSistema
+        - tipoTarifa
+        - consumoDiario
+        - percHorasSol
+        - precoSimples
         - precoVendaExcedente
 
     FinancialResult:
@@ -1154,23 +1267,242 @@ components:
       properties:
         producaoAnual:
           type: number
+        consumoAnual:
+          type: number
+        potenciaPico:
+          type: number
         autoconsumo:
           type: number
         excedente:
+          type: number
+        taxaAutoconsumo:
+          type: number
+        taxaCobertura:
           type: number
         poupancaAnual:
           type: number
         receitaExcedente:
           type: number
+        beneficioTotal:
+          type: number
         payback:
           type: number
+        tir:
+          type: number
+        lucroTotal:
+          type: number
+        emissoesCO2Evitadas:
+          type: number
+        arvoresEquivalentes:
+          type: number
+        cashFlowAnual:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnoCashFlow"
+        producaoMensal:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthlyProduction"
       required:
         - producaoAnual
+        - consumoAnual
+        - potenciaPico
         - autoconsumo
         - excedente
+        - taxaAutoconsumo
+        - taxaCobertura
         - poupancaAnual
         - receitaExcedente
+        - beneficioTotal
         - payback
+        - tir
+        - lucroTotal
+        - emissoesCO2Evitadas
+        - arvoresEquivalentes
+        - cashFlowAnual
+        - producaoMensal
+
+    AnoCashFlow:
+      type: object
+      properties:
+        ano:
+          type: integer
+        producao:
+          type: number
+        poupanca:
+          type: number
+        receitaExcedente:
+          type: number
+        beneficio:
+          type: number
+        cashFlow:
+          type: number
+        cashFlowAcumulado:
+          type: number
+      required:
+        - ano
+        - producao
+        - poupanca
+        - receitaExcedente
+        - beneficio
+        - cashFlow
+        - cashFlowAcumulado
+
+    # --- String Sizing ---
+    StringSizingBody:
+      type: object
+      properties:
+        tipoModulo:
+          type: string
+          description: Panel model name
+        voc:
+          type: number
+          description: Open circuit voltage at STC (V)
+        vmp:
+          type: number
+          description: Maximum power point voltage (V)
+        isc:
+          type: number
+          description: Short circuit current (A)
+        imp:
+          type: number
+          description: Maximum power point current (A)
+        coefTensao:
+          type: number
+          description: Temperature coefficient of Voc (%/°C)
+        coefCorrente:
+          type: number
+          description: Temperature coefficient of Isc (%/°C)
+        noct:
+          type: number
+          description: Nominal operating cell temperature (°C)
+        tipoInversor:
+          type: string
+          description: Inverter model name
+        vmpptMin:
+          type: number
+          description: Inverter MPPT minimum voltage (V)
+        vmpptMax:
+          type: number
+          description: Inverter MPPT maximum voltage (V)
+        vdcMax:
+          type: number
+          description: Inverter absolute maximum DC voltage (V)
+        impptMax:
+          type: number
+          description: Inverter maximum MPPT current (A)
+        ipviscMax:
+          type: number
+          description: Inverter maximum PV Isc current (A)
+        irradiancia:
+          type: number
+          description: Irradiance for calculation W/m2 (default 1000)
+        ganhosBifacial:
+          type: number
+          description: Bifacial gain percentage (0-30)
+      required:
+        - voc
+        - vmp
+        - isc
+        - imp
+        - coefTensao
+        - coefCorrente
+        - noct
+        - vmpptMin
+        - vmpptMax
+        - vdcMax
+        - impptMax
+        - ipviscMax
+
+    StringSizingResult:
+      type: object
+      properties:
+        nMinArranque:
+          type: integer
+          description: Minimum panels for inverter start-up
+        nMaxString:
+          type: integer
+          description: Maximum panels per string
+        nRecomendado:
+          type: integer
+          description: Recommended panels per string
+        tabelaTermica:
+          type: array
+          items:
+            $ref: "#/components/schemas/StringThermalRow"
+        avisos:
+          type: array
+          items:
+            type: string
+        erros:
+          type: array
+          items:
+            type: string
+      required:
+        - nMinArranque
+        - nMaxString
+        - nRecomendado
+        - tabelaTermica
+        - avisos
+        - erros
+
+    StringThermalRow:
+      type: object
+      properties:
+        tAmb:
+          type: integer
+          description: Ambient temperature (°C)
+        tCelula:
+          type: number
+          description: Cell temperature (°C)
+        voc:
+          type: number
+          description: String Voc at this temperature (V)
+        vmp:
+          type: number
+          description: String Vmp at this temperature (V)
+        isc:
+          type: number
+          description: String Isc at this temperature (A)
+        imp:
+          type: number
+          description: String Imp at this temperature (A)
+        nPaineis:
+          type: integer
+          description: Number of panels in this string
+        estado:
+          type: string
+          enum: [OK, CLIPPING, ERRO_TENSAO, ERRO_CORRENTE]
+        mensagem:
+          type: string
+      required:
+        - tAmb
+        - tCelula
+        - voc
+        - vmp
+        - isc
+        - imp
+        - nPaineis
+        - estado
+        - mensagem
+
+    # --- Locations ---
+    Location:
+      type: object
+      properties:
+        nome:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        regiao:
+          type: string
+      required:
+        - nome
+        - latitude
+        - longitude
+        - regiao
 
     # --- Dashboard ---
     DashboardSummary:
