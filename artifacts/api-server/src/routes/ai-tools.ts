@@ -81,25 +81,15 @@ Responde APENAS com o JSON, sem texto adicional.`,
 
 // POST /tools/auto-size
 router.post("/tools/auto-size", async (req, res): Promise<void> => {
-  const {
-    consumoAnual,
-    latitude,
-    longitude,
-    inclinacao = 30,
-    azimute = 0,
-    coberturaMeta = 80,
-    incluirBateria = false,
-    horasAutonomia = 4,
-  } = req.body as {
-    consumoAnual: number;
-    latitude: number;
-    longitude: number;
-    inclinacao?: number;
-    azimute?: number;
-    coberturaMeta?: number;
-    incluirBateria?: boolean;
-    horasAutonomia?: number;
-  };
+  const raw = req.body as Record<string, unknown>;
+  const consumoAnual = Number(raw.consumoAnual);
+  const latitude = Number(raw.latitude);
+  const longitude = Number(raw.longitude);
+  const inclinacao = raw.inclinacao !== undefined ? Number(raw.inclinacao) : 30;
+  const azimute = raw.azimute !== undefined ? Number(raw.azimute) : 0;
+  const coberturaMeta = raw.coberturaMeta !== undefined ? Number(raw.coberturaMeta) : 80;
+  const incluirBateria = raw.incluirBateria === true || raw.incluirBateria === "true";
+  const horasAutonomia = raw.horasAutonomia !== undefined ? Number(raw.horasAutonomia) : 4;
 
   if (!consumoAnual || !latitude || !longitude) {
     res.status(400).json({ error: "consumoAnual, latitude e longitude são obrigatórios" });
