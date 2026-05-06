@@ -9,12 +9,8 @@ import {
   useListInverters,
   useListBatteries,
   useCreateSystem,
-  useCheckSystemCompatibility,
-  useGetSystemPvgis,
   useCalculateFinancial,
-  getListSystemsQueryKey,
-  getCheckSystemCompatibilityQueryKey,
-  getGetSystemPvgisQueryKey
+  getListSystemsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -90,28 +86,6 @@ export default function SystemNew() {
 
   const watchAll = form.watch();
   
-  const { data: compatibility, isLoading: loadingCompat } = useCheckSystemCompatibility(
-    { 
-      panelId: watchAll.panelId, 
-      inverterId: watchAll.inverterId, 
-      numPaineis: watchAll.numPaineis, 
-      numStrings: watchAll.numStrings, 
-      paineisporstring: watchAll.paineisporstring 
-    },
-    {
-      query: {
-        enabled: !!watchAll.panelId && !!watchAll.inverterId && !!watchAll.numPaineis && !!watchAll.numStrings && !!watchAll.paineisporstring,
-        queryKey: getCheckSystemCompatibilityQueryKey({ 
-          panelId: watchAll.panelId, 
-          inverterId: watchAll.inverterId, 
-          numPaineis: watchAll.numPaineis, 
-          numStrings: watchAll.numStrings, 
-          paineisporstring: watchAll.paineisporstring 
-        })
-      }
-    }
-  );
-
   const onSubmit = (data: SystemFormValues) => {
     createSystem.mutate(
       { data },
@@ -384,55 +358,10 @@ export default function SystemNew() {
               <CardTitle className="text-lg">Validação Elétrica</CardTitle>
             </CardHeader>
             <CardContent>
-              {!watchAll.panelId || !watchAll.inverterId ? (
-                <div className="text-sm text-muted-foreground text-center py-4 flex flex-col items-center gap-2">
-                  <Info className="h-8 w-8 text-muted-foreground/50" />
-                  Selecione equipamentos para validar
-                </div>
-              ) : loadingCompat ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : compatibility ? (
-                <div className="space-y-4">
-                  {compatibility.estado === "Válido" ? (
-                    <Alert className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                      <CheckCircle className="h-4 w-4 stroke-emerald-600" />
-                      <AlertTitle>Sistema Válido</AlertTitle>
-                      <AlertDescription className="text-emerald-600/90 text-xs">
-                        Configuração elétrica dentro dos limites.
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                    <Alert variant="destructive">
-                      <AlertTriangle className="h-4 w-4" />
-                      <AlertTitle>Sistema Inválido</AlertTitle>
-                      <AlertDescription>
-                        A configuração excede os limites do inversor.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {compatibility.erros && compatibility.erros.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-destructive">Erros:</p>
-                      <ul className="text-xs text-destructive space-y-1 list-disc pl-4">
-                        {compatibility.erros.map((e, i) => <li key={i}>{e}</li>)}
-                      </ul>
-                    </div>
-                  )}
-
-                  {compatibility.avisos && compatibility.avisos.length > 0 && (
-                    <div className="space-y-2 mt-4 pt-4 border-t">
-                      <p className="text-sm font-medium text-amber-600 dark:text-amber-500">Avisos:</p>
-                      <ul className="text-xs text-amber-600 dark:text-amber-500 space-y-1 list-disc pl-4">
-                        {compatibility.avisos.map((a, i) => <li key={i}>{a}</li>)}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              ) : null}
+              <div className="text-sm text-muted-foreground text-center py-4 flex flex-col items-center gap-2">
+                <Info className="h-8 w-8 text-muted-foreground/50" />
+                A validação elétrica fica disponível após criação do sistema.
+              </div>
             </CardContent>
           </Card>
         </div>

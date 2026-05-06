@@ -11,6 +11,8 @@ import financialRouter from "./financial";
 import dashboardRouter from "./dashboard";
 import stringSizingRouter from "./string-sizing";
 import locationsRouter from "./locations";
+import aiToolsRouter from "./ai-tools";
+import proposalsRouter from "./proposals";
 
 const router: IRouter = Router();
 
@@ -26,5 +28,7 @@ router.use(financialRouter);
 router.use(dashboardRouter);
 router.use(stringSizingRouter);
 router.use(locationsRouter);
+router.use(aiToolsRouter);
+router.use(proposalsRouter);
 
 export default router;

@@ -7,7 +7,9 @@ import {
   BoxSelect, 
   LayoutDashboard,
   Menu,
-  GitBranch
+  GitBranch,
+  Wand2,
+  FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,6 +28,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/equipamentos/inversores", label: "Inversores", icon: Zap },
     { href: "/equipamentos/baterias", label: "Baterias", icon: Battery },
     { href: "/calculadora-strings", label: "Calculadora Strings", icon: GitBranch },
+    { href: "/wizard", label: "Wizard Dimensionamento", icon: Wand2 },
+    { href: "/propostas", label: "Propostas Técnicas", icon: FileText },
   ];
 
   const SidebarContent = () => (

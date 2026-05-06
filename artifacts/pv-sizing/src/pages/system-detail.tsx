@@ -135,7 +135,7 @@ export default function SystemDetail() {
     systemId,
     { query: { enabled: !!systemId, queryKey: getCheckSystemCompatibilityQueryKey(systemId) } }
   );
-  const { data: pvgis, isLoading: loadingPvgis } = useGetSystemPvgis(systemId, {
+  const { data: pvgis, isLoading: loadingPvgis } = useGetSystemPvgis(systemId, undefined, {
     query: { enabled: !!systemId, queryKey: getGetSystemPvgisQueryKey(systemId) }
   });
 

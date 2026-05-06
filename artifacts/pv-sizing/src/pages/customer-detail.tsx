@@ -3,7 +3,7 @@ import { useGetCustomer, useListSystems, getGetCustomerQueryKey } from "@workspa
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Zap, Euro, Activity, Clock, FileText } from "lucide-react";
+import { MapPin, Zap, Euro, Activity, Clock, FileText, Sun } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";

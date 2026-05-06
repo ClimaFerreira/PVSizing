@@ -17,21 +17,31 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AutoSizeBody,
+  AutoSizeResult,
   Battery,
+  BatterySizeBody,
+  BatterySizeResult,
   CompatibilityResult,
   CreateBatteryBody,
   CreateCustomerBody,
   CreateInverterBody,
+  CreateProposalBody,
   CreatePvSystemBody,
   CreateSolarPanelBody,
   Customer,
   DashboardSummary,
+  DatasheetResult,
   FinancialInputBody,
   FinancialResult,
   GetSystemPvgisParams,
   HealthStatus,
+  ImportDatasheetBody,
   Inverter,
+  InvoiceData,
   Location,
+  ParseInvoiceBody,
+  Proposal,
   PvSystem,
   PvgisResult,
   SolarPanel,
@@ -2665,6 +2675,687 @@ export function useListLocations<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Parse energy invoice (PDF/image) with AI to extract consumption data
+ */
+export const getParseInvoiceUrl = () => {
+  return `/api/tools/parse-invoice`;
+};
+
+export const parseInvoice = async (
+  parseInvoiceBody: ParseInvoiceBody,
+  options?: RequestInit,
+): Promise<InvoiceData> => {
+  const formData = new FormData();
+  formData.append(`file`, parseInvoiceBody.file);
+
+  return customFetch<InvoiceData>(getParseInvoiceUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getParseInvoiceMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseInvoice>>,
+    TError,
+    { data: BodyType<ParseInvoiceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof parseInvoice>>,
+  TError,
+  { data: BodyType<ParseInvoiceBody> },
+  TContext
+> => {
+  const mutationKey = ["parseInvoice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof parseInvoice>>,
+    { data: BodyType<ParseInvoiceBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return parseInvoice(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ParseInvoiceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof parseInvoice>>
+>;
+export type ParseInvoiceMutationBody = BodyType<ParseInvoiceBody>;
+export type ParseInvoiceMutationError = ErrorType<void>;
+
+/**
+ * @summary Parse energy invoice (PDF/image) with AI to extract consumption data
+ */
+export const useParseInvoice = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseInvoice>>,
+    TError,
+    { data: BodyType<ParseInvoiceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof parseInvoice>>,
+  TError,
+  { data: BodyType<ParseInvoiceBody> },
+  TContext
+> => {
+  return useMutation(getParseInvoiceMutationOptions(options));
+};
+
+/**
+ * @summary Automatically calculate PV system size from consumption data
+ */
+export const getAutoSizeSystemUrl = () => {
+  return `/api/tools/auto-size`;
+};
+
+export const autoSizeSystem = async (
+  autoSizeBody: AutoSizeBody,
+  options?: RequestInit,
+): Promise<AutoSizeResult> => {
+  return customFetch<AutoSizeResult>(getAutoSizeSystemUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(autoSizeBody),
+  });
+};
+
+export const getAutoSizeSystemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof autoSizeSystem>>,
+    TError,
+    { data: BodyType<AutoSizeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof autoSizeSystem>>,
+  TError,
+  { data: BodyType<AutoSizeBody> },
+  TContext
+> => {
+  const mutationKey = ["autoSizeSystem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof autoSizeSystem>>,
+    { data: BodyType<AutoSizeBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return autoSizeSystem(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AutoSizeSystemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof autoSizeSystem>>
+>;
+export type AutoSizeSystemMutationBody = BodyType<AutoSizeBody>;
+export type AutoSizeSystemMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Automatically calculate PV system size from consumption data
+ */
+export const useAutoSizeSystem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof autoSizeSystem>>,
+    TError,
+    { data: BodyType<AutoSizeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof autoSizeSystem>>,
+  TError,
+  { data: BodyType<AutoSizeBody> },
+  TContext
+> => {
+  return useMutation(getAutoSizeSystemMutationOptions(options));
+};
+
+/**
+ * @summary Calculate optimal battery capacity for a system
+ */
+export const getSizeBatteryUrl = () => {
+  return `/api/tools/battery-size`;
+};
+
+export const sizeBattery = async (
+  batterySizeBody: BatterySizeBody,
+  options?: RequestInit,
+): Promise<BatterySizeResult> => {
+  return customFetch<BatterySizeResult>(getSizeBatteryUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(batterySizeBody),
+  });
+};
+
+export const getSizeBatteryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sizeBattery>>,
+    TError,
+    { data: BodyType<BatterySizeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sizeBattery>>,
+  TError,
+  { data: BodyType<BatterySizeBody> },
+  TContext
+> => {
+  const mutationKey = ["sizeBattery"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sizeBattery>>,
+    { data: BodyType<BatterySizeBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return sizeBattery(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SizeBatteryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sizeBattery>>
+>;
+export type SizeBatteryMutationBody = BodyType<BatterySizeBody>;
+export type SizeBatteryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Calculate optimal battery capacity for a system
+ */
+export const useSizeBattery = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sizeBattery>>,
+    TError,
+    { data: BodyType<BatterySizeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sizeBattery>>,
+  TError,
+  { data: BodyType<BatterySizeBody> },
+  TContext
+> => {
+  return useMutation(getSizeBatteryMutationOptions(options));
+};
+
+/**
+ * @summary Extract equipment specs from datasheet PDF/image
+ */
+export const getImportDatasheetUrl = () => {
+  return `/api/tools/import-datasheet`;
+};
+
+export const importDatasheet = async (
+  importDatasheetBody: ImportDatasheetBody,
+  options?: RequestInit,
+): Promise<DatasheetResult> => {
+  const formData = new FormData();
+  formData.append(`file`, importDatasheetBody.file);
+  formData.append(`tipoEquipamento`, importDatasheetBody.tipoEquipamento);
+
+  return customFetch<DatasheetResult>(getImportDatasheetUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getImportDatasheetMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof importDatasheet>>,
+    TError,
+    { data: BodyType<ImportDatasheetBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof importDatasheet>>,
+  TError,
+  { data: BodyType<ImportDatasheetBody> },
+  TContext
+> => {
+  const mutationKey = ["importDatasheet"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof importDatasheet>>,
+    { data: BodyType<ImportDatasheetBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return importDatasheet(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ImportDatasheetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof importDatasheet>>
+>;
+export type ImportDatasheetMutationBody = BodyType<ImportDatasheetBody>;
+export type ImportDatasheetMutationError = ErrorType<void>;
+
+/**
+ * @summary Extract equipment specs from datasheet PDF/image
+ */
+export const useImportDatasheet = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof importDatasheet>>,
+    TError,
+    { data: BodyType<ImportDatasheetBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof importDatasheet>>,
+  TError,
+  { data: BodyType<ImportDatasheetBody> },
+  TContext
+> => {
+  return useMutation(getImportDatasheetMutationOptions(options));
+};
+
+/**
+ * @summary List all proposals
+ */
+export const getListProposalsUrl = () => {
+  return `/api/proposals`;
+};
+
+export const listProposals = async (
+  options?: RequestInit,
+): Promise<Proposal[]> => {
+  return customFetch<Proposal[]>(getListProposalsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListProposalsQueryKey = () => {
+  return [`/api/proposals`] as const;
+};
+
+export const getListProposalsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProposals>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listProposals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListProposalsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listProposals>>> = ({
+    signal,
+  }) => listProposals({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProposals>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListProposalsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProposals>>
+>;
+export type ListProposalsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all proposals
+ */
+
+export function useListProposals<
+  TData = Awaited<ReturnType<typeof listProposals>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listProposals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListProposalsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a technical proposal
+ */
+export const getCreateProposalUrl = () => {
+  return `/api/proposals`;
+};
+
+export const createProposal = async (
+  createProposalBody: CreateProposalBody,
+  options?: RequestInit,
+): Promise<Proposal> => {
+  return customFetch<Proposal>(getCreateProposalUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createProposalBody),
+  });
+};
+
+export const getCreateProposalMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProposal>>,
+    TError,
+    { data: BodyType<CreateProposalBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createProposal>>,
+  TError,
+  { data: BodyType<CreateProposalBody> },
+  TContext
+> => {
+  const mutationKey = ["createProposal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createProposal>>,
+    { data: BodyType<CreateProposalBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createProposal(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateProposalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createProposal>>
+>;
+export type CreateProposalMutationBody = BodyType<CreateProposalBody>;
+export type CreateProposalMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a technical proposal
+ */
+export const useCreateProposal = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProposal>>,
+    TError,
+    { data: BodyType<CreateProposalBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createProposal>>,
+  TError,
+  { data: BodyType<CreateProposalBody> },
+  TContext
+> => {
+  return useMutation(getCreateProposalMutationOptions(options));
+};
+
+/**
+ * @summary Get a proposal by ID
+ */
+export const getGetProposalUrl = (id: number) => {
+  return `/api/proposals/${id}`;
+};
+
+export const getProposal = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Proposal> => {
+  return customFetch<Proposal>(getGetProposalUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetProposalQueryKey = (id: number) => {
+  return [`/api/proposals/${id}`] as const;
+};
+
+export const getGetProposalQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProposal>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProposal>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetProposalQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getProposal>>> = ({
+    signal,
+  }) => getProposal(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProposal>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProposalQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProposal>>
+>;
+export type GetProposalQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a proposal by ID
+ */
+
+export function useGetProposal<
+  TData = Awaited<ReturnType<typeof getProposal>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProposal>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProposalQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete a proposal
+ */
+export const getDeleteProposalUrl = (id: number) => {
+  return `/api/proposals/${id}`;
+};
+
+export const deleteProposal = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteProposalUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteProposalMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProposal>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteProposal>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteProposal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteProposal>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteProposal(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteProposalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteProposal>>
+>;
+
+export type DeleteProposalMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a proposal
+ */
+export const useDeleteProposal = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProposal>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteProposal>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteProposalMutationOptions(options));
+};
 
 /**
  * @summary Get dashboard summary stats

@@ -512,6 +512,191 @@ export interface DashboardSummary {
   clientesPorTipo: CountByLabel[];
 }
 
+export type InvoiceDataLeiturasItem = {
+  mes: string;
+  consumo: number;
+};
+
+export interface InvoiceData {
+  /** Average monthly consumption in kWh */
+  consumoMensal?: number;
+  /** Total annual consumption in kWh */
+  consumoAnual?: number;
+  /** Contracted power in kVA */
+  potenciaContratada?: number;
+  /** Price per kWh in EUR */
+  precoKwh?: number;
+  /** Electricity supplier name */
+  operador?: string;
+  /** Tariff plan name */
+  tarifario?: string;
+  /** Invoice period description */
+  periodo?: string;
+  leituras?: InvoiceDataLeiturasItem[];
+  /** AI confidence score 0-1 */
+  confianca: number;
+  /** Additional notes from AI */
+  notas?: string;
+}
+
+export interface AutoSizeBody {
+  /** Annual consumption in kWh */
+  consumoAnual: number;
+  latitude: number;
+  longitude: number;
+  /** Panel tilt in degrees (default 30) */
+  inclinacao?: number;
+  /** Azimuth in degrees from South (default 0) */
+  azimute?: number;
+  /** Target self-consumption coverage % (default 80) */
+  coberturaMeta?: number;
+  /** Include battery in sizing (default false) */
+  incluirBateria?: boolean;
+  /** Target battery autonomy hours (default 4) */
+  horasAutonomia?: number;
+}
+
+export interface AutoSizeResult {
+  /** Recommended peak power in kWp */
+  potenciaRecomendada: number;
+  /** Recommended number of panels (at 400Wp typical) */
+  numPaineis: number;
+  /** Estimated annual production in kWh */
+  energiaAnualEstimada: number;
+  /** Expected coverage percentage */
+  coberturaPrevista: number;
+  /**
+   * Recommended battery capacity in kWh (null if not requested)
+   * @nullable
+   */
+  capacidadeBateriaRecomendada?: number | null;
+  /** Peak sun hours at location */
+  hsp: number;
+  /** System efficiency factor used */
+  fatorRendimento: number;
+  /** Human-readable explanation of the sizing */
+  explicacao: string;
+}
+
+export interface BatterySizeBody {
+  /** Daily consumption in kWh */
+  consumoDiario: number;
+  /** Percentage of consumption at night (0-100) */
+  percConsumoNoturno: number;
+  /** Target hours of autonomy (default 4) */
+  horasAutonomia?: number;
+  /** System voltage in V (default 48) */
+  tensaoSistema?: number;
+  /** Depth of discharge % (default 80 for LiFePO4) */
+  dod?: number;
+}
+
+export interface BatterySizeResult {
+  /** Recommended battery capacity in kWh */
+  capacidadeRecomendada: number;
+  /** Usable capacity after DoD in kWh */
+  capacidadeUtilizavel: number;
+  /** Night-time energy demand in kWh */
+  energiaNocturna: number;
+  /** Suggested number of 10kWh battery units */
+  numBaterias: number;
+  explicacao: string;
+}
+
+export type DatasheetResultTipoEquipamento =
+  (typeof DatasheetResultTipoEquipamento)[keyof typeof DatasheetResultTipoEquipamento];
+
+export const DatasheetResultTipoEquipamento = {
+  painel: "painel",
+  inversor: "inversor",
+  bateria: "bateria",
+} as const;
+
+/**
+ * Extracted equipment data matching the create body schema
+ */
+export type DatasheetResultDados = { [key: string]: unknown };
+
+export interface DatasheetResult {
+  tipoEquipamento: DatasheetResultTipoEquipamento;
+  /** Extracted equipment data matching the create body schema */
+  dados: DatasheetResultDados;
+  /** AI confidence score 0-1 */
+  confianca: number;
+  /** Notes or warnings from AI extraction */
+  notas?: string;
+}
+
+export type ProposalStatus =
+  (typeof ProposalStatus)[keyof typeof ProposalStatus];
+
+export const ProposalStatus = {
+  rascunho: "rascunho",
+  aprovada: "aprovada",
+  enviada: "enviada",
+} as const;
+
+export interface Proposal {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  systemId?: number | null;
+  titulo: string;
+  /** @nullable */
+  consumoAnualEstimado?: number | null;
+  /** @nullable */
+  potenciaRecomendada?: number | null;
+  /** @nullable */
+  numPaineis?: number | null;
+  /** @nullable */
+  panelId?: number | null;
+  /** @nullable */
+  inverterId?: number | null;
+  /** @nullable */
+  batteryId?: number | null;
+  /** String configuration JSON */
+  configuracaoStrings?: unknown;
+  /** @nullable */
+  producaoAnualEstimada?: number | null;
+  /** @nullable */
+  payback?: number | null;
+  /** @nullable */
+  tir?: number | null;
+  alertas?: string[];
+  status: ProposalStatus;
+  createdAt: string;
+}
+
+export interface CreateProposalBody {
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  systemId?: number | null;
+  titulo: string;
+  /** @nullable */
+  consumoAnualEstimado?: number | null;
+  /** @nullable */
+  potenciaRecomendada?: number | null;
+  /** @nullable */
+  numPaineis?: number | null;
+  /** @nullable */
+  panelId?: number | null;
+  /** @nullable */
+  inverterId?: number | null;
+  /** @nullable */
+  batteryId?: number | null;
+  /** String configuration JSON */
+  configuracaoStrings?: unknown;
+  /** @nullable */
+  producaoAnualEstimada?: number | null;
+  /** @nullable */
+  payback?: number | null;
+  /** @nullable */
+  tir?: number | null;
+  alertas?: string[];
+}
+
 export type GetSystemPvgisParams = {
   /**
    * Second MPPT tilt angle (degrees)
@@ -525,4 +710,22 @@ export type GetSystemPvgisParams = {
    * Number of panels on second MPPT
    */
   numPaineis2?: number;
+};
+
+export type ParseInvoiceBody = {
+  file: Blob;
+};
+
+export type ImportDatasheetBodyTipoEquipamento =
+  (typeof ImportDatasheetBodyTipoEquipamento)[keyof typeof ImportDatasheetBodyTipoEquipamento];
+
+export const ImportDatasheetBodyTipoEquipamento = {
+  painel: "painel",
+  inversor: "inversor",
+  bateria: "bateria",
+} as const;
+
+export type ImportDatasheetBody = {
+  file: Blob;
+  tipoEquipamento: ImportDatasheetBodyTipoEquipamento;
 };

@@ -10,7 +10,7 @@ import {
   getListInvertersQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Inverter } from "@workspace/api-client-react/src/generated/api.schemas";
+import { Inverter } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DatasheetImport } from "@/components/datasheet-import";
 
 const inverterSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
@@ -166,6 +167,21 @@ export default function Inverters() {
             <DialogHeader>
               <DialogTitle>Criar Novo Inversor</DialogTitle>
             </DialogHeader>
+            <DatasheetImport
+              tipoEquipamento="inversor"
+              onExtracted={(dados) => {
+                const d = dados as Record<string, number | string>;
+                if (d.fabricante) form.setValue("fabricante", String(d.fabricante));
+                if (d.nome) form.setValue("nome", String(d.nome));
+                if (d.potenciaAc) form.setValue("potenciaAc", Number(d.potenciaAc));
+                if (d.potenciaDcMax) form.setValue("potenciaDcMax", Number(d.potenciaDcMax));
+                if (d.mpptMin) form.setValue("mpptMin", Number(d.mpptMin));
+                if (d.mpptMax) form.setValue("mpptMax", Number(d.mpptMax));
+                if (d.corrMaxMppt) form.setValue("corrMaxMppt", Number(d.corrMaxMppt));
+                if (d.numMppt) form.setValue("numMppt", Number(d.numMppt));
+                if (d.stringsPorMppt) form.setValue("stringsPorMppt", Number(d.stringsPorMppt));
+              }}
+            />
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">

@@ -3,3 +3,4 @@ export * from "./panels";
 export * from "./inverters";
 export * from "./batteries";
 export * from "./systems";
+export * from "./proposals";

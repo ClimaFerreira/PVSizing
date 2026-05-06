@@ -11,7 +11,7 @@ import {
   getListCustomersQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Customer, CreateCustomerBodyTipoCliente, CreateCustomerBodyPerfilConsumo } from "@workspace/api-client-react/src/generated/api.schemas";
+import { Customer, CreateCustomerBodyTipoCliente, CreateCustomerBodyPerfilConsumo } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

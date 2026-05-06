@@ -695,6 +695,231 @@ export const ListLocationsResponseItem = zod.object({
 export const ListLocationsResponse = zod.array(ListLocationsResponseItem);
 
 /**
+ * @summary Parse energy invoice (PDF/image) with AI to extract consumption data
+ */
+export const ParseInvoiceBody = zod.object({
+  file: zod.instanceof(File),
+});
+
+export const ParseInvoiceResponse = zod.object({
+  consumoMensal: zod
+    .number()
+    .optional()
+    .describe("Average monthly consumption in kWh"),
+  consumoAnual: zod
+    .number()
+    .optional()
+    .describe("Total annual consumption in kWh"),
+  potenciaContratada: zod
+    .number()
+    .optional()
+    .describe("Contracted power in kVA"),
+  precoKwh: zod.number().optional().describe("Price per kWh in EUR"),
+  operador: zod.string().optional().describe("Electricity supplier name"),
+  tarifario: zod.string().optional().describe("Tariff plan name"),
+  periodo: zod.string().optional().describe("Invoice period description"),
+  leituras: zod
+    .array(
+      zod.object({
+        mes: zod.string(),
+        consumo: zod.number(),
+      }),
+    )
+    .optional(),
+  confianca: zod.number().describe("AI confidence score 0-1"),
+  notas: zod.string().optional().describe("Additional notes from AI"),
+});
+
+/**
+ * @summary Automatically calculate PV system size from consumption data
+ */
+export const AutoSizeSystemBody = zod.object({
+  consumoAnual: zod.number().describe("Annual consumption in kWh"),
+  latitude: zod.number(),
+  longitude: zod.number(),
+  inclinacao: zod
+    .number()
+    .optional()
+    .describe("Panel tilt in degrees (default 30)"),
+  azimute: zod
+    .number()
+    .optional()
+    .describe("Azimuth in degrees from South (default 0)"),
+  coberturaMeta: zod
+    .number()
+    .optional()
+    .describe("Target self-consumption coverage % (default 80)"),
+  incluirBateria: zod
+    .boolean()
+    .optional()
+    .describe("Include battery in sizing (default false)"),
+  horasAutonomia: zod
+    .number()
+    .optional()
+    .describe("Target battery autonomy hours (default 4)"),
+});
+
+export const AutoSizeSystemResponse = zod.object({
+  potenciaRecomendada: zod.number().describe("Recommended peak power in kWp"),
+  numPaineis: zod
+    .number()
+    .describe("Recommended number of panels (at 400Wp typical)"),
+  energiaAnualEstimada: zod
+    .number()
+    .describe("Estimated annual production in kWh"),
+  coberturaPrevista: zod.number().describe("Expected coverage percentage"),
+  capacidadeBateriaRecomendada: zod
+    .number()
+    .nullish()
+    .describe("Recommended battery capacity in kWh (null if not requested)"),
+  hsp: zod.number().describe("Peak sun hours at location"),
+  fatorRendimento: zod.number().describe("System efficiency factor used"),
+  explicacao: zod.string().describe("Human-readable explanation of the sizing"),
+});
+
+/**
+ * @summary Calculate optimal battery capacity for a system
+ */
+export const SizeBatteryBody = zod.object({
+  consumoDiario: zod.number().describe("Daily consumption in kWh"),
+  percConsumoNoturno: zod
+    .number()
+    .describe("Percentage of consumption at night (0-100)"),
+  horasAutonomia: zod
+    .number()
+    .optional()
+    .describe("Target hours of autonomy (default 4)"),
+  tensaoSistema: zod
+    .number()
+    .optional()
+    .describe("System voltage in V (default 48)"),
+  dod: zod
+    .number()
+    .optional()
+    .describe("Depth of discharge % (default 80 for LiFePO4)"),
+});
+
+export const SizeBatteryResponse = zod.object({
+  capacidadeRecomendada: zod
+    .number()
+    .describe("Recommended battery capacity in kWh"),
+  capacidadeUtilizavel: zod
+    .number()
+    .describe("Usable capacity after DoD in kWh"),
+  energiaNocturna: zod.number().describe("Night-time energy demand in kWh"),
+  numBaterias: zod.number().describe("Suggested number of 10kWh battery units"),
+  explicacao: zod.string(),
+});
+
+/**
+ * @summary Extract equipment specs from datasheet PDF/image
+ */
+export const ImportDatasheetBody = zod.object({
+  file: zod.instanceof(File),
+  tipoEquipamento: zod.enum(["painel", "inversor", "bateria"]),
+});
+
+export const ImportDatasheetResponse = zod.object({
+  tipoEquipamento: zod.enum(["painel", "inversor", "bateria"]),
+  dados: zod
+    .object({})
+    .passthrough()
+    .describe("Extracted equipment data matching the create body schema"),
+  confianca: zod.number().describe("AI confidence score 0-1"),
+  notas: zod
+    .string()
+    .optional()
+    .describe("Notes or warnings from AI extraction"),
+});
+
+/**
+ * @summary List all proposals
+ */
+export const ListProposalsResponseItem = zod.object({
+  id: zod.number(),
+  customerId: zod.number().nullish(),
+  systemId: zod.number().nullish(),
+  titulo: zod.string(),
+  consumoAnualEstimado: zod.number().nullish(),
+  potenciaRecomendada: zod.number().nullish(),
+  numPaineis: zod.number().nullish(),
+  panelId: zod.number().nullish(),
+  inverterId: zod.number().nullish(),
+  batteryId: zod.number().nullish(),
+  configuracaoStrings: zod
+    .unknown()
+    .optional()
+    .describe("String configuration JSON"),
+  producaoAnualEstimada: zod.number().nullish(),
+  payback: zod.number().nullish(),
+  tir: zod.number().nullish(),
+  alertas: zod.array(zod.string()).optional(),
+  status: zod.enum(["rascunho", "aprovada", "enviada"]),
+  createdAt: zod.coerce.date(),
+});
+export const ListProposalsResponse = zod.array(ListProposalsResponseItem);
+
+/**
+ * @summary Create a technical proposal
+ */
+export const CreateProposalBody = zod.object({
+  customerId: zod.number().nullish(),
+  systemId: zod.number().nullish(),
+  titulo: zod.string(),
+  consumoAnualEstimado: zod.number().nullish(),
+  potenciaRecomendada: zod.number().nullish(),
+  numPaineis: zod.number().nullish(),
+  panelId: zod.number().nullish(),
+  inverterId: zod.number().nullish(),
+  batteryId: zod.number().nullish(),
+  configuracaoStrings: zod
+    .unknown()
+    .optional()
+    .describe("String configuration JSON"),
+  producaoAnualEstimada: zod.number().nullish(),
+  payback: zod.number().nullish(),
+  tir: zod.number().nullish(),
+  alertas: zod.array(zod.string()).optional(),
+});
+
+/**
+ * @summary Get a proposal by ID
+ */
+export const GetProposalParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetProposalResponse = zod.object({
+  id: zod.number(),
+  customerId: zod.number().nullish(),
+  systemId: zod.number().nullish(),
+  titulo: zod.string(),
+  consumoAnualEstimado: zod.number().nullish(),
+  potenciaRecomendada: zod.number().nullish(),
+  numPaineis: zod.number().nullish(),
+  panelId: zod.number().nullish(),
+  inverterId: zod.number().nullish(),
+  batteryId: zod.number().nullish(),
+  configuracaoStrings: zod
+    .unknown()
+    .optional()
+    .describe("String configuration JSON"),
+  producaoAnualEstimada: zod.number().nullish(),
+  payback: zod.number().nullish(),
+  tir: zod.number().nullish(),
+  alertas: zod.array(zod.string()).optional(),
+  status: zod.enum(["rascunho", "aprovada", "enviada"]),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a proposal
+ */
+export const DeleteProposalParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary Get dashboard summary stats
  */
 export const GetDashboardSummaryResponse = zod.object({

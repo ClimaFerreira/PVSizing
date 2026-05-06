@@ -10,7 +10,7 @@ import {
   getListPanelsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { SolarPanel } from "@workspace/api-client-react/src/generated/api.schemas";
+import { SolarPanel } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DatasheetImport } from "@/components/datasheet-import";
 
 const panelSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
@@ -163,6 +164,20 @@ export default function Panels() {
             <DialogHeader>
               <DialogTitle>Criar Novo Painel</DialogTitle>
             </DialogHeader>
+            <DatasheetImport
+              tipoEquipamento="painel"
+              onExtracted={(dados) => {
+                const d = dados as Record<string, number | string>;
+                if (d.fabricante) form.setValue("fabricante", String(d.fabricante));
+                if (d.nome) form.setValue("nome", String(d.nome));
+                if (d.potencia) form.setValue("potencia", Number(d.potencia));
+                if (d.voc) form.setValue("voc", Number(d.voc));
+                if (d.vmp) form.setValue("vmp", Number(d.vmp));
+                if (d.isc) form.setValue("isc", Number(d.isc));
+                if (d.imp) form.setValue("imp", Number(d.imp));
+                if (d.coeficienteTemperatura) form.setValue("coeficienteTemperatura", Number(d.coeficienteTemperatura));
+              }}
+            />
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">

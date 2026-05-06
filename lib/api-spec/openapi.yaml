@@ -30,6 +30,10 @@ tags:
     description: Dashboard summaries
   - name: tools
     description: Engineering tools (string sizing, cable sizing, locations)
+  - name: ai
+    description: AI-powered tools (invoice parsing, datasheet import, auto-sizing)
+  - name: proposals
+    description: Technical proposals
 
 paths:
   /healthz:
@@ -651,6 +655,171 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Location"
+
+  # --- AI Tools ---
+  /tools/parse-invoice:
+    post:
+      operationId: parseInvoice
+      tags: [ai]
+      summary: Parse energy invoice (PDF/image) with AI to extract consumption data
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        "200":
+          description: Extracted invoice data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceData"
+        "400":
+          description: Invalid file
+        "502":
+          description: AI error
+
+  /tools/auto-size:
+    post:
+      operationId: autoSizeSystem
+      tags: [ai]
+      summary: Automatically calculate PV system size from consumption data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutoSizeBody"
+      responses:
+        "200":
+          description: System sizing recommendation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoSizeResult"
+
+  /tools/battery-size:
+    post:
+      operationId: sizeBattery
+      tags: [ai]
+      summary: Calculate optimal battery capacity for a system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatterySizeBody"
+      responses:
+        "200":
+          description: Battery sizing result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatterySizeResult"
+
+  /tools/import-datasheet:
+    post:
+      operationId: importDatasheet
+      tags: [ai]
+      summary: Extract equipment specs from datasheet PDF/image
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                tipoEquipamento:
+                  type: string
+                  enum: [painel, inversor, bateria]
+              required: [file, tipoEquipamento]
+      responses:
+        "200":
+          description: Extracted equipment specs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasheetResult"
+        "400":
+          description: Invalid request
+        "502":
+          description: AI error
+
+  # --- Proposals ---
+  /proposals:
+    get:
+      operationId: listProposals
+      tags: [proposals]
+      summary: List all proposals
+      responses:
+        "200":
+          description: List of proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Proposal"
+    post:
+      operationId: createProposal
+      tags: [proposals]
+      summary: Create a technical proposal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProposalBody"
+      responses:
+        "201":
+          description: Proposal created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+
+  /proposals/{id}:
+    get:
+      operationId: getProposal
+      tags: [proposals]
+      summary: Get a proposal by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteProposal
+      tags: [proposals]
+      summary: Delete a proposal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 
   # --- Dashboard / summary ---
   /dashboard/summary:
@@ -1540,3 +1709,263 @@ components:
       required:
         - label
         - count
+
+    # --- AI Tools ---
+    InvoiceData:
+      type: object
+      properties:
+        consumoMensal:
+          type: number
+          description: Average monthly consumption in kWh
+        consumoAnual:
+          type: number
+          description: Total annual consumption in kWh
+        potenciaContratada:
+          type: number
+          description: Contracted power in kVA
+        precoKwh:
+          type: number
+          description: Price per kWh in EUR
+        operador:
+          type: string
+          description: Electricity supplier name
+        tarifario:
+          type: string
+          description: Tariff plan name
+        periodo:
+          type: string
+          description: Invoice period description
+        leituras:
+          type: array
+          items:
+            type: object
+            properties:
+              mes:
+                type: string
+              consumo:
+                type: number
+            required: [mes, consumo]
+        confianca:
+          type: number
+          description: AI confidence score 0-1
+        notas:
+          type: string
+          description: Additional notes from AI
+      required:
+        - confianca
+
+    AutoSizeBody:
+      type: object
+      properties:
+        consumoAnual:
+          type: number
+          description: Annual consumption in kWh
+        latitude:
+          type: number
+        longitude:
+          type: number
+        inclinacao:
+          type: number
+          description: Panel tilt in degrees (default 30)
+        azimute:
+          type: number
+          description: Azimuth in degrees from South (default 0)
+        coberturaMeta:
+          type: number
+          description: Target self-consumption coverage % (default 80)
+        incluirBateria:
+          type: boolean
+          description: Include battery in sizing (default false)
+        horasAutonomia:
+          type: number
+          description: Target battery autonomy hours (default 4)
+      required:
+        - consumoAnual
+        - latitude
+        - longitude
+
+    AutoSizeResult:
+      type: object
+      properties:
+        potenciaRecomendada:
+          type: number
+          description: Recommended peak power in kWp
+        numPaineis:
+          type: integer
+          description: Recommended number of panels (at 400Wp typical)
+        energiaAnualEstimada:
+          type: number
+          description: Estimated annual production in kWh
+        coberturaPrevista:
+          type: number
+          description: Expected coverage percentage
+        capacidadeBateriaRecomendada:
+          type: ["number", "null"]
+          description: Recommended battery capacity in kWh (null if not requested)
+        hsp:
+          type: number
+          description: Peak sun hours at location
+        fatorRendimento:
+          type: number
+          description: System efficiency factor used
+        explicacao:
+          type: string
+          description: Human-readable explanation of the sizing
+      required:
+        - potenciaRecomendada
+        - numPaineis
+        - energiaAnualEstimada
+        - coberturaPrevista
+        - hsp
+        - fatorRendimento
+        - explicacao
+
+    BatterySizeBody:
+      type: object
+      properties:
+        consumoDiario:
+          type: number
+          description: Daily consumption in kWh
+        percConsumoNoturno:
+          type: number
+          description: Percentage of consumption at night (0-100)
+        horasAutonomia:
+          type: number
+          description: Target hours of autonomy (default 4)
+        tensaoSistema:
+          type: number
+          description: System voltage in V (default 48)
+        dod:
+          type: number
+          description: Depth of discharge % (default 80 for LiFePO4)
+      required:
+        - consumoDiario
+        - percConsumoNoturno
+
+    BatterySizeResult:
+      type: object
+      properties:
+        capacidadeRecomendada:
+          type: number
+          description: Recommended battery capacity in kWh
+        capacidadeUtilizavel:
+          type: number
+          description: Usable capacity after DoD in kWh
+        energiaNocturna:
+          type: number
+          description: Night-time energy demand in kWh
+        numBaterias:
+          type: integer
+          description: Suggested number of 10kWh battery units
+        explicacao:
+          type: string
+      required:
+        - capacidadeRecomendada
+        - capacidadeUtilizavel
+        - energiaNocturna
+        - numBaterias
+        - explicacao
+
+    DatasheetResult:
+      type: object
+      properties:
+        tipoEquipamento:
+          type: string
+          enum: [painel, inversor, bateria]
+        dados:
+          type: object
+          description: Extracted equipment data matching the create body schema
+        confianca:
+          type: number
+          description: AI confidence score 0-1
+        notas:
+          type: string
+          description: Notes or warnings from AI extraction
+      required:
+        - tipoEquipamento
+        - dados
+        - confianca
+
+    # --- Proposals ---
+    Proposal:
+      type: object
+      properties:
+        id:
+          type: integer
+        customerId:
+          type: ["integer", "null"]
+        systemId:
+          type: ["integer", "null"]
+        titulo:
+          type: string
+        consumoAnualEstimado:
+          type: ["number", "null"]
+        potenciaRecomendada:
+          type: ["number", "null"]
+        numPaineis:
+          type: ["integer", "null"]
+        panelId:
+          type: ["integer", "null"]
+        inverterId:
+          type: ["integer", "null"]
+        batteryId:
+          type: ["integer", "null"]
+        configuracaoStrings:
+          description: String configuration JSON
+        producaoAnualEstimada:
+          type: ["number", "null"]
+        payback:
+          type: ["number", "null"]
+        tir:
+          type: ["number", "null"]
+        alertas:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [rascunho, aprovada, enviada]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - titulo
+        - status
+        - createdAt
+
+    CreateProposalBody:
+      type: object
+      properties:
+        customerId:
+          type: ["integer", "null"]
+        systemId:
+          type: ["integer", "null"]
+        titulo:
+          type: string
+        consumoAnualEstimado:
+          type: ["number", "null"]
+        potenciaRecomendada:
+          type: ["number", "null"]
+        numPaineis:
+          type: ["integer", "null"]
+        panelId:
+          type: ["integer", "null"]
+        inverterId:
+          type: ["integer", "null"]
+        batteryId:
+          type: ["integer", "null"]
+        configuracaoStrings:
+          description: String configuration JSON
+        producaoAnualEstimada:
+          type: ["number", "null"]
+        payback:
+          type: ["number", "null"]
+        tir:
+          type: ["number", "null"]
+        alertas:
+          type: array
+          items:
+            type: string
+      required:
+        - titulo

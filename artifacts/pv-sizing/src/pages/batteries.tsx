@@ -7,10 +7,10 @@ import {
   useCreateBattery, 
   useUpdateBattery, 
   useDeleteBattery,
-  getListBatteriesQueryKey
+  getListBatteriesQueryKey,
+  Battery,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Battery } from "@workspace/api-client-react/src/generated/api.schemas";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,19 +37,26 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DatasheetImport } from "@/components/datasheet-import";
+
+const TECNOLOGIAS = ["LiFePO4", "Li-ion", "AGM", "Gel"] as const;
 
 const batterySchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
   fabricante: z.string().min(1, "Fabricante é obrigatório"),
   capacidade: z.coerce.number().min(0.1, "Obrigatório"),
-  tensaoNominal: z.coerce.number().min(1, "Obrigatório"),
-  potenciaCarga: z.coerce.number().min(1, "Obrigatório"),
-  potenciaDescarga: z.coerce.number().min(1, "Obrigatório"),
-  profundidadeDescarga: z.coerce.number().min(1).max(100),
-  compatibilidade: z.string().nullable().optional()
+  tensao: z.coerce.number().min(1, "Obrigatório"),
+  tecnologia: z.enum(TECNOLOGIAS),
 });
 
 type BatteryFormValues = z.infer<typeof batterySchema>;
@@ -72,11 +79,8 @@ export default function Batteries() {
       nome: "",
       fabricante: "",
       capacidade: 0,
-      tensaoNominal: 0,
-      potenciaCarga: 0,
-      potenciaDescarga: 0,
-      profundidadeDescarga: 90,
-      compatibilidade: ""
+      tensao: 48,
+      tecnologia: "LiFePO4",
     },
   });
 
@@ -128,17 +132,63 @@ export default function Batteries() {
       nome: bat.nome,
       fabricante: bat.fabricante,
       capacidade: bat.capacidade,
-      tensaoNominal: bat.tensaoNominal,
-      potenciaCarga: bat.potenciaCarga,
-      potenciaDescarga: bat.potenciaDescarga,
-      profundidadeDescarga: bat.profundidadeDescarga,
-      compatibilidade: bat.compatibilidade || "",
+      tensao: bat.tensao,
+      tecnologia: bat.tecnologia,
     });
   };
 
   const filtered = batteries?.filter(p => 
     p.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
     p.fabricante.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const BatteryForm = ({ isEdit = false }: { isEdit?: boolean }) => (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <FormField control={form.control} name="fabricante" render={({ field }) => (
+            <FormItem><FormLabel>Fabricante</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
+          <FormField control={form.control} name="nome" render={({ field }) => (
+            <FormItem><FormLabel>Modelo</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
+          <FormField control={form.control} name="capacidade" render={({ field }) => (
+            <FormItem><FormLabel>Capacidade (kWh)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
+          <FormField control={form.control} name="tensao" render={({ field }) => (
+            <FormItem><FormLabel>Tensão Nominal (V)</FormLabel><FormControl><Input type="number" step="1" {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
+          <FormField control={form.control} name="tecnologia" render={({ field }) => (
+            <FormItem><FormLabel>Tecnologia</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                <SelectContent>
+                  {TECNOLOGIAS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            <FormMessage /></FormItem>
+          )} />
+        </div>
+        {!isEdit && (
+          <DatasheetImport
+            tipoEquipamento="bateria"
+            onExtracted={(data) => {
+              if (data.nome) form.setValue("nome", String(data.nome));
+              if (data.fabricante) form.setValue("fabricante", String(data.fabricante));
+              if (data.capacidade) form.setValue("capacidade", Number(data.capacidade));
+              if (data.tensao) form.setValue("tensao", Number(data.tensao));
+            }}
+          />
+        )}
+        <div className="flex justify-end">
+          <Button type="submit" disabled={isEdit ? updateBattery.isPending : createBattery.isPending}>
+            {isEdit
+              ? (updateBattery.isPending ? "A atualizar..." : "Atualizar Bateria")
+              : (createBattery.isPending ? "A criar..." : "Criar Bateria")}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 
   return (
@@ -159,62 +209,26 @@ export default function Batteries() {
               Nova Bateria
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[560px]">
             <DialogHeader>
-              <DialogTitle>Criar Nova Bateria</DialogTitle>
+              <DialogTitle>Nova Bateria</DialogTitle>
             </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField control={form.control} name="fabricante" render={({ field }) => (
-                    <FormItem><FormLabel>Fabricante</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="nome" render={({ field }) => (
-                    <FormItem><FormLabel>Modelo</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="capacidade" render={({ field }) => (
-                    <FormItem><FormLabel>Capacidade (kWh)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="tensaoNominal" render={({ field }) => (
-                    <FormItem><FormLabel>Tensão Nominal (V)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="potenciaCarga" render={({ field }) => (
-                    <FormItem><FormLabel>Potência Carga (W)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="potenciaDescarga" render={({ field }) => (
-                    <FormItem><FormLabel>Potência Descarga (W)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="profundidadeDescarga" render={({ field }) => (
-                    <FormItem><FormLabel>DoD (%)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="compatibilidade" render={({ field: { value, ...rest } }) => (
-                    <FormItem><FormLabel>Compatibilidade (Opcional)</FormLabel><FormControl><Input value={value || ""} {...rest} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                </div>
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={createBattery.isPending}>
-                    {createBattery.isPending ? "A guardar..." : "Guardar Bateria"}
-                  </Button>
-                </div>
-              </form>
-            </Form>
+            <BatteryForm />
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Pesquisar baterias..."
-            className="pl-8"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Pesquisar baterias..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-9"
+        />
       </div>
 
-      <div className="border rounded-md bg-card">
+      <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -222,7 +236,7 @@ export default function Batteries() {
               <TableHead>Modelo</TableHead>
               <TableHead>Capacidade</TableHead>
               <TableHead>Tensão</TableHead>
-              <TableHead>Potência Max (D/C)</TableHead>
+              <TableHead>Tecnologia</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -234,7 +248,7 @@ export default function Batteries() {
                   <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell className="text-right"><Skeleton className="h-8 w-16 inline-block" /></TableCell>
                 </TableRow>
               ))
@@ -250,8 +264,8 @@ export default function Batteries() {
                   <TableCell className="font-medium">{bat.fabricante}</TableCell>
                   <TableCell>{bat.nome}</TableCell>
                   <TableCell>{bat.capacidade} kWh</TableCell>
-                  <TableCell>{bat.tensaoNominal} V</TableCell>
-                  <TableCell>{bat.potenciaDescarga}W / {bat.potenciaCarga}W</TableCell>
+                  <TableCell>{bat.tensao} V</TableCell>
+                  <TableCell>{bat.tecnologia}</TableCell>
                   <TableCell className="text-right">
                     <Dialog open={editingBattery?.id === bat.id} onOpenChange={(open) => {
                       if (!open) { setEditingBattery(null); form.reset(); }
@@ -262,45 +276,11 @@ export default function Batteries() {
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="sm:max-w-[600px]">
+                      <DialogContent className="sm:max-w-[560px]">
                         <DialogHeader>
                           <DialogTitle>Editar Bateria</DialogTitle>
                         </DialogHeader>
-                        <Form {...form}>
-                          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <FormField control={form.control} name="fabricante" render={({ field }) => (
-                                <FormItem><FormLabel>Fabricante</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                              )} />
-                              <FormField control={form.control} name="nome" render={({ field }) => (
-                                <FormItem><FormLabel>Modelo</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                              )} />
-                              <FormField control={form.control} name="capacidade" render={({ field }) => (
-                                <FormItem><FormLabel>Capacidade (kWh)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
-                              )} />
-                              <FormField control={form.control} name="tensaoNominal" render={({ field }) => (
-                                <FormItem><FormLabel>Tensão Nominal (V)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
-                              )} />
-                              <FormField control={form.control} name="potenciaCarga" render={({ field }) => (
-                                <FormItem><FormLabel>Potência Carga (W)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                              )} />
-                              <FormField control={form.control} name="potenciaDescarga" render={({ field }) => (
-                                <FormItem><FormLabel>Potência Descarga (W)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                              )} />
-                              <FormField control={form.control} name="profundidadeDescarga" render={({ field }) => (
-                                <FormItem><FormLabel>DoD (%)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                              )} />
-                              <FormField control={form.control} name="compatibilidade" render={({ field: { value, ...rest } }) => (
-                                <FormItem><FormLabel>Compatibilidade (Opcional)</FormLabel><FormControl><Input value={value || ""} {...rest} /></FormControl><FormMessage /></FormItem>
-                              )} />
-                            </div>
-                            <div className="flex justify-end">
-                              <Button type="submit" disabled={updateBattery.isPending}>
-                                {updateBattery.isPending ? "A atualizar..." : "Atualizar Bateria"}
-                              </Button>
-                            </div>
-                          </form>
-                        </Form>
+                        <BatteryForm isEdit />
                       </DialogContent>
                     </Dialog>
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(bat.id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">

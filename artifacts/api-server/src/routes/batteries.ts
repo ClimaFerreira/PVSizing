@@ -33,11 +33,11 @@ router.post("/batteries", async (req, res): Promise<void> => {
       nome: d.nome,
       fabricante: d.fabricante,
       capacidade: String(d.capacidade),
-      tensaoNominal: String(d.tensaoNominal),
-      potenciaCarga: String(d.potenciaCarga),
-      potenciaDescarga: String(d.potenciaDescarga),
-      profundidadeDescarga: String(d.profundidadeDescarga),
-      compatibilidade: d.compatibilidade ?? null,
+      tensaoNominal: String(d.tensao ?? 48),
+      potenciaCarga: String(0),
+      potenciaDescarga: String(0),
+      profundidadeDescarga: String(80),
+      compatibilidade: null,
     })
     .returning();
 
@@ -82,11 +82,7 @@ router.patch("/batteries/:id", async (req, res): Promise<void> => {
   if (d.nome !== undefined) updateValues.nome = d.nome;
   if (d.fabricante !== undefined) updateValues.fabricante = d.fabricante;
   if (d.capacidade !== undefined) updateValues.capacidade = String(d.capacidade);
-  if (d.tensaoNominal !== undefined) updateValues.tensaoNominal = String(d.tensaoNominal);
-  if (d.potenciaCarga !== undefined) updateValues.potenciaCarga = String(d.potenciaCarga);
-  if (d.potenciaDescarga !== undefined) updateValues.potenciaDescarga = String(d.potenciaDescarga);
-  if (d.profundidadeDescarga !== undefined) updateValues.profundidadeDescarga = String(d.profundidadeDescarga);
-  if (d.compatibilidade !== undefined) updateValues.compatibilidade = d.compatibilidade ?? null;
+  if (d.tensao !== undefined) updateValues.tensaoNominal = String(d.tensao);
 
   const [battery] = await db
     .update(batteriesTable)
@@ -130,10 +126,6 @@ function toBatteryResponse(row: typeof batteriesTable.$inferSelect) {
     capacidade: Number(row.capacidade),
     tensao: Number(row.tensaoNominal),
     tecnologia: "LiFePO4" as const,
-    potenciaCarga: Number(row.potenciaCarga),
-    potenciaDescarga: Number(row.potenciaDescarga),
-    profundidadeDescarga: Number(row.profundidadeDescarga),
-    compatibilidade: row.compatibilidade ?? null,
     createdAt: row.createdAt,
   };
 }
