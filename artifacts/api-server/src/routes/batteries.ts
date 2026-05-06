@@ -124,13 +124,17 @@ router.delete("/batteries/:id", async (req, res): Promise<void> => {
 
 function toBatteryResponse(row: typeof batteriesTable.$inferSelect) {
   return {
-    ...row,
+    id: row.id,
+    nome: row.nome,
+    fabricante: row.fabricante,
     capacidade: Number(row.capacidade),
-    tensaoNominal: Number(row.tensaoNominal),
+    tensao: Number(row.tensaoNominal),
+    tecnologia: "LiFePO4" as const,
     potenciaCarga: Number(row.potenciaCarga),
     potenciaDescarga: Number(row.potenciaDescarga),
     profundidadeDescarga: Number(row.profundidadeDescarga),
     compatibilidade: row.compatibilidade ?? null,
+    createdAt: row.createdAt,
   };
 }
 

@@ -6,7 +6,8 @@ import {
   Zap, 
   BoxSelect, 
   LayoutDashboard,
-  Menu
+  Menu,
+  GitBranch
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/equipamentos/paineis", label: "Painéis Solares", icon: BoxSelect },
     { href: "/equipamentos/inversores", label: "Inversores", icon: Zap },
     { href: "/equipamentos/baterias", label: "Baterias", icon: Battery },
+    { href: "/calculadora-strings", label: "Calculadora Strings", icon: GitBranch },
   ];
 
   const SidebarContent = () => (

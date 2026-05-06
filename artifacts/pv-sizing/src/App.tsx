@@ -15,6 +15,7 @@ import Batteries from "@/pages/batteries";
 import Systems from "@/pages/systems";
 import SystemNew from "@/pages/system-new";
 import SystemDetail from "@/pages/system-detail";
+import StringSizing from "@/pages/string-sizing";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ function Router() {
         <Route path="/sistemas" component={Systems} />
         <Route path="/sistemas/novo" component={SystemNew} />
         <Route path="/sistemas/:id" component={SystemDetail} />
+        <Route path="/calculadora-strings" component={StringSizing} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
