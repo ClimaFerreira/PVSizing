@@ -1779,17 +1779,52 @@ components:
         horasAutonomia:
           type: number
           description: Target battery autonomy hours (default 4)
+        crescimentoFuturo:
+          type: number
+          description: Expected annual consumption growth % to factor in (default 0)
       required:
         - consumoAnual
         - latitude
         - longitude
 
+    CenarioPainel:
+      type: object
+      properties:
+        potenciaWp:
+          type: integer
+          description: Panel wattage scenario (e.g. 300, 350, 400, 450, 500)
+        quantidade:
+          type: integer
+          description: Number of panels needed for this wattage
+        potenciaInstalada:
+          type: number
+          description: Total installed power in kWp for this scenario
+      required:
+        - potenciaWp
+        - quantidade
+        - potenciaInstalada
+
     AutoSizeResult:
       type: object
       properties:
+        consumoDiario:
+          type: number
+          description: Daily energy consumption in kWh/day
+        consumoAnualAjustado:
+          type: number
+          description: Annual consumption adjusted for future growth (kWh)
+        energiaAlvoDiaria:
+          type: number
+          description: Daily solar energy target (consumption × coverage %)
+        potenciaBruta:
+          type: number
+          description: System size before losses (kWp)
+        margemPerdas:
+          type: number
+          description: Loss margin applied (fraction, e.g. 0.25 = 25%)
         potenciaRecomendada:
           type: number
-          description: Recommended peak power in kWp
+          description: Recommended peak power in kWp (after losses margin)
         numPaineis:
           type: integer
           description: Recommended number of panels (at 400Wp typical)
@@ -1808,6 +1843,11 @@ components:
         fatorRendimento:
           type: number
           description: System efficiency factor used
+        cenariosPaineis:
+          type: array
+          items:
+            $ref: "#/components/schemas/CenarioPainel"
+          description: Panel count scenarios for common wattages
         explicacao:
           type: string
           description: Human-readable explanation of the sizing

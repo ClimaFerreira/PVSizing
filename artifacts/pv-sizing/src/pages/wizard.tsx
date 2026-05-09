@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Upload, FileText, Zap, MapPin, Settings2, CheckCircle2,
   ChevronRight, ChevronLeft, Loader2, Sun, Battery, BarChart3,
-  AlertTriangle, TrendingUp, Clock, Lightbulb
+  AlertTriangle, TrendingUp, Clock, Lightbulb, ArrowRight, Calculator
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +35,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const consumoSchema = z.object({
   consumoAnual: z.coerce.number().min(100, "Consumo deve ser ≥ 100 kWh").max(500000),
   coberturaMeta: z.coerce.number().min(10).max(100),
+  crescimentoFuturo: z.coerce.number().min(0).max(200),
   incluirBateria: z.boolean(),
   horasAutonomia: z.coerce.number().min(1).max(24),
 });
@@ -54,14 +55,22 @@ type ConsumoForm = z.infer<typeof consumoSchema>;
 type LocalizacaoForm = z.infer<typeof localizacaoSchema>;
 type EquipamentosForm = z.infer<typeof equipamentosSchema>;
 
+interface CenarioPainel { potenciaWp: number; quantidade: number; potenciaInstalada: number; }
+
 interface AutoSizeResult {
+  consumoDiario: number;
+  consumoAnualAjustado: number;
+  energiaAlvoDiaria: number;
+  potenciaBruta: number;
+  margemPerdas: number;
+  fatorRendimento: number;
   potenciaRecomendada: number;
   numPaineis: number;
   energiaAnualEstimada: number;
   coberturaPrevista: number;
   capacidadeBateriaRecomendada: number | null;
   hsp: number;
-  fatorRendimento: number;
+  cenariosPaineis: CenarioPainel[];
   explicacao: string;
 }
 
@@ -77,10 +86,10 @@ interface InvoiceData {
 }
 
 const STEPS = [
-  { id: 1, label: "Consumo",     icon: Zap },
-  { id: 2, label: "Localização", icon: MapPin },
-  { id: 3, label: "Estudo",      icon: BarChart3 },
-  { id: 4, label: "Equipamentos",icon: Settings2 },
+  { id: 1, label: "Consumo",      icon: Zap },
+  { id: 2, label: "Localização",  icon: MapPin },
+  { id: 3, label: "Estudo",       icon: BarChart3 },
+  { id: 4, label: "Equipamentos", icon: Settings2 },
 ];
 
 export default function Wizard() {
@@ -101,32 +110,28 @@ export default function Wizard() {
   const { data: locations } = useListLocations();
   const createProposal = useCreateProposal();
 
-  // ── Step 1 form ──────────────────────────────────────────────────────────────
+  // ── Step forms ────────────────────────────────────────────────────────────
   const consumoForm = useForm<ConsumoForm>({
     resolver: zodResolver(consumoSchema),
-    defaultValues: { consumoAnual: 3500, coberturaMeta: 80, incluirBateria: false, horasAutonomia: 4 },
+    defaultValues: { consumoAnual: 3500, coberturaMeta: 80, crescimentoFuturo: 0, incluirBateria: false, horasAutonomia: 4 },
   });
-
-  // ── Step 2 form ──────────────────────────────────────────────────────────────
   const locForm = useForm<LocalizacaoForm>({
     resolver: zodResolver(localizacaoSchema),
     defaultValues: { latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 },
   });
-
-  // ── Step 4 form ──────────────────────────────────────────────────────────────
   const equipForm = useForm<EquipamentosForm>({
     resolver: zodResolver(equipamentosSchema),
     defaultValues: {},
   });
 
-  // ── Invoice upload ────────────────────────────────────────────────────────────
+  // ── Invoice upload ────────────────────────────────────────────────────────
   const handleInvoiceUpload = async (file: File) => {
     setIsParsingInvoice(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
       const resp = await fetch(`${BASE}/api/tools/parse-invoice`, { method: "POST", body: fd });
-      if (!resp.ok) throw new Error("Erro ao analisar fatura");
+      if (!resp.ok) throw new Error();
       const data: InvoiceData = await resp.json();
       setInvoiceData(data);
       if (data.consumoAnual) consumoForm.setValue("consumoAnual", Math.round(data.consumoAnual));
@@ -142,7 +147,7 @@ export default function Wizard() {
     }
   };
 
-  // ── Auto-size call ────────────────────────────────────────────────────────────
+  // ── Auto-size ─────────────────────────────────────────────────────────────
   const runAutoSize = async (consumo: ConsumoForm, loc: LocalizacaoForm) => {
     setIsSizing(true);
     try {
@@ -156,13 +161,13 @@ export default function Wizard() {
           inclinacao: Number(loc.inclinacao),
           azimute: Number(loc.azimute),
           coberturaMeta: Number(consumo.coberturaMeta),
+          crescimentoFuturo: Number(consumo.crescimentoFuturo),
           incluirBateria: consumo.incluirBateria,
           horasAutonomia: Number(consumo.horasAutonomia),
         }),
       });
-      if (!resp.ok) throw new Error("Erro no dimensionamento");
-      const data: AutoSizeResult = await resp.json();
-      setSizing(data);
+      if (!resp.ok) throw new Error();
+      setSizing(await resp.json());
     } catch {
       toast({ title: "Erro no dimensionamento automático", variant: "destructive" });
     } finally {
@@ -170,65 +175,55 @@ export default function Wizard() {
     }
   };
 
-  // ── Save proposal ─────────────────────────────────────────────────────────────
+  // ── Save proposal ─────────────────────────────────────────────────────────
   const handleSaveProposal = () => {
     if (!consumoData || !sizing) return;
-    const equipValues = equipForm.getValues();
-    const selectedPanel = panels?.find(p => p.id === equipValues.panelId);
-    const titulo = `Proposta ${selectedPanel?.fabricante ?? ""} ${sizing.potenciaRecomendada} kWp`;
+    const eq = equipForm.getValues();
+    const panel = panels?.find(p => p.id === eq.panelId);
     createProposal.mutate(
       {
         data: {
-          titulo,
+          titulo: `Proposta ${panel?.fabricante ?? ""} ${sizing.potenciaRecomendada} kWp`,
           consumoAnualEstimado: consumoData.consumoAnual,
           potenciaRecomendada: sizing.potenciaRecomendada,
           numPaineis: sizing.numPaineis,
-          panelId: equipValues.panelId || null,
-          inverterId: equipValues.inverterId || null,
-          batteryId: equipValues.batteryId ?? null,
+          panelId: eq.panelId || null,
+          inverterId: eq.inverterId || null,
+          batteryId: eq.batteryId ?? null,
           producaoAnualEstimada: sizing.energiaAnualEstimada,
           alertas: [],
         },
       },
       {
-        onSuccess: () => {
-          toast({ title: "Proposta guardada com sucesso!" });
-          navigate("/propostas");
-        },
+        onSuccess: () => { toast({ title: "Proposta guardada!" }); navigate("/propostas"); },
         onError: () => toast({ title: "Erro ao guardar proposta", variant: "destructive" }),
       }
     );
   };
 
-  // ── Navigation ────────────────────────────────────────────────────────────────
+  // ── Navigation ────────────────────────────────────────────────────────────
   const goNext = async () => {
     if (step === 1) {
-      const ok = await consumoForm.trigger();
-      if (!ok) return;
+      if (!(await consumoForm.trigger())) return;
       setConsumoData(consumoForm.getValues());
       setStep(2);
     } else if (step === 2) {
-      const ok = await locForm.trigger();
-      if (!ok) return;
+      if (!(await locForm.trigger())) return;
       const loc = locForm.getValues();
-      setLocData(loc);
       const consumo = consumoForm.getValues();
+      setLocData(loc);
       setConsumoData(consumo);
       await runAutoSize(consumo, loc);
       setStep(3);
     } else if (step === 3) {
-      // Study → Equipment
       setStep(4);
     }
   };
-
-  const goPrev = () => setStep(s => Math.max(1, s - 1));
 
   const progress = ((step - 1) / (STEPS.length - 1)) * 100;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dimensionamento Automático</h1>
         <p className="text-muted-foreground mt-1">Wizard passo-a-passo para dimensionar o sistema solar.</p>
@@ -252,10 +247,8 @@ export default function Wizard() {
                 )}>
                   {done ? <CheckCircle2 size={18} /> : <Icon size={18} />}
                 </div>
-                <span className={cn(
-                  "text-xs font-medium hidden sm:block",
-                  active ? "text-primary" : done ? "text-foreground" : "text-muted-foreground"
-                )}>
+                <span className={cn("text-xs font-medium hidden sm:block",
+                  active ? "text-primary" : done ? "text-foreground" : "text-muted-foreground")}>
                   {s.label}
                 </span>
               </div>
@@ -264,7 +257,7 @@ export default function Wizard() {
         </div>
       </div>
 
-      {/* ── STEP 1: Consumo ── */}
+      {/* ── STEP 1: Consumo ─────────────────────────────────────────────────── */}
       {step === 1 && (
         <Card>
           <CardHeader>
@@ -272,7 +265,7 @@ export default function Wizard() {
             <CardDescription>Indique o consumo anual ou carregue uma fatura para extração automática com IA.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Invoice upload */}
+            {/* Invoice upload zone */}
             <div
               className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
               onClick={() => fileInputRef.current?.click()}
@@ -287,9 +280,7 @@ export default function Wizard() {
                   <FileText size={32} />
                   <p className="font-medium text-sm">Fatura analisada com sucesso</p>
                   <Badge variant="secondary">Confiança: {(invoiceData.confianca * 100).toFixed(0)}%</Badge>
-                  {invoiceData.operador && (
-                    <p className="text-xs text-muted-foreground">{invoiceData.operador} · {invoiceData.tarifario}</p>
-                  )}
+                  {invoiceData.operador && <p className="text-xs text-muted-foreground">{invoiceData.operador} · {invoiceData.tarifario}</p>}
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -298,13 +289,8 @@ export default function Wizard() {
                   <p className="text-xs">PDF ou imagem — extração automática com IA</p>
                 </div>
               )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf,image/*"
-                className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleInvoiceUpload(f); }}
-              />
+              <input ref={fileInputRef} type="file" accept="application/pdf,image/*" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleInvoiceUpload(f); }} />
             </div>
 
             <div className="relative flex items-center">
@@ -319,9 +305,14 @@ export default function Wizard() {
                   <FormItem>
                     <FormLabel>Consumo Anual (kWh)</FormLabel>
                     <FormControl><Input type="number" step="10" {...field} /></FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      ≈ {(Number(consumoForm.watch("consumoAnual")) / 12).toFixed(0)} kWh/mês ·{" "}
+                      {(Number(consumoForm.watch("consumoAnual")) / 365).toFixed(1)} kWh/dia
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )} />
+
                 <FormField control={consumoForm.control} name="coberturaMeta" render={({ field }) => (
                   <FormItem>
                     <div className="flex justify-between items-center">
@@ -334,6 +325,35 @@ export default function Wizard() {
                     <p className="text-xs text-muted-foreground">Percentagem do consumo anual a cobrir com solar</p>
                   </FormItem>
                 )} />
+
+                <FormField control={consumoForm.control} name="crescimentoFuturo" render={({ field }) => (
+                  <FormItem>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <FormLabel className="flex items-center gap-1.5">
+                          <TrendingUp size={14} className="text-muted-foreground" />
+                          Crescimento de Consumo Futuro
+                        </FormLabel>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Para VE, nova divisão, ar condicionado, etc.
+                        </p>
+                      </div>
+                      <span className={cn("text-sm font-bold", field.value > 0 ? "text-orange-500" : "text-muted-foreground")}>
+                        {field.value > 0 ? `+${field.value}%` : "0%"}
+                      </span>
+                    </div>
+                    <FormControl>
+                      <Slider min={0} max={100} step={5} value={[field.value]} onValueChange={([v]) => field.onChange(v)} />
+                    </FormControl>
+                    {field.value > 0 && (
+                      <p className="text-xs text-orange-600 dark:text-orange-400">
+                        O sistema será dimensionado para{" "}
+                        {Math.round(Number(consumoForm.watch("consumoAnual")) * (1 + field.value / 100)).toLocaleString("pt-PT")} kWh/ano
+                      </p>
+                    )}
+                  </FormItem>
+                )} />
+
                 <FormField control={consumoForm.control} name="incluirBateria" render={({ field }) => (
                   <FormItem className="flex items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
@@ -356,7 +376,7 @@ export default function Wizard() {
                       <FormControl>
                         <Slider min={1} max={24} step={1} value={[field.value]} onValueChange={([v]) => field.onChange(v)} />
                       </FormControl>
-                      <p className="text-xs text-muted-foreground">Horas de funcionamento sem sol</p>
+                      <p className="text-xs text-muted-foreground">Horas de funcionamento sem sol (DoD 80%)</p>
                     </FormItem>
                   )} />
                 )}
@@ -366,7 +386,7 @@ export default function Wizard() {
         </Card>
       )}
 
-      {/* ── STEP 2: Localização ── */}
+      {/* ── STEP 2: Localização ─────────────────────────────────────────────── */}
       {step === 2 && (
         <Card>
           <CardHeader>
@@ -379,18 +399,11 @@ export default function Wizard() {
                 <label className="text-sm font-medium">Localidade (pré-definida)</label>
                 <Select onValueChange={(v) => {
                   const loc = locations.find(l => l.nome === v);
-                  if (loc) {
-                    locForm.setValue("latitude", loc.latitude);
-                    locForm.setValue("longitude", loc.longitude);
-                  }
+                  if (loc) { locForm.setValue("latitude", loc.latitude); locForm.setValue("longitude", loc.longitude); }
                 }}>
-                  <SelectTrigger className="mt-1.5">
-                    <SelectValue placeholder="Selecionar localidade..." />
-                  </SelectTrigger>
+                  <SelectTrigger className="mt-1.5"><SelectValue placeholder="Selecionar localidade..." /></SelectTrigger>
                   <SelectContent>
-                    {locations.map(l => (
-                      <SelectItem key={l.nome} value={l.nome}>{l.nome} — {l.regiao}</SelectItem>
-                    ))}
+                    {locations.map(l => <SelectItem key={l.nome} value={l.nome}>{l.nome} — {l.regiao}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -415,7 +428,7 @@ export default function Wizard() {
                   <FormItem>
                     <FormLabel>Inclinação (°)</FormLabel>
                     <FormControl><Input type="number" min={0} max={90} {...field} /></FormControl>
-                    <p className="text-xs text-muted-foreground">0° = horizontal, 90° = vertical</p>
+                    <p className="text-xs text-muted-foreground">0°=horizontal · Óptimo ≈ 30–35°</p>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -433,7 +446,7 @@ export default function Wizard() {
         </Card>
       )}
 
-      {/* ── STEP 3: Estudo ── */}
+      {/* ── STEP 3: Estudo ──────────────────────────────────────────────────── */}
       {step === 3 && (
         <div className="space-y-4">
           {isSizing ? (
@@ -448,24 +461,26 @@ export default function Wizard() {
             </Card>
           ) : sizing ? (
             <>
-              {/* Main sizing result */}
+              {/* Key results */}
               <Card className="border-primary/40 bg-primary/5">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-primary">
                     <Sun size={22} /> Estudo de Dimensionamento
                   </CardTitle>
                   <CardDescription>
-                    Resultado calculado para {consumoData?.consumoAnual?.toLocaleString("pt-PT")} kWh/ano · {consumoData?.coberturaMeta}% cobertura solar
+                    {consumoData?.consumoAnual?.toLocaleString("pt-PT")} kWh/ano base
+                    {(consumoData?.crescimentoFuturo ?? 0) > 0 && ` + ${consumoData?.crescimentoFuturo}% futuro = ${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh/ano`}
+                    {" · "}{consumoData?.coberturaMeta}% cobertura solar
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Key metrics */}
+                  {/* Main metrics */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
-                      { label: "Potência a Instalar", value: `${sizing.potenciaRecomendada} kWp`, highlight: true, icon: Zap },
-                      { label: "Nº de Painéis",        value: `≈ ${sizing.numPaineis} un.`,        highlight: true, icon: Sun },
+                      { label: "Potência a Instalar", value: `${sizing.potenciaRecomendada} kWp`, highlight: true,  icon: Zap },
+                      { label: "Nº Painéis (400 Wp)", value: `≈ ${sizing.numPaineis} un.`,         highlight: true,  icon: Sun },
                       { label: "Produção Anual Est.",  value: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`, highlight: false, icon: TrendingUp },
-                      { label: "Cobertura Prevista",   value: `${sizing.coberturaPrevista}%`,       highlight: false, icon: BarChart3 },
+                      { label: "Cobertura Prevista",   value: `${sizing.coberturaPrevista}%`,        highlight: false, icon: BarChart3 },
                     ].map(({ label, value, highlight, icon: Icon }) => (
                       <div key={label} className={cn(
                         "rounded-xl p-4 text-center border",
@@ -480,12 +495,61 @@ export default function Wizard() {
 
                   <Separator />
 
-                  {/* Technical details */}
+                  {/* Formula walkthrough */}
+                  <div>
+                    <p className="text-sm font-semibold flex items-center gap-2 mb-3">
+                      <Calculator size={16} className="text-primary" /> Fórmula de Cálculo
+                    </p>
+                    <div className="space-y-2 text-sm">
+                      {[
+                        {
+                          label: "1. Consumo diário",
+                          formula: `${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh/ano ÷ 365 dias`,
+                          result: `${sizing.consumoDiario} kWh/dia`,
+                        },
+                        {
+                          label: "2. Energia solar diária necessária",
+                          formula: `${sizing.consumoDiario} kWh/dia × ${consumoData?.coberturaMeta}% cobertura`,
+                          result: `${sizing.energiaAlvoDiaria} kWh/dia`,
+                        },
+                        {
+                          label: "3. Potência bruta (sem perdas)",
+                          formula: `${sizing.energiaAlvoDiaria} kWh/dia ÷ ${sizing.hsp} h/dia (HSP)`,
+                          result: `${sizing.potenciaBruta} kWp`,
+                        },
+                        {
+                          label: `4. Margem de perdas (${(sizing.margemPerdas * 100).toFixed(0)}%)`,
+                          formula: `${sizing.potenciaBruta} kWp ÷ ${(sizing.fatorRendimento).toFixed(2)} (rendimento)`,
+                          result: `${sizing.potenciaRecomendada} kWp`,
+                          highlight: true,
+                        },
+                      ].map(({ label, formula, result, highlight }) => (
+                        <div key={label} className={cn(
+                          "grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-lg px-3 py-2",
+                          highlight ? "bg-primary/10 border border-primary/20 font-semibold" : "bg-muted/40"
+                        )}>
+                          <div>
+                            <p className={cn("text-xs font-medium", highlight ? "text-primary" : "text-muted-foreground")}>{label}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{formula}</p>
+                          </div>
+                          <ArrowRight size={14} className="text-muted-foreground shrink-0" />
+                          <p className={cn("text-sm font-bold shrink-0", highlight ? "text-primary" : "text-foreground")}>{result}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2 pl-1">
+                      Perdas consideradas: inversor (~4%), temperatura (~5%), sombreamento (~3%), cabos e sujidade (~5%), mismatch (~5%)
+                    </p>
+                  </div>
+
+                  <Separator />
+
+                  {/* HSP + tech details */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {[
-                      { label: "Horas de Sol Pico (HSP)", value: `${sizing.hsp} h/dia` },
-                      { label: "Rendimento Global",        value: `${(sizing.fatorRendimento * 100).toFixed(0)}%` },
-                      { label: "Painel Referência",        value: "400 Wp (std.)" },
+                      { label: "Horas Sol Pico (HSP)", value: `${sizing.hsp} h/dia` },
+                      { label: "Rendimento Global",     value: `${(sizing.fatorRendimento * 100).toFixed(0)}%` },
+                      { label: "Consumo Diário",        value: `${sizing.consumoDiario} kWh/dia` },
                     ].map(({ label, value }) => (
                       <div key={label} className="flex flex-col gap-0.5 p-3 bg-muted/40 rounded-lg">
                         <p className="text-xs text-muted-foreground">{label}</p>
@@ -494,7 +558,42 @@ export default function Wizard() {
                     ))}
                   </div>
 
-                  {/* Battery recommendation */}
+                  <Separator />
+
+                  {/* Panel scenarios */}
+                  <div>
+                    <p className="text-sm font-semibold flex items-center gap-2 mb-3">
+                      <Sun size={16} className="text-primary" /> Cenários de Painéis Solares
+                    </p>
+                    <div className="rounded-lg border overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-muted/50 border-b">
+                            <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Potência Painel</th>
+                            <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Nº Painéis</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Potência Instalada</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sizing.cenariosPaineis.map((c, i) => (
+                            <tr key={c.potenciaWp} className={cn(
+                              "border-b last:border-0",
+                              c.potenciaWp === 400 ? "bg-primary/5 font-semibold" : i % 2 === 0 ? "bg-background" : "bg-muted/20"
+                            )}>
+                              <td className="px-3 py-2">
+                                {c.potenciaWp} Wp
+                                {c.potenciaWp === 400 && <Badge variant="outline" className="ml-2 text-xs">Ref.</Badge>}
+                              </td>
+                              <td className="px-3 py-2 text-center font-bold">{c.quantidade}</td>
+                              <td className="px-3 py-2 text-right">{c.potenciaInstalada.toFixed(2)} kWp</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Battery */}
                   {sizing.capacidadeBateriaRecomendada && (
                     <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800">
                       <Battery size={22} className="text-amber-600 mt-0.5 shrink-0" />
@@ -503,7 +602,7 @@ export default function Wizard() {
                           Bateria Recomendada: {sizing.capacidadeBateriaRecomendada} kWh
                         </p>
                         <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
-                          Para {consumoData?.horasAutonomia}h de autonomia noturna com DoD 80%
+                          Para {consumoData?.horasAutonomia}h de autonomia noturna · profundidade de descarga 80%
                         </p>
                       </div>
                     </div>
@@ -515,7 +614,6 @@ export default function Wizard() {
                     <p className="text-xs text-muted-foreground leading-relaxed">{sizing.explicacao}</p>
                   </div>
 
-                  {/* Disclaimer */}
                   <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
                     <AlertTriangle size={15} className="text-blue-600 mt-0.5 shrink-0" />
                     <p className="text-xs text-blue-700 dark:text-blue-400">
@@ -531,12 +629,10 @@ export default function Wizard() {
                   <CardContent className="pt-4 pb-4">
                     <div className="flex flex-wrap gap-4 text-sm">
                       <span className="flex items-center gap-1.5 text-muted-foreground">
-                        <MapPin size={14} />
-                        {locData.latitude.toFixed(4)}°N, {locData.longitude.toFixed(4)}°E
+                        <MapPin size={14} />{locData.latitude.toFixed(4)}°N, {locData.longitude.toFixed(4)}°E
                       </span>
                       <span className="flex items-center gap-1.5 text-muted-foreground">
-                        <Clock size={14} />
-                        Inclinação {locData.inclinacao}° · Azimute {locData.azimute}° de Sul
+                        <Clock size={14} />Inclinação {locData.inclinacao}° · Azimute {locData.azimute}° de Sul
                       </span>
                     </div>
                   </CardContent>
@@ -554,10 +650,10 @@ export default function Wizard() {
         </div>
       )}
 
-      {/* ── STEP 4: Equipamentos ── */}
+      {/* ── STEP 4: Equipamentos ────────────────────────────────────────────── */}
       {step === 4 && (
         <div className="space-y-4">
-          {/* Sizing summary banner */}
+          {/* Study summary banner */}
           {sizing && (
             <div className="flex flex-wrap gap-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
               <div className="flex items-center gap-2">
@@ -581,9 +677,7 @@ export default function Wizard() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings2 size={20} /> Seleção de Equipamentos
-              </CardTitle>
+              <CardTitle className="flex items-center gap-2"><Settings2 size={20} /> Seleção de Equipamentos</CardTitle>
               <CardDescription>
                 Escolha os equipamentos do catálogo para esta instalação. Use o estudo acima como referência.
               </CardDescription>
@@ -595,11 +689,7 @@ export default function Wizard() {
                     <FormItem>
                       <FormLabel>Painel Solar *</FormLabel>
                       <Select onValueChange={v => field.onChange(Number(v))} value={field.value?.toString()}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecionar painel solar..." />
-                          </SelectTrigger>
-                        </FormControl>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Selecionar painel solar..." /></SelectTrigger></FormControl>
                         <SelectContent>
                           {panels?.map(p => (
                             <SelectItem key={p.id} value={String(p.id)}>
@@ -608,13 +698,14 @@ export default function Wizard() {
                           ))}
                         </SelectContent>
                       </Select>
-                      {sizing && equipForm.watch("panelId") > 0 && (() => {
+                      {sizing && (equipForm.watch("panelId") ?? 0) > 0 && (() => {
                         const panel = panels?.find(p => p.id === equipForm.watch("panelId"));
                         if (!panel) return null;
-                        const realPaineis = Math.ceil((sizing.potenciaRecomendada * 1000) / panel.potencia);
+                        const n = Math.ceil((sizing.potenciaRecomendada * 1000) / panel.potencia);
+                        const kWp = (n * panel.potencia / 1000).toFixed(2);
                         return (
                           <p className="text-xs text-primary mt-1">
-                            → Com este painel: {realPaineis} painéis para {sizing.potenciaRecomendada} kWp
+                            → Com este painel ({panel.potencia} Wp): <strong>{n} painéis</strong> = {kWp} kWp instalados
                           </p>
                         );
                       })()}
@@ -626,23 +717,19 @@ export default function Wizard() {
                     <FormItem>
                       <FormLabel>Inversor *</FormLabel>
                       <Select onValueChange={v => field.onChange(Number(v))} value={field.value?.toString()}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecionar inversor..." />
-                          </SelectTrigger>
-                        </FormControl>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Selecionar inversor..." /></SelectTrigger></FormControl>
                         <SelectContent>
                           {inverters?.map(i => {
-                            const match = sizing && i.potenciaAc >= sizing.potenciaRecomendada * 0.9;
+                            const ok = sizing && i.potenciaAc >= sizing.potenciaRecomendada * 0.9;
                             return (
                               <SelectItem key={i.id} value={String(i.id)}>
-                                {i.fabricante} {i.nome} — {i.potenciaAc} kW AC
-                                {match ? " ✓" : ""}
+                                {i.fabricante} {i.nome} — {i.potenciaAc} kW AC{ok ? " ✓" : ""}
                               </SelectItem>
                             );
                           })}
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-muted-foreground">Inversores marcados com ✓ têm potência adequada ao estudo</p>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -652,11 +739,7 @@ export default function Wizard() {
                       <FormItem>
                         <FormLabel>Bateria (opcional)</FormLabel>
                         <Select onValueChange={v => field.onChange(Number(v))} value={field.value?.toString()}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecionar bateria..." />
-                            </SelectTrigger>
-                          </FormControl>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Selecionar bateria..." /></SelectTrigger></FormControl>
                           <SelectContent>
                             {batteries?.map(b => (
                               <SelectItem key={b.id} value={String(b.id)}>
@@ -679,15 +762,10 @@ export default function Wizard() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                   <p className="font-medium">Guardar como Proposta Técnica</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Cria uma proposta com o estudo e equipamentos selecionados
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Cria uma proposta com o estudo e equipamentos selecionados</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <Button
-                    onClick={handleSaveProposal}
-                    disabled={createProposal.isPending}
-                  >
+                  <Button onClick={handleSaveProposal} disabled={createProposal.isPending}>
                     {createProposal.isPending
                       ? <Loader2 size={16} className="mr-2 animate-spin" />
                       : <CheckCircle2 size={16} className="mr-2" />}
@@ -705,14 +783,12 @@ export default function Wizard() {
 
       {/* Navigation */}
       <div className="flex justify-between pt-2">
-        <Button variant="outline" onClick={goPrev} disabled={step === 1}>
+        <Button variant="outline" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1}>
           <ChevronLeft size={16} className="mr-1" /> Anterior
         </Button>
         {step < 4 && (
           <Button onClick={goNext} disabled={isSizing}>
-            {isSizing
-              ? <Loader2 size={16} className="mr-1 animate-spin" />
-              : null}
+            {isSizing && <Loader2 size={16} className="mr-1 animate-spin" />}
             {step === 3 ? "Selecionar Equipamentos" : "Seguinte"}
             <ChevronRight size={16} className="ml-1" />
           </Button>

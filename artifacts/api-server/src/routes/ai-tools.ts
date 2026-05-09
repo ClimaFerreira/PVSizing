@@ -82,7 +82,7 @@ Responde APENAS com o JSON, sem texto adicional.`,
 // POST /tools/auto-size
 router.post("/tools/auto-size", async (req, res): Promise<void> => {
   const raw = req.body as Record<string, unknown>;
-  const consumoAnual = Number(raw.consumoAnual);
+  const consumoAnualBase = Number(raw.consumoAnual);
   const latitude = Number(raw.latitude);
   const longitude = Number(raw.longitude);
   const inclinacao = raw.inclinacao !== undefined ? Number(raw.inclinacao) : 30;
@@ -90,45 +90,87 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
   const coberturaMeta = raw.coberturaMeta !== undefined ? Number(raw.coberturaMeta) : 80;
   const incluirBateria = raw.incluirBateria === true || raw.incluirBateria === "true";
   const horasAutonomia = raw.horasAutonomia !== undefined ? Number(raw.horasAutonomia) : 4;
+  const crescimentoFuturo = raw.crescimentoFuturo !== undefined ? Number(raw.crescimentoFuturo) : 0;
 
-  if (!consumoAnual || !latitude || !longitude) {
+  if (!consumoAnualBase || !latitude || !longitude) {
     res.status(400).json({ error: "consumoAnual, latitude e longitude são obrigatórios" });
     return;
   }
 
-  // Estimate HSP for Portugal using simplified model
+  // Apply future growth factor
+  const consumoAnualAjustado = consumoAnualBase * (1 + crescimentoFuturo / 100);
+  const consumoDiario = consumoAnualAjustado / 365;
+
+  // ── Estimate HSP for Portugal ─────────────────────────────────────────────
+  // Simple irradiance model: base HSP adjusted for latitude, tilt and azimuth
   const latRad = (Math.abs(latitude) * Math.PI) / 180;
   const baseHsp = 5.2 - latRad * 1.8;
-  const tiltFactor = 1 - Math.abs(inclinacao - 35) * 0.005;
-  const azimuthFactor = 1 - Math.abs(azimute) * 0.003;
-  const hsp = baseHsp * tiltFactor * azimuthFactor;
+  const tiltFactor = 1 - Math.abs(inclinacao - 35) * 0.005;   // optimal ~35°
+  const azimuthFactor = 1 - Math.abs(azimute) * 0.003;        // optimal = South (0°)
+  const hsp = Math.max(2.5, baseHsp * tiltFactor * azimuthFactor);
 
-  const fatorRendimento = 0.78;
-  const cobertura = coberturaMeta / 100;
-  const energiaAlvo = consumoAnual * cobertura;
-  const potenciaRecomendada = energiaAlvo / (hsp * 365 * fatorRendimento);
+  // ── Sizing formula (as per IEA / industry standard) ───────────────────────
+  // Step 1: daily solar energy target
+  const energiaAlvoDiaria = consumoDiario * (coberturaMeta / 100);
+
+  // Step 2: brute system size (before losses)  P_bruto = E_dia / HSP
+  const potenciaBruta = energiaAlvoDiaria / hsp;
+
+  // Step 3: apply system losses margin (~25%: inverter + temp + wiring + soiling)
+  //   P_ajustado = P_bruto / (1 - perdas) = P_bruto / 0.75
+  //   We use fatorRendimento = 0.78 (slightly optimistic for PT climate)
+  const margemPerdas = 0.22; // 22% total losses
+  const fatorRendimento = 1 - margemPerdas;
+  const potenciaRecomendada = potenciaBruta / fatorRendimento;
+
+  // Step 4: estimated annual production
   const energiaAnualEstimada = potenciaRecomendada * hsp * 365 * fatorRendimento;
-  const coberturaPrevista = Math.min(100, (energiaAnualEstimada / consumoAnual) * 100);
-  const numPaineis = Math.ceil((potenciaRecomendada * 1000) / 400);
+  const coberturaPrevista = Math.min(100, (energiaAnualEstimada / consumoAnualAjustado) * 100);
 
+  // Step 5: panel count scenarios for common wattages
+  const WATTAGES = [300, 350, 400, 450, 500] as const;
+  const cenariosPaineis = WATTAGES.map((wp) => {
+    const quantidade = Math.ceil((potenciaRecomendada * 1000) / wp);
+    return { potenciaWp: wp, quantidade, potenciaInstalada: Math.round(quantidade * wp) / 1000 };
+  });
+
+  // Panel count at reference 400 Wp
+  const numPaineis = cenariosPaineis.find(c => c.potenciaWp === 400)!.quantidade;
+
+  // ── Battery sizing ────────────────────────────────────────────────────────
   let capacidadeBateriaRecomendada: number | null = null;
   if (incluirBateria) {
-    const consumoDiario = consumoAnual / 365;
-    const percNoturno = 0.4;
-    const energiaNoturna = consumoDiario * percNoturno * (horasAutonomia / 12);
-    capacidadeBateriaRecomendada = Math.ceil((energiaNoturna / 0.8) * 2) / 2;
+    const percNoturno = 0.40;
+    const energiaNoturna = consumoDiario * percNoturno * (horasAutonomia / (24 * percNoturno));
+    capacidadeBateriaRecomendada = Math.ceil((energiaNoturna / 0.8) * 2) / 2; // round to 0.5 kWh, DoD=80%
   }
 
-  const explicacao = `Para um consumo anual de ${consumoAnual.toFixed(0)} kWh com meta de ${coberturaMeta}% de cobertura, recomenda-se um sistema de ${potenciaRecomendada.toFixed(2)} kWp (≈${numPaineis} painéis de 400Wp). Com ${hsp.toFixed(2)} horas de sol pico (HSP) e rendimento global de ${(fatorRendimento * 100).toFixed(0)}%, estima-se uma produção anual de ${energiaAnualEstimada.toFixed(0)} kWh (${coberturaPrevista.toFixed(1)}% do consumo).${capacidadeBateriaRecomendada ? ` Bateria recomendada: ${capacidadeBateriaRecomendada} kWh para ${horasAutonomia}h de autonomia noturna.` : ""}`;
+  const crescimentoTexto = crescimentoFuturo > 0
+    ? ` (inclui ${crescimentoFuturo}% de crescimento futuro, passando a ${consumoAnualAjustado.toFixed(0)} kWh/ano)`
+    : "";
+  const explicacao =
+    `Consumo base: ${consumoAnualBase.toFixed(0)} kWh/ano${crescimentoTexto} → ${consumoDiario.toFixed(1)} kWh/dia. ` +
+    `Energia solar diária necessária (${coberturaMeta}% cobertura): ${energiaAlvoDiaria.toFixed(2)} kWh/dia. ` +
+    `Com ${hsp.toFixed(2)} h de sol pico (HSP), potência bruta = ${potenciaBruta.toFixed(2)} kWp. ` +
+    `Aplicando margem de ${(margemPerdas * 100).toFixed(0)}% para perdas (inversor, temperatura, sombreamento): ` +
+    `${potenciaRecomendada.toFixed(2)} kWp instalados (≈${numPaineis} painéis de 400 Wp). ` +
+    `Produção anual estimada: ${energiaAnualEstimada.toFixed(0)} kWh (${coberturaPrevista.toFixed(1)}% do consumo).` +
+    (capacidadeBateriaRecomendada ? ` Bateria: ${capacidadeBateriaRecomendada} kWh para ${horasAutonomia}h de autonomia.` : "");
 
   res.json({
+    consumoDiario: Math.round(consumoDiario * 10) / 10,
+    consumoAnualAjustado: Math.round(consumoAnualAjustado),
+    energiaAlvoDiaria: Math.round(energiaAlvoDiaria * 100) / 100,
+    potenciaBruta: Math.round(potenciaBruta * 100) / 100,
+    margemPerdas,
+    fatorRendimento,
     potenciaRecomendada: Math.round(potenciaRecomendada * 100) / 100,
     numPaineis,
     energiaAnualEstimada: Math.round(energiaAnualEstimada),
     coberturaPrevista: Math.round(coberturaPrevista * 10) / 10,
     capacidadeBateriaRecomendada,
     hsp: Math.round(hsp * 100) / 100,
-    fatorRendimento,
+    cenariosPaineis,
     explicacao,
   });
 });
