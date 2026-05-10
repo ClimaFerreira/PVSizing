@@ -168,14 +168,19 @@ export default function Panels() {
               tipoEquipamento="painel"
               onExtracted={(dados) => {
                 const d = dados as Record<string, number | string>;
-                if (d.fabricante) form.setValue("fabricante", String(d.fabricante));
-                if (d.nome) form.setValue("nome", String(d.nome));
-                if (d.potencia) form.setValue("potencia", Number(d.potencia));
-                if (d.voc) form.setValue("voc", Number(d.voc));
-                if (d.vmp) form.setValue("vmp", Number(d.vmp));
-                if (d.isc) form.setValue("isc", Number(d.isc));
-                if (d.imp) form.setValue("imp", Number(d.imp));
-                if (d.coeficienteTemperatura) form.setValue("coeficienteTemperatura", Number(d.coeficienteTemperatura));
+                const cur = form.getValues();
+                form.reset({
+                  fabricante:            d.fabricante           ? String(d.fabricante)            : cur.fabricante,
+                  nome:                  d.nome                 ? String(d.nome)                  : cur.nome,
+                  potencia:              Number(d.potencia) > 0 ? Number(d.potencia)              : cur.potencia,
+                  voc:                   Number(d.voc)      > 0 ? Number(d.voc)                   : cur.voc,
+                  vmp:                   Number(d.vmp)      > 0 ? Number(d.vmp)                   : cur.vmp,
+                  isc:                   Number(d.isc)      > 0 ? Number(d.isc)                   : cur.isc,
+                  imp:                   Number(d.imp)      > 0 ? Number(d.imp)                   : cur.imp,
+                  coeficienteTemperatura: Number(d.coeficienteTemperatura) !== 0
+                                           ? Number(d.coeficienteTemperatura)
+                                           : cur.coeficienteTemperatura,
+                });
               }}
               onBatchCreate={async (modelos) => {
                 let ok = 0;

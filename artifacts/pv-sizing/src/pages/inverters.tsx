@@ -171,15 +171,18 @@ export default function Inverters() {
               tipoEquipamento="inversor"
               onExtracted={(dados) => {
                 const d = dados as Record<string, number | string>;
-                if (d.fabricante) form.setValue("fabricante", String(d.fabricante));
-                if (d.nome) form.setValue("nome", String(d.nome));
-                if (d.potenciaAc) form.setValue("potenciaAc", Number(d.potenciaAc));
-                if (d.potenciaDcMax) form.setValue("potenciaDcMax", Number(d.potenciaDcMax));
-                if (d.mpptMin) form.setValue("mpptMin", Number(d.mpptMin));
-                if (d.mpptMax) form.setValue("mpptMax", Number(d.mpptMax));
-                if (d.corrMaxMppt) form.setValue("corrMaxMppt", Number(d.corrMaxMppt));
-                if (d.numMppt) form.setValue("numMppt", Number(d.numMppt));
-                if (d.stringsPorMppt) form.setValue("stringsPorMppt", Number(d.stringsPorMppt));
+                const cur = form.getValues();
+                form.reset({
+                  fabricante:    d.fabricante               ? String(d.fabricante)       : cur.fabricante,
+                  nome:          d.nome                     ? String(d.nome)             : cur.nome,
+                  potenciaAc:    Number(d.potenciaAc)    > 0 ? Number(d.potenciaAc)     : cur.potenciaAc,
+                  potenciaDcMax: Number(d.potenciaDcMax) > 0 ? Number(d.potenciaDcMax)  : cur.potenciaDcMax,
+                  mpptMin:       Number(d.mpptMin)       > 0 ? Number(d.mpptMin)        : cur.mpptMin,
+                  mpptMax:       Number(d.mpptMax)       > 0 ? Number(d.mpptMax)        : cur.mpptMax,
+                  corrMaxMppt:   Number(d.corrMaxMppt)   > 0 ? Number(d.corrMaxMppt)    : cur.corrMaxMppt,
+                  numMppt:       Number(d.numMppt)       > 0 ? Number(d.numMppt)        : cur.numMppt,
+                  stringsPorMppt: Number(d.stringsPorMppt) > 0 ? Number(d.stringsPorMppt) : cur.stringsPorMppt,
+                });
               }}
               onBatchCreate={async (modelos) => {
                 let ok = 0;

@@ -173,12 +173,16 @@ export default function Batteries() {
           <DatasheetImport
             tipoEquipamento="bateria"
             onExtracted={(data) => {
-              if (data.nome) form.setValue("nome", String(data.nome));
-              if (data.fabricante) form.setValue("fabricante", String(data.fabricante));
-              if (data.capacidade) form.setValue("capacidade", Number(data.capacidade));
-              if (data.tensao) form.setValue("tensao", Number(data.tensao));
-              if (data.tecnologia && TECNOLOGIAS.includes(data.tecnologia as typeof TECNOLOGIAS[number]))
-                form.setValue("tecnologia", data.tecnologia as typeof TECNOLOGIAS[number]);
+              const cur = form.getValues();
+              form.reset({
+                nome:        data.nome        ? String(data.nome)        : cur.nome,
+                fabricante:  data.fabricante  ? String(data.fabricante)  : cur.fabricante,
+                capacidade:  Number(data.capacidade) > 0 ? Number(data.capacidade) : cur.capacidade,
+                tensao:      Number(data.tensao)      > 0 ? Number(data.tensao)      : cur.tensao,
+                tecnologia:  TECNOLOGIAS.includes(data.tecnologia as typeof TECNOLOGIAS[number])
+                               ? (data.tecnologia as typeof TECNOLOGIAS[number])
+                               : cur.tecnologia,
+              });
             }}
             onBatchCreate={async (modelos) => {
               let ok = 0;
