@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -25,7 +25,19 @@ import {
   Zap, MapPin, Settings2, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown,
   Loader2, Sun, Battery, BarChart3, AlertTriangle, TrendingUp, TrendingDown,
   Clock, Lightbulb, ArrowRight, Calculator, SlidersHorizontal, RotateCcw, Target, Euro,
+  Save, HistoryIcon,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { saveDraft, loadDraft, clearDraft, draftAge, type WizardDraftData } from "@/lib/wizard-draft";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 
@@ -139,6 +151,10 @@ export default function Wizard() {
   const [showManualAdjust, setShowManualAdjust] = useState(false);
   const [manual, setManual]       = useState<ManualOverride | null>(null);
   const [selectedCenarioTipo, setSelectedCenarioTipo] = useState<CenarioTipo>("equilibrado");
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<WizardDraftData | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -169,6 +185,35 @@ export default function Wizard() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sizing]);
+
+  // ── Draft: check on mount ──────────────────────────────────────────────────
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft && (draft.step > 1 || draft.sizing !== null)) {
+      setPendingDraft(draft);
+      setShowRecovery(true);
+    }
+  }, []);
+
+  // ── Draft: auto-save (debounced 800ms) ────────────────────────────────────
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveDraft({
+        step,
+        consumoData: consumoData as unknown as Record<string, unknown>,
+        locData: locData as unknown as Record<string, unknown> | null,
+        sizing: sizing as unknown as Record<string, unknown> | null,
+        selectedCenarioTipo,
+        manual: manual as unknown as Record<string, unknown> | null,
+        showManualAdjust,
+        equipFormValues: equipForm.getValues(),
+      });
+      setLastSaved(new Date());
+    }, 800);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust]);
 
   // Currently selected sizing scenario
   const activeCenario: AutoSizeCenario | null = useMemo(() => {
@@ -228,6 +273,48 @@ export default function Wizard() {
     );
   }, [manual, activeCenario, sizing]);
 
+  // ── Draft handlers ─────────────────────────────────────────────────────────
+  const restoreDraft = useCallback((draft: WizardDraftData) => {
+    setConsumoData(draft.consumoData as unknown as ConsumoData);
+    if (draft.locData) {
+      setLocData(draft.locData as unknown as LocalizacaoForm);
+      locForm.reset(draft.locData as unknown as LocalizacaoForm);
+    }
+    if (draft.sizing) setSizing(draft.sizing as unknown as AutoSizeResult);
+    setSelectedCenarioTipo(draft.selectedCenarioTipo as CenarioTipo);
+    if (draft.manual) setManual(draft.manual as unknown as ManualOverride);
+    setShowManualAdjust(draft.showManualAdjust);
+    if (draft.equipFormValues && Object.keys(draft.equipFormValues).length > 0) {
+      equipForm.reset(draft.equipFormValues);
+    }
+    setStep(draft.step);
+    setShowRecovery(false);
+    setPendingDraft(null);
+    toast({ title: "Estudo retomado", description: "O teu estudo foi recuperado com sucesso." });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locForm, equipForm]);
+
+  const discardDraft = useCallback(() => {
+    clearDraft();
+    setShowRecovery(false);
+    setPendingDraft(null);
+  }, []);
+
+  const resetWizard = useCallback(() => {
+    clearDraft();
+    setConsumoData(DEFAULT_CONSUMO_DATA);
+    setLocData(null);
+    setSizing(null);
+    setStep(1);
+    setManual(null);
+    setSelectedCenarioTipo("equilibrado");
+    setShowManualAdjust(false);
+    setLastSaved(null);
+    locForm.reset({ latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 });
+    equipForm.reset({});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locForm, equipForm]);
+
   // ── Auto-size ─────────────────────────────────────────────────────────────
   const runAutoSize = async (consumo: ConsumoData, loc: LocalizacaoForm) => {
     setIsSizing(true);
@@ -279,7 +366,7 @@ export default function Wizard() {
         alertas:               [],
       }},
       {
-        onSuccess: () => { toast({ title: "Proposta guardada!" }); navigate("/propostas"); },
+        onSuccess: () => { clearDraft(); toast({ title: "Proposta guardada!" }); navigate("/propostas"); },
         onError:   () => toast({ title: "Erro ao guardar proposta", variant: "destructive" }),
       }
     );
@@ -308,9 +395,67 @@ export default function Wizard() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dimensionamento Automático</h1>
-        <p className="text-muted-foreground mt-1">Wizard passo-a-passo para dimensionar o sistema solar.</p>
+
+      {/* ── Recovery dialog ───────────────────────────────────────────────── */}
+      <AlertDialog open={showRecovery} onOpenChange={setShowRecovery}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <HistoryIcon size={18} className="text-primary" />
+              Estudo em progresso encontrado
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Foi encontrado um estudo guardado automaticamente{" "}
+                  <strong>{pendingDraft ? draftAge(pendingDraft) : ""}</strong>,
+                  no passo <strong>{pendingDraft?.step ?? 1}</strong> de 4.
+                </p>
+                {pendingDraft?.sizing && (
+                  <p className="text-sm text-muted-foreground">
+                    Estudo calculado ·{" "}
+                    {String((pendingDraft.sizing as Record<string, unknown>).potenciaRecomendada ?? "—")} kWp ·{" "}
+                    {String((pendingDraft.sizing as Record<string, unknown>).numPaineis ?? "—")} painéis
+                  </p>
+                )}
+                <p>Deseja continuar ou iniciar um novo estudo?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={discardDraft}>Iniciar novo</AlertDialogCancel>
+            <AlertDialogAction onClick={() => pendingDraft && restoreDraft(pendingDraft)}>
+              Continuar estudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dimensionamento Automático</h1>
+          <p className="text-muted-foreground mt-1">Wizard passo-a-passo para dimensionar o sistema solar.</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 pt-1">
+          {lastSaved && (
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <Save size={11} />
+              Guardado
+            </span>
+          )}
+          {(step > 1 || sizing) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-destructive h-8 px-2"
+              onClick={resetWizard}
+              title="Reiniciar estudo"
+            >
+              <RotateCcw size={14} className="mr-1" />
+              Reiniciar
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Step indicators */}
