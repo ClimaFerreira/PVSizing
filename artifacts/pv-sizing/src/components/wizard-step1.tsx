@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -178,10 +178,33 @@ export default function WizardStep1({ data, onChange }: Props) {
   const [invoices, setInvoices] = useState<ParsedInvoice[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [showAppliances, setShowAppliances] = useState(false);
+  const [autoApplied, setAutoApplied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  // Stable refs so the auto-apply effect never has stale closures
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
   const set = useCallback((patch: Partial<ConsumoData>) => onChange({ ...data, ...patch }), [data, onChange]);
+
+  // Auto-apply consolidated invoice data to parent state whenever invoices change
+  useEffect(() => {
+    if (inputMode !== "faturas") return;
+    const c = consolidateInvoices(invoices);
+    if (!c || c.consumoAnualEstimado <= 0) return;
+    const patch: Partial<ConsumoData> = { consumoAnual: c.consumoAnualEstimado };
+    if (c.percVazio != null) {
+      patch.percVazio = c.percVazio;
+      patch.percCheio = c.percCheio!;
+      patch.percPonta = c.percPonta!;
+    }
+    onChangeRef.current({ ...dataRef.current, ...patch });
+    setAutoApplied(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoices, inputMode]);
 
   // Derived: total appliance consumption
   const extraKwh = APPLIANCES
@@ -221,7 +244,8 @@ export default function WizardStep1({ data, onChange }: Props) {
     const patch: Partial<ConsumoData> = { consumoAnual: c.consumoAnualEstimado };
     if (c.percVazio != null) { patch.percVazio = c.percVazio; patch.percCheio = c.percCheio!; patch.percPonta = c.percPonta!; }
     onChange({ ...data, ...patch });
-    toast({ title: "Dados aplicados ao dimensionamento" });
+    setAutoApplied(true);
+    toast({ title: `Consumo atualizado: ${c.consumoAnualEstimado.toLocaleString("pt-PT")} kWh/ano` });
   }, [invoices, data, onChange, toast]);
 
   const saveInvoiceEdit = useCallback((id: string, edits: Partial<InvoiceData>) => {
@@ -297,7 +321,16 @@ export default function WizardStep1({ data, onChange }: Props) {
                 <p className="text-sm font-semibold">Resumo Consolidado</p>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{doneInvoices.length} {doneInvoices.length === 1 ? "fatura" : "faturas"} · {consolidated.mesesCobertos} {consolidated.mesesCobertos === 1 ? "mês" : "meses"}</Badge>
-                  <Button size="sm" onClick={applyConsolidated}>Aplicar ao Estudo</Button>
+                  {autoApplied ? (
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="secondary" className="text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800 gap-1">
+                        <CheckCircle2 size={11} /> Aplicado ao estudo
+                      </Badge>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={applyConsolidated}>Atualizar</Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" onClick={applyConsolidated}>Aplicar ao Estudo</Button>
+                  )}
                 </div>
               </div>
               <div className="p-4 space-y-4">
