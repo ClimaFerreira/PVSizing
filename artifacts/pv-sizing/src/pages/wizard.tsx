@@ -155,6 +155,7 @@ export default function Wizard() {
   const [selectedCenarioTipo, setSelectedCenarioTipo] = useState<CenarioTipo>("equilibrado");
   const [showRecovery, setShowRecovery] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<WizardDraftData | null>(null);
+  const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
@@ -396,6 +397,12 @@ export default function Wizard() {
         toast({ title: "Selecione pelo menos um painel e um inversor", variant: "destructive" });
         return;
       }
+      const eff = effectiveSizing ?? sizing;
+      const selectedPanel = panels?.find(p => p.id === vals.panelId);
+      const computed = eff
+        ? Math.ceil((eff.potenciaInstalada * 1000) / (selectedPanel?.potencia ?? 400))
+        : (manual?.numPaineis ?? 0);
+      setNumPaineisStep5(computed);
       setStep(5);
     }
   };
@@ -1422,34 +1429,48 @@ export default function Wizard() {
         const panel = panels?.find(p => p.id === vals.panelId) ?? null;
         const inverter = inverters?.find(i => i.id === vals.inverterId) ?? null;
         const battery = vals.batteryId ? batteries?.find(b => b.id === vals.batteryId) ?? null : null;
-        const numPaineis = eff
-          ? Math.ceil((eff.potenciaInstalada * 1000) / (panel?.potencia ?? 400))
-          : (manual?.numPaineis ?? 0);
+        const numPaineis = numPaineisStep5 ?? 0;
+        const potenciaRealKwp = panel ? (numPaineis * Number(panel.potencia)) / 1000 : (eff?.potenciaInstalada ?? 0);
 
         return (
           <div className="space-y-4">
-            {(effectiveSizing ?? sizing) && (() => {
-              const e = (effectiveSizing ?? sizing)!;
-              return (
-                <div className="flex flex-wrap gap-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <Zap size={16} className="text-primary" />
-                    <span className="text-sm font-medium">{e.potenciaInstalada} kWp instalados</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Sun size={16} className="text-primary" />
-                    <span className="text-sm font-medium">{numPaineis} painéis</span>
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Editable configuration bar */}
+            <div className="flex flex-wrap items-center gap-4 p-4 bg-primary/5 border border-primary/20 rounded-xl">
+              <div className="flex items-center gap-2 shrink-0">
+                <Zap size={16} className="text-primary" />
+                <span className="text-sm font-medium">{potenciaRealKwp.toFixed(2)} kWp</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Sun size={16} className="text-primary shrink-0" />
+                <label className="text-sm font-medium shrink-0">Painéis:</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={numPaineis}
+                  onChange={e => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v > 0) setNumPaineisStep5(v);
+                  }}
+                  className="w-20 h-7 text-sm text-center px-1"
+                />
+              </div>
+              {eff && panel && numPaineis !== Math.ceil((eff.potenciaInstalada * 1000) / Number(panel.potencia)) && (
+                <button
+                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+                  onClick={() => setNumPaineisStep5(Math.ceil((eff.potenciaInstalada * 1000) / Number(panel.potencia)))}
+                >
+                  Repor sugestão ({Math.ceil((eff.potenciaInstalada * 1000) / Number(panel.potencia))} painéis)
+                </button>
+              )}
+            </div>
 
             <WizardStep5Tecnica
               panel={panel}
               inverter={inverter}
               battery={battery}
               numPaineis={numPaineis}
-              potenciaInstalada={eff?.potenciaInstalada ?? 0}
+              potenciaInstalada={potenciaRealKwp}
             />
 
             <Card className="border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
