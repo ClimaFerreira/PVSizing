@@ -49,17 +49,23 @@ router.post("/tools/parse-invoice", upload.single("file"), async (req, res): Pro
             contentBlock,
             {
               type: "text",
-              text: `Analisa esta fatura de eletricidade portuguesa e extrai os seguintes dados em JSON:
+              text: `Analisa esta fatura de eletricidade portuguesa e extrai os dados em JSON com exactamente estes campos:
 {
-  "consumoMensal": número médio mensal em kWh ou null,
-  "consumoAnual": consumo total anual em kWh ou null,
+  "consumoTotal": kWh total neste período de faturação (não anualizado) ou null,
+  "consumoMensal": média mensal em kWh se o período for >1 mês, senão igual a consumoTotal, ou null,
+  "consumoAnual": consumo anual em kWh se explicitamente indicado na fatura, senão null,
+  "consumoPonta": kWh em horas de ponta (se tarifa bi/tri-horária) ou null,
+  "consumoCheio": kWh em horas cheias (se tarifa bi/tri-horária) ou null,
+  "consumoVazio": kWh em horas de vazio/super-vazio (se tarifa bi/tri-horária) ou null,
   "potenciaContratada": potência contratada em kVA ou null,
-  "precoKwh": preço por kWh em EUR ou null,
-  "operador": nome da comercializadora ou null,
-  "tarifario": nome do tarifário (simples/bi-horária/etc) ou null,
-  "periodo": descrição do período da fatura ou null,
-  "leituras": array de {mes: string, consumo: número} com leituras mensais se disponíveis,
-  "confianca": valor entre 0 e 1 representando confiança na extração,
+  "precoKwh": preço médio por kWh em EUR (sem IVA se indicado) ou null,
+  "operador": nome da comercializadora (ex: EDP, Galp, Endesa, Iberdrola) ou null,
+  "tarifario": tipo de tarifário: "simples", "bi-horária", "tri-horária" ou null,
+  "dataInicio": data início do período em formato YYYY-MM-DD ou null,
+  "dataFim": data fim do período em formato YYYY-MM-DD ou null,
+  "periodoMeses": número de meses cobertos por esta fatura (normalmente 1 ou 2) ou null,
+  "leiturasMensais": array de {"mes": "Abr 2024", "consumo": 312} com leituras individuais se disponíveis ou [],
+  "confianca": número entre 0 e 1 representando confiança global na extração,
   "notas": observações relevantes ou null
 }
 Responde APENAS com o JSON, sem texto adicional.`,
@@ -91,6 +97,14 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
   const incluirBateria = raw.incluirBateria === true || raw.incluirBateria === "true";
   const horasAutonomia = raw.horasAutonomia !== undefined ? Number(raw.horasAutonomia) : 4;
   const crescimentoFuturo = raw.crescimentoFuturo !== undefined ? Number(raw.crescimentoFuturo) : 0;
+  const percVazioInput  = raw.percVazio  !== undefined ? Number(raw.percVazio)  : 40;
+  const percCheioInput  = raw.percCheio  !== undefined ? Number(raw.percCheio)  : 35;
+  const percPontaInput  = raw.percPonta  !== undefined ? Number(raw.percPonta)  : 25;
+  // Normalize so the three always sum to 100
+  const totalTarifa = percVazioInput + percCheioInput + percPontaInput || 100;
+  const percVazio = Math.round((percVazioInput / totalTarifa) * 100);
+  const percCheio = Math.round((percCheioInput / totalTarifa) * 100);
+  const percPonta = 100 - percVazio - percCheio;
 
   if (!consumoAnualBase || !latitude || !longitude) {
     res.status(400).json({ error: "consumoAnual, latitude e longitude são obrigatórios" });
@@ -137,16 +151,22 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
   // Panel count at reference 400 Wp
   const numPaineis = cenariosPaineis.find(c => c.potenciaWp === 400)!.quantidade;
 
-  // ── Battery sizing ────────────────────────────────────────────────────────
+  // ── Battery sizing (tariff-aware) ─────────────────────────────────────────
+  // Vazio = off-peak hours (PT: 22h–8h ≈ 10h/day) → this is what the battery must cover
+  // Battery capacity = (daily vazio consumption × autonomy fraction) / DoD
   let capacidadeBateriaRecomendada: number | null = null;
   if (incluirBateria) {
-    const percNoturno = 0.40;
-    const energiaNoturna = consumoDiario * percNoturno * (horasAutonomia / (24 * percNoturno));
-    capacidadeBateriaRecomendada = Math.ceil((energiaNoturna / 0.8) * 2) / 2; // round to 0.5 kWh, DoD=80%
+    const energiaVazioDiaria = consumoDiario * (percVazio / 100);
+    const horasVazioWindow = 10; // PT off-peak window ≈ 10h
+    const energiaBateriaNeeded = energiaVazioDiaria * (horasAutonomia / horasVazioWindow);
+    capacidadeBateriaRecomendada = Math.ceil((energiaBateriaNeeded / 0.8) * 2) / 2; // DoD=80%, round to 0.5 kWh
   }
 
   const crescimentoTexto = crescimentoFuturo > 0
-    ? ` (inclui ${crescimentoFuturo}% de crescimento futuro, passando a ${consumoAnualAjustado.toFixed(0)} kWh/ano)`
+    ? ` (inclui ${crescimentoFuturo}% de crescimento futuro → ${consumoAnualAjustado.toFixed(0)} kWh/ano)`
+    : "";
+  const tarifaTexto = capacidadeBateriaRecomendada
+    ? ` Bateria dimensionada com base em ${percVazio}% de consumo em vazio (período noturno): ${capacidadeBateriaRecomendada} kWh para ${horasAutonomia}h de autonomia.`
     : "";
   const explicacao =
     `Consumo base: ${consumoAnualBase.toFixed(0)} kWh/ano${crescimentoTexto} → ${consumoDiario.toFixed(1)} kWh/dia. ` +
@@ -155,7 +175,7 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     `Aplicando margem de ${(margemPerdas * 100).toFixed(0)}% para perdas (inversor, temperatura, sombreamento): ` +
     `${potenciaRecomendada.toFixed(2)} kWp instalados (≈${numPaineis} painéis de 400 Wp). ` +
     `Produção anual estimada: ${energiaAnualEstimada.toFixed(0)} kWh (${coberturaPrevista.toFixed(1)}% do consumo).` +
-    (capacidadeBateriaRecomendada ? ` Bateria: ${capacidadeBateriaRecomendada} kWh para ${horasAutonomia}h de autonomia.` : "");
+    tarifaTexto;
 
   res.json({
     consumoDiario: Math.round(consumoDiario * 10) / 10,
@@ -170,6 +190,9 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     coberturaPrevista: Math.round(coberturaPrevista * 10) / 10,
     capacidadeBateriaRecomendada,
     hsp: Math.round(hsp * 100) / 100,
+    percVazio,
+    percCheio,
+    percPonta,
     cenariosPaineis,
     explicacao,
   });

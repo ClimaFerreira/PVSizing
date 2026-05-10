@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -18,41 +18,33 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Upload, FileText, Zap, MapPin, Settings2, CheckCircle2,
-  ChevronRight, ChevronLeft, Loader2, Sun, Battery, BarChart3,
-  AlertTriangle, TrendingUp, Clock, Lightbulb, ArrowRight, Calculator
+  Zap, MapPin, Settings2, CheckCircle2, ChevronRight, ChevronLeft,
+  Loader2, Sun, Battery, BarChart3, AlertTriangle, TrendingUp,
+  Clock, Lightbulb, ArrowRight, Calculator,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+import WizardStep1, { ConsumoData, DEFAULT_CONSUMO_DATA } from "@/components/wizard-step1";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
-const consumoSchema = z.object({
-  consumoAnual: z.coerce.number().min(100, "Consumo deve ser ≥ 100 kWh").max(500000),
-  coberturaMeta: z.coerce.number().min(10).max(100),
-  crescimentoFuturo: z.coerce.number().min(0).max(200),
-  incluirBateria: z.boolean(),
-  horasAutonomia: z.coerce.number().min(1).max(24),
-});
 const localizacaoSchema = z.object({
-  latitude: z.coerce.number().min(36).max(42.5),
+  latitude:  z.coerce.number().min(36).max(42.5),
   longitude: z.coerce.number().min(-10).max(-6),
   inclinacao: z.coerce.number().min(0).max(90),
-  azimute: z.coerce.number().min(-180).max(180),
+  azimute:   z.coerce.number().min(-180).max(180),
 });
 const equipamentosSchema = z.object({
-  panelId: z.coerce.number().min(1, "Selecione um painel"),
+  panelId:   z.coerce.number().min(1, "Selecione um painel"),
   inverterId: z.coerce.number().min(1, "Selecione um inversor"),
   batteryId: z.coerce.number().optional(),
 });
 
-type ConsumoForm = z.infer<typeof consumoSchema>;
-type LocalizacaoForm = z.infer<typeof localizacaoSchema>;
+type LocalizacaoForm  = z.infer<typeof localizacaoSchema>;
 type EquipamentosForm = z.infer<typeof equipamentosSchema>;
 
 interface CenarioPainel { potenciaWp: number; quantidade: number; potenciaInstalada: number; }
@@ -70,19 +62,11 @@ interface AutoSizeResult {
   coberturaPrevista: number;
   capacidadeBateriaRecomendada: number | null;
   hsp: number;
+  percVazio: number;
+  percCheio: number;
+  percPonta: number;
   cenariosPaineis: CenarioPainel[];
   explicacao: string;
-}
-
-interface InvoiceData {
-  consumoMensal?: number;
-  consumoAnual?: number;
-  potenciaContratada?: number;
-  precoKwh?: number;
-  operador?: string;
-  tarifario?: string;
-  confianca: number;
-  notas?: string;
 }
 
 const STEPS = [
@@ -93,77 +77,43 @@ const STEPS = [
 ];
 
 export default function Wizard() {
-  const [step, setStep] = useState(1);
-  const [consumoData, setConsumoData] = useState<ConsumoForm | null>(null);
-  const [locData, setLocData] = useState<LocalizacaoForm | null>(null);
-  const [sizing, setSizing] = useState<AutoSizeResult | null>(null);
-  const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
-  const [isParsingInvoice, setIsParsingInvoice] = useState(false);
-  const [isSizing, setIsSizing] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [step, setStep]           = useState(1);
+  const [consumoData, setConsumoData] = useState<ConsumoData>(DEFAULT_CONSUMO_DATA);
+  const [locData, setLocData]     = useState<LocalizacaoForm | null>(null);
+  const [sizing, setSizing]       = useState<AutoSizeResult | null>(null);
+  const [isSizing, setIsSizing]   = useState(false);
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  const { data: panels } = useListPanels();
+  const { data: panels }    = useListPanels();
   const { data: inverters } = useListInverters();
   const { data: batteries } = useListBatteries();
   const { data: locations } = useListLocations();
-  const createProposal = useCreateProposal();
+  const createProposal      = useCreateProposal();
 
-  // ── Step forms ────────────────────────────────────────────────────────────
-  const consumoForm = useForm<ConsumoForm>({
-    resolver: zodResolver(consumoSchema),
-    defaultValues: { consumoAnual: 3500, coberturaMeta: 80, crescimentoFuturo: 0, incluirBateria: false, horasAutonomia: 4 },
-  });
-  const locForm = useForm<LocalizacaoForm>({
-    resolver: zodResolver(localizacaoSchema),
-    defaultValues: { latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 },
-  });
-  const equipForm = useForm<EquipamentosForm>({
-    resolver: zodResolver(equipamentosSchema),
-    defaultValues: {},
-  });
-
-  // ── Invoice upload ────────────────────────────────────────────────────────
-  const handleInvoiceUpload = async (file: File) => {
-    setIsParsingInvoice(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const resp = await fetch(`${BASE}/api/tools/parse-invoice`, { method: "POST", body: fd });
-      if (!resp.ok) throw new Error();
-      const data: InvoiceData = await resp.json();
-      setInvoiceData(data);
-      if (data.consumoAnual) consumoForm.setValue("consumoAnual", Math.round(data.consumoAnual));
-      else if (data.consumoMensal) consumoForm.setValue("consumoAnual", Math.round(data.consumoMensal * 12));
-      toast({
-        title: `Fatura analisada (confiança: ${(data.confianca * 100).toFixed(0)}%)`,
-        description: data.operador ? `Operador: ${data.operador}` : undefined,
-      });
-    } catch {
-      toast({ title: "Erro ao ler fatura", variant: "destructive" });
-    } finally {
-      setIsParsingInvoice(false);
-    }
-  };
+  const locForm   = useForm<LocalizacaoForm>({ resolver: zodResolver(localizacaoSchema), defaultValues: { latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 } });
+  const equipForm = useForm<EquipamentosForm>({ resolver: zodResolver(equipamentosSchema), defaultValues: {} });
 
   // ── Auto-size ─────────────────────────────────────────────────────────────
-  const runAutoSize = async (consumo: ConsumoForm, loc: LocalizacaoForm) => {
+  const runAutoSize = async (consumo: ConsumoData, loc: LocalizacaoForm) => {
     setIsSizing(true);
     try {
       const resp = await fetch(`${BASE}/api/tools/auto-size`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          consumoAnual: Number(consumo.consumoAnual),
-          latitude: Number(loc.latitude),
-          longitude: Number(loc.longitude),
-          inclinacao: Number(loc.inclinacao),
-          azimute: Number(loc.azimute),
-          coberturaMeta: Number(consumo.coberturaMeta),
-          crescimentoFuturo: Number(consumo.crescimentoFuturo),
-          incluirBateria: consumo.incluirBateria,
-          horasAutonomia: Number(consumo.horasAutonomia),
+          consumoAnual:      consumo.consumoAnual,
+          latitude:          loc.latitude,
+          longitude:         loc.longitude,
+          inclinacao:        loc.inclinacao,
+          azimute:           loc.azimute,
+          coberturaMeta:     consumo.coberturaMeta,
+          crescimentoFuturo: consumo.crescimentoFuturo,
+          incluirBateria:    consumo.incluirBateria,
+          horasAutonomia:    consumo.horasAutonomia,
+          percVazio:         consumo.percVazio,
+          percCheio:         consumo.percCheio,
+          percPonta:         consumo.percPonta,
         }),
       });
       if (!resp.ok) throw new Error();
@@ -177,26 +127,24 @@ export default function Wizard() {
 
   // ── Save proposal ─────────────────────────────────────────────────────────
   const handleSaveProposal = () => {
-    if (!consumoData || !sizing) return;
-    const eq = equipForm.getValues();
+    if (!sizing) return;
+    const eq    = equipForm.getValues();
     const panel = panels?.find(p => p.id === eq.panelId);
     createProposal.mutate(
-      {
-        data: {
-          titulo: `Proposta ${panel?.fabricante ?? ""} ${sizing.potenciaRecomendada} kWp`,
-          consumoAnualEstimado: consumoData.consumoAnual,
-          potenciaRecomendada: sizing.potenciaRecomendada,
-          numPaineis: sizing.numPaineis,
-          panelId: eq.panelId || null,
-          inverterId: eq.inverterId || null,
-          batteryId: eq.batteryId ?? null,
-          producaoAnualEstimada: sizing.energiaAnualEstimada,
-          alertas: [],
-        },
-      },
+      { data: {
+        titulo:                `Proposta ${panel?.fabricante ?? ""} ${sizing.potenciaRecomendada} kWp`,
+        consumoAnualEstimado:  consumoData.consumoAnual,
+        potenciaRecomendada:   sizing.potenciaRecomendada,
+        numPaineis:            sizing.numPaineis,
+        panelId:               eq.panelId || null,
+        inverterId:            eq.inverterId || null,
+        batteryId:             eq.batteryId ?? null,
+        producaoAnualEstimada: sizing.energiaAnualEstimada,
+        alertas:               [],
+      }},
       {
         onSuccess: () => { toast({ title: "Proposta guardada!" }); navigate("/propostas"); },
-        onError: () => toast({ title: "Erro ao guardar proposta", variant: "destructive" }),
+        onError:   () => toast({ title: "Erro ao guardar proposta", variant: "destructive" }),
       }
     );
   };
@@ -204,16 +152,16 @@ export default function Wizard() {
   // ── Navigation ────────────────────────────────────────────────────────────
   const goNext = async () => {
     if (step === 1) {
-      if (!(await consumoForm.trigger())) return;
-      setConsumoData(consumoForm.getValues());
+      if (consumoData.consumoAnual < 100) {
+        toast({ title: "Consumo deve ser ≥ 100 kWh", variant: "destructive" });
+        return;
+      }
       setStep(2);
     } else if (step === 2) {
       if (!(await locForm.trigger())) return;
       const loc = locForm.getValues();
-      const consumo = consumoForm.getValues();
       setLocData(loc);
-      setConsumoData(consumo);
-      await runAutoSize(consumo, loc);
+      await runAutoSize(consumoData, loc);
       setStep(3);
     } else if (step === 3) {
       setStep(4);
@@ -233,17 +181,17 @@ export default function Wizard() {
       <div className="space-y-3">
         <Progress value={progress} className="h-2" />
         <div className="flex justify-between">
-          {STEPS.map((s) => {
-            const Icon = s.icon;
+          {STEPS.map(s => {
+            const Icon   = s.icon;
             const active = step === s.id;
-            const done = step > s.id;
+            const done   = step > s.id;
             return (
               <div key={s.id} className="flex flex-col items-center gap-1">
                 <div className={cn(
                   "w-9 h-9 rounded-full flex items-center justify-center border-2 transition-colors",
-                  done  ? "bg-primary border-primary text-primary-foreground" :
+                  done   ? "bg-primary border-primary text-primary-foreground" :
                   active ? "border-primary text-primary bg-primary/10" :
-                  "border-muted text-muted-foreground"
+                           "border-muted text-muted-foreground"
                 )}>
                   {done ? <CheckCircle2 size={18} /> : <Icon size={18} />}
                 </div>
@@ -262,126 +210,12 @@ export default function Wizard() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Zap size={20} /> Consumo Energético</CardTitle>
-            <CardDescription>Indique o consumo anual ou carregue uma fatura para extração automática com IA.</CardDescription>
+            <CardDescription>
+              Carregue faturas elétricas para análise automática com IA, ou introduza os valores manualmente.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Invoice upload zone */}
-            <div
-              className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {isParsingInvoice ? (
-                <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                  <Loader2 size={32} className="animate-spin text-primary" />
-                  <p className="text-sm">A analisar fatura com IA...</p>
-                </div>
-              ) : invoiceData ? (
-                <div className="flex flex-col items-center gap-2 text-green-600">
-                  <FileText size={32} />
-                  <p className="font-medium text-sm">Fatura analisada com sucesso</p>
-                  <Badge variant="secondary">Confiança: {(invoiceData.confianca * 100).toFixed(0)}%</Badge>
-                  {invoiceData.operador && <p className="text-xs text-muted-foreground">{invoiceData.operador} · {invoiceData.tarifario}</p>}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                  <Upload size={32} />
-                  <p className="font-medium text-sm">Carregue uma fatura elétrica</p>
-                  <p className="text-xs">PDF ou imagem — extração automática com IA</p>
-                </div>
-              )}
-              <input ref={fileInputRef} type="file" accept="application/pdf,image/*" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleInvoiceUpload(f); }} />
-            </div>
-
-            <div className="relative flex items-center">
-              <div className="flex-grow border-t border-muted" />
-              <span className="mx-3 text-xs text-muted-foreground">ou introduza manualmente</span>
-              <div className="flex-grow border-t border-muted" />
-            </div>
-
-            <Form {...consumoForm}>
-              <form className="space-y-5">
-                <FormField control={consumoForm.control} name="consumoAnual" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Consumo Anual (kWh)</FormLabel>
-                    <FormControl><Input type="number" step="10" {...field} /></FormControl>
-                    <p className="text-xs text-muted-foreground">
-                      ≈ {(Number(consumoForm.watch("consumoAnual")) / 12).toFixed(0)} kWh/mês ·{" "}
-                      {(Number(consumoForm.watch("consumoAnual")) / 365).toFixed(1)} kWh/dia
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
-                <FormField control={consumoForm.control} name="coberturaMeta" render={({ field }) => (
-                  <FormItem>
-                    <div className="flex justify-between items-center">
-                      <FormLabel>Meta de Cobertura Solar</FormLabel>
-                      <span className="text-sm font-bold text-primary">{field.value}%</span>
-                    </div>
-                    <FormControl>
-                      <Slider min={10} max={100} step={5} value={[field.value]} onValueChange={([v]) => field.onChange(v)} />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">Percentagem do consumo anual a cobrir com solar</p>
-                  </FormItem>
-                )} />
-
-                <FormField control={consumoForm.control} name="crescimentoFuturo" render={({ field }) => (
-                  <FormItem>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <FormLabel className="flex items-center gap-1.5">
-                          <TrendingUp size={14} className="text-muted-foreground" />
-                          Crescimento de Consumo Futuro
-                        </FormLabel>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Para VE, nova divisão, ar condicionado, etc.
-                        </p>
-                      </div>
-                      <span className={cn("text-sm font-bold", field.value > 0 ? "text-orange-500" : "text-muted-foreground")}>
-                        {field.value > 0 ? `+${field.value}%` : "0%"}
-                      </span>
-                    </div>
-                    <FormControl>
-                      <Slider min={0} max={100} step={5} value={[field.value]} onValueChange={([v]) => field.onChange(v)} />
-                    </FormControl>
-                    {field.value > 0 && (
-                      <p className="text-xs text-orange-600 dark:text-orange-400">
-                        O sistema será dimensionado para{" "}
-                        {Math.round(Number(consumoForm.watch("consumoAnual")) * (1 + field.value / 100)).toLocaleString("pt-PT")} kWh/ano
-                      </p>
-                    )}
-                  </FormItem>
-                )} />
-
-                <FormField control={consumoForm.control} name="incluirBateria" render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="cursor-pointer flex items-center gap-2">
-                        <Battery size={16} className="text-amber-500" />
-                        Incluir Armazenamento em Bateria
-                      </FormLabel>
-                      <p className="text-xs text-muted-foreground">Dimensiona a capacidade de bateria necessária</p>
-                    </div>
-                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                  </FormItem>
-                )} />
-                {consumoForm.watch("incluirBateria") && (
-                  <FormField control={consumoForm.control} name="horasAutonomia" render={({ field }) => (
-                    <FormItem className="pl-4 border-l-2 border-amber-300">
-                      <div className="flex justify-between items-center">
-                        <FormLabel>Autonomia Pretendida</FormLabel>
-                        <span className="text-sm font-bold text-amber-600">{field.value}h</span>
-                      </div>
-                      <FormControl>
-                        <Slider min={1} max={24} step={1} value={[field.value]} onValueChange={([v]) => field.onChange(v)} />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground">Horas de funcionamento sem sol (DoD 80%)</p>
-                    </FormItem>
-                  )} />
-                )}
-              </form>
-            </Form>
+          <CardContent>
+            <WizardStep1 data={consumoData} onChange={setConsumoData} />
           </CardContent>
         </Card>
       )}
@@ -397,7 +231,7 @@ export default function Wizard() {
             {locations && locations.length > 0 && (
               <div>
                 <label className="text-sm font-medium">Localidade (pré-definida)</label>
-                <Select onValueChange={(v) => {
+                <Select onValueChange={v => {
                   const loc = locations.find(l => l.nome === v);
                   if (loc) { locForm.setValue("latitude", loc.latitude); locForm.setValue("longitude", loc.longitude); }
                 }}>
@@ -461,34 +295,30 @@ export default function Wizard() {
             </Card>
           ) : sizing ? (
             <>
-              {/* Key results */}
               <Card className="border-primary/40 bg-primary/5">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-primary">
                     <Sun size={22} /> Estudo de Dimensionamento
                   </CardTitle>
                   <CardDescription>
-                    {consumoData?.consumoAnual?.toLocaleString("pt-PT")} kWh/ano base
-                    {(consumoData?.crescimentoFuturo ?? 0) > 0 && ` + ${consumoData?.crescimentoFuturo}% futuro = ${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh/ano`}
-                    {" · "}{consumoData?.coberturaMeta}% cobertura solar
+                    {consumoData.consumoAnual.toLocaleString("pt-PT")} kWh/ano base
+                    {consumoData.crescimentoFuturo > 0 && ` + ${consumoData.crescimentoFuturo}% futuro = ${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh/ano`}
+                    {" · "}{consumoData.coberturaMeta}% cobertura solar
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Main metrics */}
+                  {/* Key metrics */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
-                      { label: "Potência a Instalar", value: `${sizing.potenciaRecomendada} kWp`, highlight: true,  icon: Zap },
-                      { label: "Nº Painéis (400 Wp)", value: `≈ ${sizing.numPaineis} un.`,         highlight: true,  icon: Sun },
-                      { label: "Produção Anual Est.",  value: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`, highlight: false, icon: TrendingUp },
-                      { label: "Cobertura Prevista",   value: `${sizing.coberturaPrevista}%`,        highlight: false, icon: BarChart3 },
-                    ].map(({ label, value, highlight, icon: Icon }) => (
-                      <div key={label} className={cn(
-                        "rounded-xl p-4 text-center border",
-                        highlight ? "bg-primary/10 border-primary/30" : "bg-background border-border"
-                      )}>
-                        <Icon size={18} className={cn("mx-auto mb-2", highlight ? "text-primary" : "text-muted-foreground")} />
+                      { label: "Potência a Instalar", value: `${sizing.potenciaRecomendada} kWp`, hi: true,  Icon: Zap },
+                      { label: "Nº Painéis (400 Wp)", value: `≈ ${sizing.numPaineis} un.`,        hi: true,  Icon: Sun },
+                      { label: "Produção Anual Est.",  value: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`, hi: false, Icon: TrendingUp },
+                      { label: "Cobertura Prevista",   value: `${sizing.coberturaPrevista}%`,      hi: false, Icon: BarChart3 },
+                    ].map(({ label, value, hi, Icon }) => (
+                      <div key={label} className={cn("rounded-xl p-4 text-center border", hi ? "bg-primary/10 border-primary/30" : "bg-background border-border")}>
+                        <Icon size={18} className={cn("mx-auto mb-2", hi ? "text-primary" : "text-muted-foreground")} />
                         <p className="text-xs text-muted-foreground leading-tight">{label}</p>
-                        <p className={cn("font-bold text-lg mt-1", highlight ? "text-primary" : "text-foreground")}>{value}</p>
+                        <p className={cn("font-bold text-lg mt-1", hi ? "text-primary" : "text-foreground")}>{value}</p>
                       </div>
                     ))}
                   </div>
@@ -502,49 +332,32 @@ export default function Wizard() {
                     </p>
                     <div className="space-y-2 text-sm">
                       {[
-                        {
-                          label: "1. Consumo diário",
-                          formula: `${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh/ano ÷ 365 dias`,
-                          result: `${sizing.consumoDiario} kWh/dia`,
-                        },
-                        {
-                          label: "2. Energia solar diária necessária",
-                          formula: `${sizing.consumoDiario} kWh/dia × ${consumoData?.coberturaMeta}% cobertura`,
-                          result: `${sizing.energiaAlvoDiaria} kWh/dia`,
-                        },
-                        {
-                          label: "3. Potência bruta (sem perdas)",
-                          formula: `${sizing.energiaAlvoDiaria} kWh/dia ÷ ${sizing.hsp} h/dia (HSP)`,
-                          result: `${sizing.potenciaBruta} kWp`,
-                        },
-                        {
-                          label: `4. Margem de perdas (${(sizing.margemPerdas * 100).toFixed(0)}%)`,
-                          formula: `${sizing.potenciaBruta} kWp ÷ ${(sizing.fatorRendimento).toFixed(2)} (rendimento)`,
-                          result: `${sizing.potenciaRecomendada} kWp`,
-                          highlight: true,
-                        },
-                      ].map(({ label, formula, result, highlight }) => (
+                        { label: "1. Consumo diário",              formula: `${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh/ano ÷ 365 dias`,                    result: `${sizing.consumoDiario} kWh/dia`,          hi: false },
+                        { label: "2. Energia solar diária alvo",   formula: `${sizing.consumoDiario} kWh/dia × ${consumoData.coberturaMeta}% cobertura`,                    result: `${sizing.energiaAlvoDiaria} kWh/dia`,     hi: false },
+                        { label: "3. Potência bruta (sem perdas)", formula: `${sizing.energiaAlvoDiaria} kWh/dia ÷ ${sizing.hsp} h/dia (HSP)`,                              result: `${sizing.potenciaBruta} kWp`,             hi: false },
+                        { label: `4. Após perdas (${(sizing.margemPerdas*100).toFixed(0)}%)`, formula: `${sizing.potenciaBruta} kWp ÷ ${sizing.fatorRendimento.toFixed(2)} (rendimento)`, result: `${sizing.potenciaRecomendada} kWp`, hi: true },
+                      ].map(({ label, formula, result, hi }) => (
                         <div key={label} className={cn(
                           "grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-lg px-3 py-2",
-                          highlight ? "bg-primary/10 border border-primary/20 font-semibold" : "bg-muted/40"
+                          hi ? "bg-primary/10 border border-primary/20 font-semibold" : "bg-muted/40"
                         )}>
                           <div>
-                            <p className={cn("text-xs font-medium", highlight ? "text-primary" : "text-muted-foreground")}>{label}</p>
+                            <p className={cn("text-xs font-medium", hi ? "text-primary" : "text-muted-foreground")}>{label}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">{formula}</p>
                           </div>
                           <ArrowRight size={14} className="text-muted-foreground shrink-0" />
-                          <p className={cn("text-sm font-bold shrink-0", highlight ? "text-primary" : "text-foreground")}>{result}</p>
+                          <p className={cn("text-sm font-bold shrink-0", hi ? "text-primary" : "text-foreground")}>{result}</p>
                         </div>
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground mt-2 pl-1">
-                      Perdas consideradas: inversor (~4%), temperatura (~5%), sombreamento (~3%), cabos e sujidade (~5%), mismatch (~5%)
+                      Perdas: inversor (~4%), temperatura (~5%), sombreamento (~3%), cabos e sujidade (~5%), mismatch (~5%)
                     </p>
                   </div>
 
                   <Separator />
 
-                  {/* HSP + tech details */}
+                  {/* Tech details + tariff distribution */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {[
                       { label: "Horas Sol Pico (HSP)", value: `${sizing.hsp} h/dia` },
@@ -556,6 +369,25 @@ export default function Wizard() {
                         <p className="font-semibold text-sm">{value}</p>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Tariff distribution (always shown) */}
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1.5">Distribuição tarifária utilizada no cálculo</p>
+                    <div className="flex rounded-full overflow-hidden h-5 border border-border text-[10px]">
+                      <div className="bg-blue-400 flex items-center justify-center text-white font-semibold transition-all" style={{ width: `${sizing.percVazio}%` }}>
+                        {sizing.percVazio >= 15 && `Vazio ${sizing.percVazio}%`}
+                      </div>
+                      <div className="bg-amber-400 flex items-center justify-center text-white font-semibold transition-all" style={{ width: `${sizing.percCheio}%` }}>
+                        {sizing.percCheio >= 12 && `Cheio ${sizing.percCheio}%`}
+                      </div>
+                      <div className="bg-red-400 flex items-center justify-center text-white font-semibold transition-all" style={{ width: `${sizing.percPonta}%` }}>
+                        {sizing.percPonta >= 10 && `Ponta ${sizing.percPonta}%`}
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      A distribuição tarifária influencia o dimensionamento da bateria (consumo em Vazio = horas noturnas a cobrir)
+                    </p>
                   </div>
 
                   <Separator />
@@ -602,7 +434,7 @@ export default function Wizard() {
                           Bateria Recomendada: {sizing.capacidadeBateriaRecomendada} kWh
                         </p>
                         <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
-                          Para {consumoData?.horasAutonomia}h de autonomia noturna · profundidade de descarga 80%
+                          Para {consumoData.horasAutonomia}h de autonomia · {sizing.percVazio}% consumo em Vazio (período noturno) · DoD 80%
                         </p>
                       </div>
                     </div>
@@ -623,7 +455,6 @@ export default function Wizard() {
                 </CardContent>
               </Card>
 
-              {/* Location summary */}
               {locData && (
                 <Card>
                   <CardContent className="pt-4 pb-4">
@@ -653,7 +484,6 @@ export default function Wizard() {
       {/* ── STEP 4: Equipamentos ────────────────────────────────────────────── */}
       {step === 4 && (
         <div className="space-y-4">
-          {/* Study summary banner */}
           {sizing && (
             <div className="flex flex-wrap gap-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
               <div className="flex items-center gap-2">
@@ -678,9 +508,7 @@ export default function Wizard() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Settings2 size={20} /> Seleção de Equipamentos</CardTitle>
-              <CardDescription>
-                Escolha os equipamentos do catálogo para esta instalação. Use o estudo acima como referência.
-              </CardDescription>
+              <CardDescription>Escolha os equipamentos do catálogo. Use o resumo acima como referência.</CardDescription>
             </CardHeader>
             <CardContent>
               <Form {...equipForm}>
@@ -701,7 +529,7 @@ export default function Wizard() {
                       {sizing && (equipForm.watch("panelId") ?? 0) > 0 && (() => {
                         const panel = panels?.find(p => p.id === equipForm.watch("panelId"));
                         if (!panel) return null;
-                        const n = Math.ceil((sizing.potenciaRecomendada * 1000) / panel.potencia);
+                        const n   = Math.ceil((sizing.potenciaRecomendada * 1000) / panel.potencia);
                         const kWp = (n * panel.potencia / 1000).toFixed(2);
                         return (
                           <p className="text-xs text-primary mt-1">
@@ -729,12 +557,12 @@ export default function Wizard() {
                           })}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">Inversores marcados com ✓ têm potência adequada ao estudo</p>
+                      <p className="text-xs text-muted-foreground">Inversores com ✓ têm potência adequada ao estudo</p>
                       <FormMessage />
                     </FormItem>
                   )} />
 
-                  {consumoData?.incluirBateria && (
+                  {consumoData.incluirBateria && (
                     <FormField control={equipForm.control} name="batteryId" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Bateria (opcional)</FormLabel>
@@ -756,7 +584,6 @@ export default function Wizard() {
             </CardContent>
           </Card>
 
-          {/* Save proposal */}
           <Card className="border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
             <CardContent className="pt-5 pb-5">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
