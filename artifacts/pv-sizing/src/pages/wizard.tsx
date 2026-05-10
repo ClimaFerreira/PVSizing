@@ -436,7 +436,11 @@ export default function Wizard() {
                 const cenarios = sizing.cenariosDimensionamento;
                 const minCob = Math.min(...cenarios.map(c => c.coberturaReal));
                 const maxCob = Math.max(...cenarios.map(c => c.coberturaReal));
-                const activeCob = activeCenario?.coberturaReal ?? cenarios[1]?.coberturaReal ?? 80;
+                const rangeMin = Math.max(10, minCob - 5);
+                const rangeMax = maxCob + 5;
+                const activeCob = Math.min(rangeMax, Math.max(rangeMin,
+                  activeCenario?.coberturaReal ?? cenarios[1]?.coberturaReal ?? 80
+                ));
                 const handleSlider = ([val]: number[]) => {
                   const nearest = cenarios.reduce((best, c) =>
                     Math.abs(c.coberturaReal - val) < Math.abs(best.coberturaReal - val) ? c : best
@@ -448,19 +452,19 @@ export default function Wizard() {
                     <CardContent className="pt-5 pb-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-semibold">Meta de Cobertura Solar</p>
+                          <p className="text-sm font-semibold">Cenário de Dimensionamento</p>
                           <p className="text-xs text-muted-foreground">Arraste para comparar cenários e ver a produção mensal</p>
                         </div>
                         <div className="text-right">
-                          <span className="text-3xl font-bold text-primary">{activeCob}%</span>
+                          <span className="text-3xl font-bold text-primary">{activeCenario?.coberturaReal ?? "—"}%</span>
                           <p className="text-xs text-muted-foreground">{activeCenario?.label ?? "—"}</p>
                         </div>
                       </div>
 
                       <div className="relative pt-1">
                         <Slider
-                          min={Math.max(10, minCob - 5)}
-                          max={Math.min(100, maxCob + 5)}
+                          min={rangeMin}
+                          max={rangeMax}
                           step={1}
                           value={[activeCob]}
                           onValueChange={handleSlider}
@@ -469,8 +473,6 @@ export default function Wizard() {
                         {/* Scenario tick marks */}
                         <div className="relative mt-3">
                           {cenarios.map(c => {
-                            const rangeMin = Math.max(10, minCob - 5);
-                            const rangeMax = Math.min(100, maxCob + 5);
                             const pct = ((c.coberturaReal - rangeMin) / (rangeMax - rangeMin)) * 100;
                             const isActive = c.tipo === selectedCenarioTipo;
                             const meta = CENARIO_META[c.tipo as CenarioTipo];
