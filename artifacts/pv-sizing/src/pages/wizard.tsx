@@ -42,6 +42,7 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } 
 import { cn } from "@/lib/utils";
 
 import WizardStep1, { ConsumoData, DEFAULT_CONSUMO_DATA } from "@/components/wizard-step1";
+import WizardStep5Tecnica from "@/components/wizard-step5-tecnica";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -140,6 +141,7 @@ const STEPS = [
   { id: 2, label: "Localização",  icon: MapPin },
   { id: 3, label: "Estudo",       icon: BarChart3 },
   { id: 4, label: "Equipamentos", icon: Settings2 },
+  { id: 5, label: "Análise Téc.", icon: CheckCircle2 },
 ];
 
 export default function Wizard() {
@@ -388,6 +390,13 @@ export default function Wizard() {
       setStep(3);
     } else if (step === 3) {
       setStep(4);
+    } else if (step === 4) {
+      const vals = equipForm.getValues();
+      if (!vals.panelId || !vals.inverterId) {
+        toast({ title: "Selecione pelo menos um painel e um inversor", variant: "destructive" });
+        return;
+      }
+      setStep(5);
     }
   };
 
@@ -1406,15 +1415,77 @@ export default function Wizard() {
         </div>
       )}
 
+      {/* ── STEP 5: Análise Técnica ─────────────────────────────────────────── */}
+      {step === 5 && (() => {
+        const vals = equipForm.getValues();
+        const eff = effectiveSizing ?? sizing;
+        const panel = panels?.find(p => p.id === vals.panelId) ?? null;
+        const inverter = inverters?.find(i => i.id === vals.inverterId) ?? null;
+        const battery = vals.batteryId ? batteries?.find(b => b.id === vals.batteryId) ?? null : null;
+        const numPaineis = eff
+          ? Math.ceil((eff.potenciaInstalada * 1000) / (panel?.potencia ?? 400))
+          : (manual?.numPaineis ?? 0);
+
+        return (
+          <div className="space-y-4">
+            {(effectiveSizing ?? sizing) && (() => {
+              const e = (effectiveSizing ?? sizing)!;
+              return (
+                <div className="flex flex-wrap gap-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <Zap size={16} className="text-primary" />
+                    <span className="text-sm font-medium">{e.potenciaInstalada} kWp instalados</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Sun size={16} className="text-primary" />
+                    <span className="text-sm font-medium">{numPaineis} painéis</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <WizardStep5Tecnica
+              panel={panel}
+              inverter={inverter}
+              battery={battery}
+              numPaineis={numPaineis}
+              potenciaInstalada={eff?.potenciaInstalada ?? 0}
+            />
+
+            <Card className="border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
+              <CardContent className="pt-5 pb-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium">Guardar como Proposta Técnica</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Cria uma proposta com o estudo, equipamentos e análise técnica</p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button onClick={handleSaveProposal} disabled={createProposal.isPending}>
+                      {createProposal.isPending
+                        ? <Loader2 size={16} className="mr-2 animate-spin" />
+                        : <CheckCircle2 size={16} className="mr-2" />}
+                      Guardar Proposta
+                    </Button>
+                    <Button variant="outline" onClick={() => navigate("/sistemas/novo")}>
+                      Criar Sistema Completo
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
+
       {/* Navigation */}
       <div className="flex justify-between pt-2">
         <Button variant="outline" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1}>
           <ChevronLeft size={16} className="mr-1" /> Anterior
         </Button>
-        {step < 4 && (
+        {step < 5 && (
           <Button onClick={goNext} disabled={isSizing}>
             {isSizing && <Loader2 size={16} className="mr-1 animate-spin" />}
-            {step === 3 ? "Selecionar Equipamentos" : "Seguinte"}
+            {step === 3 ? "Selecionar Equipamentos" : step === 4 ? "Análise Técnica" : "Seguinte"}
             <ChevronRight size={16} className="ml-1" />
           </Button>
         )}

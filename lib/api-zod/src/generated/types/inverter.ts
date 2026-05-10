@@ -17,5 +17,10 @@ export interface Inverter {
   corrMaxMppt: number;
   numMppt: number;
   stringsPorMppt: number;
+  /**
+   * Tensão DC máxima de entrada (V), ex: 1000 ou 1500
+   * @nullable
+   */
+  vdcMax?: number | null;
   createdAt: Date;
 }

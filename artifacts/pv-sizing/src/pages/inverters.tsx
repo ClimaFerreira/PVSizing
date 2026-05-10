@@ -52,6 +52,7 @@ const inverterSchema = z.object({
   corrMaxMppt: z.coerce.number().min(1, "Obrigatório"),
   numMppt: z.coerce.number().min(1, "Obrigatório"),
   stringsPorMppt: z.coerce.number().min(1, "Obrigatório"),
+  vdcMax: z.union([z.coerce.number(), z.null()]).optional(),
 });
 
 type InverterFormValues = z.infer<typeof inverterSchema>;
@@ -80,6 +81,7 @@ export default function Inverters() {
       corrMaxMppt: 0,
       numMppt: 1,
       stringsPorMppt: 1,
+      vdcMax: null,
     },
   });
 
@@ -137,6 +139,7 @@ export default function Inverters() {
       corrMaxMppt: inv.corrMaxMppt,
       numMppt: inv.numMppt,
       stringsPorMppt: inv.stringsPorMppt,
+      vdcMax: inv.vdcMax ?? null,
     });
   };
 
@@ -182,6 +185,7 @@ export default function Inverters() {
                   corrMaxMppt:   Number(d.corrMaxMppt)   > 0 ? Number(d.corrMaxMppt)    : cur.corrMaxMppt,
                   numMppt:       Number(d.numMppt)       > 0 ? Number(d.numMppt)        : cur.numMppt,
                   stringsPorMppt: Number(d.stringsPorMppt) > 0 ? Number(d.stringsPorMppt) : cur.stringsPorMppt,
+                  vdcMax: Number(d.vdcMax) > 0 ? Number(d.vdcMax) : cur.vdcMax,
                 });
               }}
               onBatchCreate={async (modelos) => {
@@ -198,6 +202,7 @@ export default function Inverters() {
                       corrMaxMppt: Number(d.corrMaxMppt ?? 0),
                       numMppt: Number(d.numMppt ?? 1),
                       stringsPorMppt: Number(d.stringsPorMppt ?? 1),
+                      vdcMax: d.vdcMax ? Number(d.vdcMax) : null,
                     }});
                     ok++;
                   } catch { /* skip failed */ }
@@ -217,10 +222,13 @@ export default function Inverters() {
                     <FormItem><FormLabel>Modelo</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="potenciaAc" render={({ field }) => (
-                    <FormItem><FormLabel>Potência AC (W)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Potência AC (kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="potenciaDcMax" render={({ field }) => (
-                    <FormItem><FormLabel>Potência DC Max (W)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Potência DC Max (kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="vdcMax" render={({ field }) => (
+                    <FormItem><FormLabel>Tensão DC Max (V)</FormLabel><FormControl><Input type="number" step="1" placeholder="1000" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="mpptMin" render={({ field }) => (
                     <FormItem><FormLabel>MPPT Min (V)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
@@ -323,10 +331,13 @@ export default function Inverters() {
                                 <FormItem><FormLabel>Modelo</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                               )} />
                               <FormField control={form.control} name="potenciaAc" render={({ field }) => (
-                                <FormItem><FormLabel>Potência AC (W)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Potência AC (kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                               )} />
                               <FormField control={form.control} name="potenciaDcMax" render={({ field }) => (
-                                <FormItem><FormLabel>Potência DC Max (W)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Potência DC Max (kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                              )} />
+                              <FormField control={form.control} name="vdcMax" render={({ field }) => (
+                                <FormItem><FormLabel>Tensão DC Max (V)</FormLabel><FormControl><Input type="number" step="1" placeholder="1000" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                               )} />
                               <FormField control={form.control} name="mpptMin" render={({ field }) => (
                                 <FormItem><FormLabel>MPPT Min (V)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>

@@ -973,6 +973,12 @@ components:
           type: number
         coeficienteTemperatura:
           type: number
+        coeficienteTemperaturaVoc:
+          type: ["number", "null"]
+          description: "Coeficiente de temperatura de Voc (%/°C), ex: -0.28"
+        noct:
+          type: ["number", "null"]
+          description: "NOCT — Temperatura Normal de Operação da Célula (°C), ex: 45"
         createdAt:
           type: string
           format: date-time
@@ -1007,6 +1013,10 @@ components:
           type: number
         coeficienteTemperatura:
           type: number
+        coeficienteTemperaturaVoc:
+          type: ["number", "null"]
+        noct:
+          type: ["number", "null"]
       required:
         - nome
         - fabricante
@@ -1036,6 +1046,10 @@ components:
           type: number
         coeficienteTemperatura:
           type: number
+        coeficienteTemperaturaVoc:
+          type: ["number", "null"]
+        noct:
+          type: ["number", "null"]
 
     # --- Inverter ---
     Inverter:
@@ -1061,6 +1075,9 @@ components:
           type: integer
         stringsPorMppt:
           type: integer
+        vdcMax:
+          type: ["number", "null"]
+          description: "Tensão DC máxima de entrada (V), ex: 1000 ou 1500"
         createdAt:
           type: string
           format: date-time
@@ -1098,6 +1115,8 @@ components:
           type: integer
         stringsPorMppt:
           type: integer
+        vdcMax:
+          type: ["number", "null"]
       required:
         - nome
         - fabricante
@@ -1130,6 +1149,8 @@ components:
           type: integer
         stringsPorMppt:
           type: integer
+        vdcMax:
+          type: ["number", "null"]
 
     # --- Battery ---
     Battery:

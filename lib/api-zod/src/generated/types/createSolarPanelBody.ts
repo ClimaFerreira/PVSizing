@@ -15,4 +15,8 @@ export interface CreateSolarPanelBody {
   isc: number;
   imp: number;
   coeficienteTemperatura: number;
+  /** @nullable */
+  coeficienteTemperaturaVoc?: number | null;
+  /** @nullable */
+  noct?: number | null;
 }

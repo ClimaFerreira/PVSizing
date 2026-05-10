@@ -127,6 +127,14 @@ export const ListPanelsResponseItem = zod.object({
   isc: zod.number(),
   imp: zod.number(),
   coeficienteTemperatura: zod.number(),
+  coeficienteTemperaturaVoc: zod
+    .number()
+    .nullish()
+    .describe("Coeficiente de temperatura de Voc (%\/°C), ex: -0.28"),
+  noct: zod
+    .number()
+    .nullish()
+    .describe("NOCT — Temperatura Normal de Operação da Célula (°C), ex: 45"),
   createdAt: zod.coerce.date(),
 });
 export const ListPanelsResponse = zod.array(ListPanelsResponseItem);
@@ -143,6 +151,8 @@ export const CreatePanelBody = zod.object({
   isc: zod.number(),
   imp: zod.number(),
   coeficienteTemperatura: zod.number(),
+  coeficienteTemperaturaVoc: zod.number().nullish(),
+  noct: zod.number().nullish(),
 });
 
 /**
@@ -162,6 +172,14 @@ export const GetPanelResponse = zod.object({
   isc: zod.number(),
   imp: zod.number(),
   coeficienteTemperatura: zod.number(),
+  coeficienteTemperaturaVoc: zod
+    .number()
+    .nullish()
+    .describe("Coeficiente de temperatura de Voc (%\/°C), ex: -0.28"),
+  noct: zod
+    .number()
+    .nullish()
+    .describe("NOCT — Temperatura Normal de Operação da Célula (°C), ex: 45"),
   createdAt: zod.coerce.date(),
 });
 
@@ -181,6 +199,8 @@ export const UpdatePanelBody = zod.object({
   isc: zod.number().optional(),
   imp: zod.number().optional(),
   coeficienteTemperatura: zod.number().optional(),
+  coeficienteTemperaturaVoc: zod.number().nullish(),
+  noct: zod.number().nullish(),
 });
 
 export const UpdatePanelResponse = zod.object({
@@ -193,6 +213,14 @@ export const UpdatePanelResponse = zod.object({
   isc: zod.number(),
   imp: zod.number(),
   coeficienteTemperatura: zod.number(),
+  coeficienteTemperaturaVoc: zod
+    .number()
+    .nullish()
+    .describe("Coeficiente de temperatura de Voc (%\/°C), ex: -0.28"),
+  noct: zod
+    .number()
+    .nullish()
+    .describe("NOCT — Temperatura Normal de Operação da Célula (°C), ex: 45"),
   createdAt: zod.coerce.date(),
 });
 
@@ -217,6 +245,10 @@ export const ListInvertersResponseItem = zod.object({
   corrMaxMppt: zod.number(),
   numMppt: zod.number(),
   stringsPorMppt: zod.number(),
+  vdcMax: zod
+    .number()
+    .nullish()
+    .describe("Tensão DC máxima de entrada (V), ex: 1000 ou 1500"),
   createdAt: zod.coerce.date(),
 });
 export const ListInvertersResponse = zod.array(ListInvertersResponseItem);
@@ -234,6 +266,7 @@ export const CreateInverterBody = zod.object({
   corrMaxMppt: zod.number(),
   numMppt: zod.number(),
   stringsPorMppt: zod.number(),
+  vdcMax: zod.number().nullish(),
 });
 
 /**
@@ -254,6 +287,10 @@ export const GetInverterResponse = zod.object({
   corrMaxMppt: zod.number(),
   numMppt: zod.number(),
   stringsPorMppt: zod.number(),
+  vdcMax: zod
+    .number()
+    .nullish()
+    .describe("Tensão DC máxima de entrada (V), ex: 1000 ou 1500"),
   createdAt: zod.coerce.date(),
 });
 
@@ -274,6 +311,7 @@ export const UpdateInverterBody = zod.object({
   corrMaxMppt: zod.number().optional(),
   numMppt: zod.number().optional(),
   stringsPorMppt: zod.number().optional(),
+  vdcMax: zod.number().nullish(),
 });
 
 export const UpdateInverterResponse = zod.object({
@@ -287,6 +325,10 @@ export const UpdateInverterResponse = zod.object({
   corrMaxMppt: zod.number(),
   numMppt: zod.number(),
   stringsPorMppt: zod.number(),
+  vdcMax: zod
+    .number()
+    .nullish()
+    .describe("Tensão DC máxima de entrada (V), ex: 1000 ou 1500"),
   createdAt: zod.coerce.date(),
 });
 

@@ -16,4 +16,6 @@ export interface CreateInverterBody {
   corrMaxMppt: number;
   numMppt: number;
   stringsPorMppt: number;
+  /** @nullable */
+  vdcMax?: number | null;
 }

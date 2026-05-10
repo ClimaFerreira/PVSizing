@@ -40,6 +40,8 @@ router.post("/panels", async (req, res): Promise<void> => {
       isc: String(d.isc),
       imp: String(d.imp),
       coeficienteTemperatura: String(d.coeficienteTemperatura),
+      coeficienteTemperaturaVoc: d.coeficienteTemperaturaVoc != null ? String(d.coeficienteTemperaturaVoc) : null,
+      noct: d.noct != null ? String(d.noct) : null,
     })
     .returning();
 
@@ -91,6 +93,8 @@ router.patch("/panels/:id", async (req, res): Promise<void> => {
   if (d.isc !== undefined) updateValues.isc = String(d.isc);
   if (d.imp !== undefined) updateValues.imp = String(d.imp);
   if (d.coeficienteTemperatura !== undefined) updateValues.coeficienteTemperatura = String(d.coeficienteTemperatura);
+  if (d.coeficienteTemperaturaVoc !== undefined) updateValues.coeficienteTemperaturaVoc = d.coeficienteTemperaturaVoc != null ? String(d.coeficienteTemperaturaVoc) : null;
+  if (d.noct !== undefined) updateValues.noct = d.noct != null ? String(d.noct) : null;
 
   const [panel] = await db
     .update(panelsTable)
@@ -136,6 +140,8 @@ function toPanelResponse(row: typeof panelsTable.$inferSelect) {
     isc: Number(row.isc),
     imp: Number(row.imp),
     coeficienteTemperatura: Number(row.coeficienteTemperatura),
+    coeficienteTemperaturaVoc: row.coeficienteTemperaturaVoc != null ? Number(row.coeficienteTemperaturaVoc) : null,
+    noct: row.noct != null ? Number(row.noct) : null,
   };
 }
 

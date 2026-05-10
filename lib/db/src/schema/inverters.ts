@@ -13,6 +13,7 @@ export const invertersTable = pgTable("inverters", {
   corrMaxMppt: numeric("corr_max_mppt", { precision: 10, scale: 4 }).notNull(),
   numMppt: integer("num_mppt").notNull(),
   stringsPorMppt: integer("strings_por_mppt").notNull(),
+  vdcMax: numeric("vdc_max", { precision: 8, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

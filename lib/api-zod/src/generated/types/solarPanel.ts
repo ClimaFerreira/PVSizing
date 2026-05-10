@@ -16,5 +16,15 @@ export interface SolarPanel {
   isc: number;
   imp: number;
   coeficienteTemperatura: number;
+  /**
+   * Coeficiente de temperatura de Voc (%/°C), ex: -0.28
+   * @nullable
+   */
+  coeficienteTemperaturaVoc?: number | null;
+  /**
+   * NOCT — Temperatura Normal de Operação da Célula (°C), ex: 45
+   * @nullable
+   */
+  noct?: number | null;
   createdAt: Date;
 }

@@ -120,6 +120,16 @@ export interface SolarPanel {
   isc: number;
   imp: number;
   coeficienteTemperatura: number;
+  /**
+   * Coeficiente de temperatura de Voc (%/°C), ex: -0.28
+   * @nullable
+   */
+  coeficienteTemperaturaVoc?: number | null;
+  /**
+   * NOCT — Temperatura Normal de Operação da Célula (°C), ex: 45
+   * @nullable
+   */
+  noct?: number | null;
   createdAt: string;
 }
 
@@ -132,6 +142,10 @@ export interface CreateSolarPanelBody {
   isc: number;
   imp: number;
   coeficienteTemperatura: number;
+  /** @nullable */
+  coeficienteTemperaturaVoc?: number | null;
+  /** @nullable */
+  noct?: number | null;
 }
 
 export interface UpdateSolarPanelBody {
@@ -143,6 +157,10 @@ export interface UpdateSolarPanelBody {
   isc?: number;
   imp?: number;
   coeficienteTemperatura?: number;
+  /** @nullable */
+  coeficienteTemperaturaVoc?: number | null;
+  /** @nullable */
+  noct?: number | null;
 }
 
 export interface Inverter {
@@ -156,6 +174,11 @@ export interface Inverter {
   corrMaxMppt: number;
   numMppt: number;
   stringsPorMppt: number;
+  /**
+   * Tensão DC máxima de entrada (V), ex: 1000 ou 1500
+   * @nullable
+   */
+  vdcMax?: number | null;
   createdAt: string;
 }
 
@@ -169,6 +192,8 @@ export interface CreateInverterBody {
   corrMaxMppt: number;
   numMppt: number;
   stringsPorMppt: number;
+  /** @nullable */
+  vdcMax?: number | null;
 }
 
 export interface UpdateInverterBody {
@@ -181,6 +206,8 @@ export interface UpdateInverterBody {
   corrMaxMppt?: number;
   numMppt?: number;
   stringsPorMppt?: number;
+  /** @nullable */
+  vdcMax?: number | null;
 }
 
 export type BatteryTecnologia =

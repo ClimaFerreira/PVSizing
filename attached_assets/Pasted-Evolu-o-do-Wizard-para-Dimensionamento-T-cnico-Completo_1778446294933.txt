@@ -1,0 +1,148 @@
+Evolução do Wizard para Dimensionamento Técnico Completo
+
+Atualmente o Wizard termina após a seleção de:
+
+painéis;
+inversor;
+bateria.
+
+Mas nesta fase o sistema deve avançar automaticamente para um módulo de engenharia técnica e validação do sistema fotovoltaico.
+
+O objetivo é transformar o SolarDim num verdadeiro software de dimensionamento FV profissional.
+
+Nova etapa após “Equipamentos”
+
+Adicionar novos passos:
+
+Equipamentos → Compatibilidade → Strings → Produção → Validação Técnica → Proposta
+1. Análise de Compatibilidade
+
+Após selecionar os equipamentos, validar automaticamente:
+
+Painel ↔ Inversor
+
+Verificar:
+
+tensão máxima;
+corrente máxima;
+potência DC admissível;
+número de MPPT;
+número de entradas;
+oversizing permitido;
+compatibilidade de corrente;
+compatibilidade térmica.
+Bateria ↔ Inversor
+
+Validar:
+
+tensão da bateria;
+corrente máxima de carga/descarga;
+CAN/BMS compatível;
+potência máxima de carga;
+química suportada;
+capacidade mínima/máxima.
+2. Dimensionamento Automático de Strings
+
+O sistema deve calcular automaticamente:
+
+número de painéis por string;
+número de strings;
+distribuição por MPPT;
+tensão Voc;
+tensão Vmpp;
+corrente Isc;
+corrente operacional;
+comportamento térmico.
+Regras elétricas importantes
+
+Validar:
+
+Em frio extremo
+Voc corrigido temperatura < tensão máxima do inversor
+Em calor extremo
+Vmpp continua dentro da janela MPPT
+Corrente
+Isc total por MPPT não ultrapassa limite do inversor
+3. Simulação de Produção
+
+Calcular:
+
+produção mensal;
+produção anual;
+clipping;
+perdas;
+autoconsumo;
+excedentes;
+importação da rede;
+exportação;
+comportamento da bateria.
+4. Análise de Bateria
+
+Dimensionar:
+
+autonomia;
+profundidade descarga;
+ciclos;
+capacidade útil;
+energia noturna;
+backup;
+potência instantânea.
+5. Alertas Técnicos Inteligentes
+
+Mostrar avisos:
+
+Exemplo
+⚠ Oversizing DC/AC elevado (145%)
+
+⚠ String 1 excede tensão máxima a -10°C
+
+⚠ Corrente MPPT acima do recomendado
+
+⚠ Bateria insuficiente para autonomia pretendida
+6. Sugestões Automáticas
+
+O sistema pode recomendar:
+
+melhor inversor;
+melhor bateria;
+melhor distribuição de strings;
+outra potência de painel;
+configuração mais eficiente.
+7. Visualização Técnica
+
+Adicionar:
+
+Diagrama unifilar automático
+strings;
+MPPT;
+bateria;
+inversor;
+quadro;
+rede.
+Resumo técnico
+30 painéis
+2 strings de 15
+MPPT1: 15 módulos
+MPPT2: 15 módulos
+
+Voc @ -10°C: 845V
+Vmpp operacional: 620V
+DC/AC Ratio: 1.18
+8. Configuração Manual Avançada
+
+Permitir:
+
+alterar strings;
+redistribuir MPPTs;
+alterar oversizing;
+forçar layouts;
+escolher estratégia bateria.
+Resultado esperado
+
+Transformar o SolarDim de:
+
+“calculadora solar”
+
+para:
+
+plataforma profissional de engenharia e dimensionamento fotovoltaico.

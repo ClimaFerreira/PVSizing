@@ -39,6 +39,7 @@ router.post("/inverters", async (req, res): Promise<void> => {
       corrMaxMppt: String(d.corrMaxMppt),
       numMppt: d.numMppt,
       stringsPorMppt: d.stringsPorMppt,
+      vdcMax: d.vdcMax != null ? String(d.vdcMax) : null,
     })
     .returning();
 
@@ -89,6 +90,7 @@ router.patch("/inverters/:id", async (req, res): Promise<void> => {
   if (d.corrMaxMppt !== undefined) updateValues.corrMaxMppt = String(d.corrMaxMppt);
   if (d.numMppt !== undefined) updateValues.numMppt = d.numMppt;
   if (d.stringsPorMppt !== undefined) updateValues.stringsPorMppt = d.stringsPorMppt;
+  if (d.vdcMax !== undefined) updateValues.vdcMax = d.vdcMax != null ? String(d.vdcMax) : null;
 
   const [inverter] = await db
     .update(invertersTable)
@@ -132,6 +134,7 @@ function toInverterResponse(row: typeof invertersTable.$inferSelect) {
     mpptMin: Number(row.mpptMin),
     mpptMax: Number(row.mpptMax),
     corrMaxMppt: Number(row.corrMaxMppt),
+    vdcMax: row.vdcMax != null ? Number(row.vdcMax) : null,
   };
 }
 

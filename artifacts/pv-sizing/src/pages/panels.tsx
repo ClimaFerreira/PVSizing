@@ -50,7 +50,9 @@ const panelSchema = z.object({
   vmp: z.coerce.number().min(0, "Vmp inválido"),
   isc: z.coerce.number().min(0, "Isc inválido"),
   imp: z.coerce.number().min(0, "Imp inválido"),
-  coeficienteTemperatura: z.coerce.number()
+  coeficienteTemperatura: z.coerce.number(),
+  coeficienteTemperaturaVoc: z.union([z.coerce.number(), z.null()]).optional(),
+  noct: z.union([z.coerce.number(), z.null()]).optional(),
 });
 
 type PanelFormValues = z.infer<typeof panelSchema>;
@@ -78,6 +80,8 @@ export default function Panels() {
       isc: 0,
       imp: 0,
       coeficienteTemperatura: -0.35,
+      coeficienteTemperaturaVoc: null,
+      noct: null,
     },
   });
 
@@ -134,6 +138,8 @@ export default function Panels() {
       isc: panel.isc,
       imp: panel.imp,
       coeficienteTemperatura: panel.coeficienteTemperatura,
+      coeficienteTemperaturaVoc: panel.coeficienteTemperaturaVoc ?? null,
+      noct: panel.noct ?? null,
     });
   };
 
@@ -180,6 +186,8 @@ export default function Panels() {
                   coeficienteTemperatura: Number(d.coeficienteTemperatura) !== 0
                                            ? Number(d.coeficienteTemperatura)
                                            : cur.coeficienteTemperatura,
+                  coeficienteTemperaturaVoc: Number(d.coeficienteTemperaturaVoc) !== 0 ? Number(d.coeficienteTemperaturaVoc) : cur.coeficienteTemperaturaVoc,
+                  noct: Number(d.noct) > 0 ? Number(d.noct) : cur.noct,
                 });
               }}
               onBatchCreate={async (modelos) => {
@@ -195,6 +203,8 @@ export default function Panels() {
                       isc: Number(d.isc ?? 0),
                       imp: Number(d.imp ?? 0),
                       coeficienteTemperatura: Number(d.coeficienteTemperatura ?? -0.35),
+                      coeficienteTemperaturaVoc: d.coeficienteTemperaturaVoc ? Number(d.coeficienteTemperaturaVoc) : null,
+                      noct: d.noct ? Number(d.noct) : null,
                     }});
                     ok++;
                   } catch { /* skip failed */ }
@@ -217,7 +227,7 @@ export default function Panels() {
                     <FormItem><FormLabel>Potência (Wp)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="coeficienteTemperatura" render={({ field }) => (
-                    <FormItem><FormLabel>Coef. Temp. (%/°C)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Coef. Temp. Pmax (%/°C)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="voc" render={({ field }) => (
                     <FormItem><FormLabel>Voc (V)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
@@ -230,6 +240,12 @@ export default function Panels() {
                   )} />
                   <FormField control={form.control} name="imp" render={({ field }) => (
                     <FormItem><FormLabel>Imp (A)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="coeficienteTemperaturaVoc" render={({ field }) => (
+                    <FormItem><FormLabel>Coef. Temp. Voc (%/°C)</FormLabel><FormControl><Input type="number" step="0.001" placeholder="-0.28" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="noct" render={({ field }) => (
+                    <FormItem><FormLabel>NOCT (°C)</FormLabel><FormControl><Input type="number" step="0.5" placeholder="45" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
                 <div className="flex justify-end">
@@ -320,7 +336,7 @@ export default function Panels() {
                                 <FormItem><FormLabel>Potência (Wp)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                               )} />
                               <FormField control={form.control} name="coeficienteTemperatura" render={({ field }) => (
-                                <FormItem><FormLabel>Coef. Temp. (%/°C)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Coef. Temp. Pmax (%/°C)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                               )} />
                               <FormField control={form.control} name="voc" render={({ field }) => (
                                 <FormItem><FormLabel>Voc (V)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
@@ -333,6 +349,12 @@ export default function Panels() {
                               )} />
                               <FormField control={form.control} name="imp" render={({ field }) => (
                                 <FormItem><FormLabel>Imp (A)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
+                              )} />
+                              <FormField control={form.control} name="coeficienteTemperaturaVoc" render={({ field }) => (
+                                <FormItem><FormLabel>Coef. Temp. Voc (%/°C)</FormLabel><FormControl><Input type="number" step="0.001" placeholder="-0.28" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                              )} />
+                              <FormField control={form.control} name="noct" render={({ field }) => (
+                                <FormItem><FormLabel>NOCT (°C)</FormLabel><FormControl><Input type="number" step="0.5" placeholder="45" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                               )} />
                             </div>
                             <div className="flex justify-end">
