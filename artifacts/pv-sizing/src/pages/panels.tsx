@@ -177,6 +177,27 @@ export default function Panels() {
                 if (d.imp) form.setValue("imp", Number(d.imp));
                 if (d.coeficienteTemperatura) form.setValue("coeficienteTemperatura", Number(d.coeficienteTemperatura));
               }}
+              onBatchCreate={async (modelos) => {
+                let ok = 0;
+                for (const d of modelos) {
+                  try {
+                    await createPanel.mutateAsync({ data: {
+                      nome: String(d.nome ?? ""),
+                      fabricante: String(d.fabricante ?? ""),
+                      potencia: Number(d.potencia ?? 0),
+                      voc: Number(d.voc ?? 0),
+                      vmp: Number(d.vmp ?? 0),
+                      isc: Number(d.isc ?? 0),
+                      imp: Number(d.imp ?? 0),
+                      coeficienteTemperatura: Number(d.coeficienteTemperatura ?? -0.35),
+                    }});
+                    ok++;
+                  } catch { /* skip failed */ }
+                }
+                queryClient.invalidateQueries({ queryKey: getListPanelsQueryKey() });
+                toast({ title: `${ok} painel(is) criado(s) com sucesso` });
+                if (ok > 0) { setIsCreateOpen(false); form.reset(); }
+              }}
             />
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

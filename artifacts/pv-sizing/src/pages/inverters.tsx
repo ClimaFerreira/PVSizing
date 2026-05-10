@@ -181,6 +181,28 @@ export default function Inverters() {
                 if (d.numMppt) form.setValue("numMppt", Number(d.numMppt));
                 if (d.stringsPorMppt) form.setValue("stringsPorMppt", Number(d.stringsPorMppt));
               }}
+              onBatchCreate={async (modelos) => {
+                let ok = 0;
+                for (const d of modelos) {
+                  try {
+                    await createInverter.mutateAsync({ data: {
+                      nome: String(d.nome ?? ""),
+                      fabricante: String(d.fabricante ?? ""),
+                      potenciaAc: Number(d.potenciaAc ?? 0),
+                      potenciaDcMax: Number(d.potenciaDcMax ?? 0),
+                      mpptMin: Number(d.mpptMin ?? 0),
+                      mpptMax: Number(d.mpptMax ?? 0),
+                      corrMaxMppt: Number(d.corrMaxMppt ?? 0),
+                      numMppt: Number(d.numMppt ?? 1),
+                      stringsPorMppt: Number(d.stringsPorMppt ?? 1),
+                    }});
+                    ok++;
+                  } catch { /* skip failed */ }
+                }
+                queryClient.invalidateQueries({ queryKey: getListInvertersQueryKey() });
+                toast({ title: `${ok} inversor(es) criado(s) com sucesso` });
+                if (ok > 0) { setIsCreateOpen(false); form.reset(); }
+              }}
             />
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

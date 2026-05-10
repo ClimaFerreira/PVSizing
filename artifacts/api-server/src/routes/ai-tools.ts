@@ -256,9 +256,11 @@ router.post("/tools/import-datasheet", upload.single("file"), async (req, res): 
     return;
   }
 
+  const nomeTipo = tipoEquipamento === "painel" ? "painel solar" : tipoEquipamento === "inversor" ? "inversor fotovoltaico" : "bateria de armazenamento";
+
   const schemaByType: Record<string, string> = {
     painel: `{"nome":"string","fabricante":"string","potencia":number,"voc":number,"vmp":number,"isc":number,"imp":number,"coeficienteTemperatura":number}`,
-    inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":integer,"stringsPorMppt":integer}`,
+    inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":number,"stringsPorMppt":number}`,
     bateria: `{"nome":"string","fabricante":"string","capacidade":number,"tensao":number,"tecnologia":"LiFePO4|Li-ion|AGM|Gel"}`,
   };
 
@@ -268,7 +270,7 @@ router.post("/tools/import-datasheet", upload.single("file"), async (req, res): 
 
     const message = await anthropic.messages.create({
       model: "claude-opus-4-5",
-      max_tokens: 1024,
+      max_tokens: 4096,
       messages: [
         {
           role: "user",
@@ -276,14 +278,30 @@ router.post("/tools/import-datasheet", upload.single("file"), async (req, res): 
             contentBlock,
             {
               type: "text",
-              text: `Analisa esta ficha técnica de ${tipoEquipamento === "painel" ? "painel solar" : tipoEquipamento === "inversor" ? "inversor fotovoltaico" : "bateria de armazenamento"} e extrai os dados técnicos no seguinte formato JSON:
+              text: `Analisa esta ficha técnica de ${nomeTipo}.
+
+REGRA FUNDAMENTAL: fichas técnicas frequentemente apresentam VÁRIOS MODELOS em paralelo numa tabela comparativa (uma coluna por modelo). Identifica TODOS os modelos presentes no documento e extrai os dados de cada um individualmente.
+
+Para cada modelo encontrado, extrai os campos no seguinte formato:
 ${schemaByType[tipoEquipamento]}
 
-Devolve também:
-- "confianca": valor 0-1 da confiança na extração
-- "notas": avisos ou valores estimados
+Devolve um objeto JSON com EXATAMENTE esta estrutura:
+{
+  "modelos": [ <array com um objeto por modelo, usando o schema acima> ],
+  "confianca": <número 0-1 da confiança geral na extração>,
+  "notas": <string com observações, ex. "5 modelos detetados na tabela comparativa da pág. 2"> ou null
+}
 
-Responde APENAS com JSON, sem texto adicional.`,
+Instruções importantes:
+- Se a tabela tiver colunas por modelo (ex: SUN-14K, SUN-15K, SUN-16K...), cria um registo separado para cada coluna.
+- Associa cada valor ao modelo correto — não mistures dados entre modelos.
+- Para inversores: potenciaAc e potenciaDcMax em Watts (W), mpptMin/mpptMax em Volts (V), corrMaxMppt em Amperes (A).
+- Para painéis: potencia em Watts pico (Wp), tensões em Volts, correntes em Amperes, coeficienteTemperatura em %/°C (valor negativo, ex: -0.35).
+- Para baterias: capacidade em kWh, tensao em Volts.
+- Se um valor não estiver disponível para um modelo, usa 0 (nunca null nos campos numéricos).
+- fabricante deve ser o mesmo para todos os modelos da mesma ficha.
+
+Responde APENAS com o JSON pedido, sem texto adicional, sem markdown.`,
             },
           ],
         },
@@ -292,10 +310,19 @@ Responde APENAS com JSON, sem texto adicional.`,
 
     const text = message.content[0].type === "text" ? message.content[0].text : "{}";
     const clean = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const parsed = JSON.parse(clean) as Record<string, unknown>;
-    const { confianca, notas, ...dados } = parsed;
+    const parsed = JSON.parse(clean) as { modelos?: Record<string, unknown>[]; confianca?: number; notas?: string | null };
 
-    res.json({ tipoEquipamento, dados, confianca: confianca ?? 0.8, notas: notas ?? null });
+    const modelos: Record<string, unknown>[] = Array.isArray(parsed.modelos) && parsed.modelos.length > 0
+      ? parsed.modelos
+      : [parsed as Record<string, unknown>];
+
+    res.json({
+      tipoEquipamento,
+      modelos,
+      dados: modelos[0],
+      confianca: parsed.confianca ?? 0.8,
+      notas: parsed.notas ?? null,
+    });
   } catch (err) {
     req.log?.error({ err }, "import-datasheet AI error");
     res.status(502).json({ error: "Erro ao processar ficha técnica com IA" });

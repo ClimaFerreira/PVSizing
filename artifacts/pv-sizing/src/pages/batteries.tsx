@@ -177,6 +177,29 @@ export default function Batteries() {
               if (data.fabricante) form.setValue("fabricante", String(data.fabricante));
               if (data.capacidade) form.setValue("capacidade", Number(data.capacidade));
               if (data.tensao) form.setValue("tensao", Number(data.tensao));
+              if (data.tecnologia && TECNOLOGIAS.includes(data.tecnologia as typeof TECNOLOGIAS[number]))
+                form.setValue("tecnologia", data.tecnologia as typeof TECNOLOGIAS[number]);
+            }}
+            onBatchCreate={async (modelos) => {
+              let ok = 0;
+              for (const d of modelos) {
+                const tec = TECNOLOGIAS.includes(d.tecnologia as typeof TECNOLOGIAS[number])
+                  ? (d.tecnologia as typeof TECNOLOGIAS[number])
+                  : "LiFePO4";
+                try {
+                  await createBattery.mutateAsync({ data: {
+                    nome: String(d.nome ?? ""),
+                    fabricante: String(d.fabricante ?? ""),
+                    capacidade: Number(d.capacidade ?? 0),
+                    tensao: Number(d.tensao ?? 48),
+                    tecnologia: tec,
+                  }});
+                  ok++;
+                } catch { /* skip failed */ }
+              }
+              queryClient.invalidateQueries({ queryKey: getListBatteriesQueryKey() });
+              toast({ title: `${ok} bateria(s) criada(s) com sucesso` });
+              if (ok > 0) { setIsCreateOpen(false); form.reset(); }
             }}
           />
         )}
