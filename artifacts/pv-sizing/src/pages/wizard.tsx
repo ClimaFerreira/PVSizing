@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,9 +21,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Zap, MapPin, Settings2, CheckCircle2, ChevronRight, ChevronLeft,
+  Zap, MapPin, Settings2, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown,
   Loader2, Sun, Battery, BarChart3, AlertTriangle, TrendingUp,
-  Clock, Lightbulb, ArrowRight, Calculator,
+  Clock, Lightbulb, ArrowRight, Calculator, SlidersHorizontal, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +79,15 @@ interface AutoSizeResult {
   explicacao: string;
 }
 
+interface ManualOverride {
+  numPaineis: number;
+  potenciaWp: number;
+  hsp: number;
+  rendimento: number;
+  capacidadeBateria: number;
+  coberturaMeta: number;
+}
+
 const STEPS = [
   { id: 1, label: "Consumo",      icon: Zap },
   { id: 2, label: "Localização",  icon: MapPin },
@@ -92,6 +101,8 @@ export default function Wizard() {
   const [locData, setLocData]     = useState<LocalizacaoForm | null>(null);
   const [sizing, setSizing]       = useState<AutoSizeResult | null>(null);
   const [isSizing, setIsSizing]   = useState(false);
+  const [showManualAdjust, setShowManualAdjust] = useState(false);
+  const [manual, setManual]       = useState<ManualOverride | null>(null);
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -103,6 +114,55 @@ export default function Wizard() {
 
   const locForm   = useForm<LocalizacaoForm>({ resolver: zodResolver(localizacaoSchema), defaultValues: { latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 } });
   const equipForm = useForm<EquipamentosForm>({ resolver: zodResolver(equipamentosSchema), defaultValues: {} });
+
+  // Reset manual overrides each time a new auto-size result arrives
+  useEffect(() => {
+    if (sizing) {
+      setManual({
+        numPaineis: sizing.numPaineis,
+        potenciaWp: 400,
+        hsp: sizing.hsp,
+        rendimento: sizing.fatorRendimento,
+        capacidadeBateria: sizing.capacidadeBateriaRecomendada ?? 0,
+        coberturaMeta: consumoData.coberturaMeta,
+      });
+      setShowManualAdjust(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sizing]);
+
+  // Effective sizing: auto merged with manual overrides
+  const effectiveSizing = useMemo(() => {
+    if (!sizing || !manual) return sizing;
+    const potenciaInstalada = +(manual.numPaineis * manual.potenciaWp / 1000).toFixed(2);
+    const energiaAnualEstimada = Math.round(potenciaInstalada * manual.hsp * 365 * manual.rendimento);
+    const coberturaReal = sizing.consumoAnualAjustado > 0
+      ? Math.round((energiaAnualEstimada / sizing.consumoAnualAjustado) * 100)
+      : 0;
+    return {
+      ...sizing,
+      potenciaInstalada,
+      potenciaRecomendada: potenciaInstalada,
+      numPaineis: manual.numPaineis,
+      energiaAnualEstimada,
+      coberturaReal,
+      coberturaAlvo: manual.coberturaMeta,
+      capacidadeBateriaRecomendada: manual.capacidadeBateria > 0 ? manual.capacidadeBateria : null,
+      hsp: manual.hsp,
+      fatorRendimento: manual.rendimento,
+    };
+  }, [sizing, manual]);
+
+  const isManualModified = useMemo(() => {
+    if (!manual || !sizing) return false;
+    return (
+      manual.numPaineis !== sizing.numPaineis ||
+      manual.potenciaWp !== 400 ||
+      Math.abs(manual.hsp - sizing.hsp) > 0.01 ||
+      Math.abs(manual.rendimento - sizing.fatorRendimento) > 0.005 ||
+      (manual.capacidadeBateria > 0 && manual.capacidadeBateria !== (sizing.capacidadeBateriaRecomendada ?? 0))
+    );
+  }, [manual, sizing]);
 
   // ── Auto-size ─────────────────────────────────────────────────────────────
   const runAutoSize = async (consumo: ConsumoData, loc: LocalizacaoForm) => {
@@ -137,19 +197,20 @@ export default function Wizard() {
 
   // ── Save proposal ─────────────────────────────────────────────────────────
   const handleSaveProposal = () => {
-    if (!sizing) return;
+    const eff = effectiveSizing ?? sizing;
+    if (!eff) return;
     const eq    = equipForm.getValues();
     const panel = panels?.find(p => p.id === eq.panelId);
     createProposal.mutate(
       { data: {
-        titulo:                `Proposta ${panel?.fabricante ?? ""} ${sizing.potenciaRecomendada} kWp`,
+        titulo:                `Proposta ${panel?.fabricante ?? ""} ${eff.potenciaRecomendada} kWp`,
         consumoAnualEstimado:  consumoData.consumoAnual,
-        potenciaRecomendada:   sizing.potenciaRecomendada,
-        numPaineis:            sizing.numPaineis,
+        potenciaRecomendada:   eff.potenciaRecomendada,
+        numPaineis:            eff.numPaineis,
         panelId:               eq.panelId || null,
         inverterId:            eq.inverterId || null,
         batteryId:             eq.batteryId ?? null,
-        producaoAnualEstimada: sizing.energiaAnualEstimada,
+        producaoAnualEstimada: eff.energiaAnualEstimada,
         alertas:               [],
       }},
       {
@@ -309,6 +370,11 @@ export default function Wizard() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-primary">
                     <Sun size={22} /> Estudo de Dimensionamento
+                    {isManualModified && (
+                      <Badge variant="outline" className="text-primary border-primary/40 text-xs ml-1 font-medium">
+                        <SlidersHorizontal size={10} className="mr-1" /> Ajustado
+                      </Badge>
+                    )}
                   </CardTitle>
                   <CardDescription>
                     {consumoData.consumoAnual.toLocaleString("pt-PT")} kWh/ano base
@@ -319,12 +385,35 @@ export default function Wizard() {
                 <CardContent className="space-y-6">
                   {/* Key metrics */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {[
-                      { label: "Potência Instalada",   value: `${sizing.potenciaInstalada} kWp`,                             sub: `mín. teórica: ${sizing.potenciaMinima} kWp`, hi: true,  Icon: Zap },
-                      { label: "Nº Painéis (400 Wp)",  value: `${sizing.numPaineis} un.`,                                     sub: `${sizing.potenciaInstalada} kWp reais`,       hi: true,  Icon: Sun },
-                      { label: "Produção Anual Real",   value: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`,   sub: `base: ${sizing.potenciaInstalada} kWp × HSP`, hi: false, Icon: TrendingUp },
-                      { label: "Cobertura Real",        value: `${sizing.coberturaReal}%`,                                    sub: `alvo: ${sizing.coberturaAlvo}%`,              hi: false, Icon: BarChart3 },
-                    ].map(({ label, value, sub, hi, Icon }) => (
+                    {(() => {
+                      const eff = effectiveSizing ?? sizing;
+                      return [
+                        {
+                          label: "Potência Instalada",
+                          value: `${eff.potenciaInstalada} kWp`,
+                          sub: isManualModified ? `auto: ${sizing.potenciaInstalada} kWp` : `mín. teórica: ${sizing.potenciaMinima} kWp`,
+                          hi: true, Icon: Zap,
+                        },
+                        {
+                          label: isManualModified ? `Nº Painéis (${manual!.potenciaWp} Wp)` : "Nº Painéis (400 Wp)",
+                          value: `${eff.numPaineis} un.`,
+                          sub: isManualModified ? `auto: ${sizing.numPaineis} un.` : `${eff.potenciaInstalada} kWp reais`,
+                          hi: true, Icon: Sun,
+                        },
+                        {
+                          label: "Produção Anual Real",
+                          value: `${eff.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`,
+                          sub: isManualModified ? `auto: ${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh` : `base: ${eff.potenciaInstalada} kWp × HSP`,
+                          hi: false, Icon: TrendingUp,
+                        },
+                        {
+                          label: "Cobertura Real",
+                          value: `${eff.coberturaReal}%`,
+                          sub: isManualModified ? `auto: ${sizing.coberturaReal}% · alvo: ${eff.coberturaAlvo}%` : `alvo: ${eff.coberturaAlvo}%`,
+                          hi: false, Icon: BarChart3,
+                        },
+                      ];
+                    })().map(({ label, value, sub, hi, Icon }) => (
                       <div key={label} className={cn("rounded-xl p-4 text-center border", hi ? "bg-primary/10 border-primary/30" : "bg-background border-border")}>
                         <Icon size={18} className={cn("mx-auto mb-2", hi ? "text-primary" : "text-muted-foreground")} />
                         <p className="text-xs text-muted-foreground leading-tight">{label}</p>
@@ -482,6 +571,222 @@ export default function Wizard() {
                 </CardContent>
               </Card>
 
+              {/* ── Manual Adjustment Card ── */}
+              {manual && (
+                <Card className={cn("transition-colors", showManualAdjust ? "border-primary/50" : "border-dashed")}>
+                  <div
+                    className="px-5 py-4 flex items-center justify-between cursor-pointer select-none"
+                    onClick={() => setShowManualAdjust(v => !v)}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <SlidersHorizontal size={18} className={cn(showManualAdjust ? "text-primary" : "text-muted-foreground")} />
+                      <div>
+                        <p className="text-sm font-semibold">Ajuste Manual da Solução</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {isManualModified
+                            ? `Ajustado: ${(effectiveSizing ?? sizing)!.potenciaInstalada} kWp · ${(effectiveSizing ?? sizing)!.numPaineis} painéis · ${(effectiveSizing ?? sizing)!.coberturaReal}% cobertura`
+                            : "Personalizar potência, painéis, HSP e rendimento"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isManualModified && <Badge variant="outline" className="text-primary border-primary/40 text-xs">Ajustado</Badge>}
+                      <ChevronDown size={16} className={cn("text-muted-foreground transition-transform duration-200", showManualAdjust && "rotate-180")} />
+                    </div>
+                  </div>
+
+                  {showManualAdjust && (
+                    <CardContent className="pt-0 pb-5 space-y-5">
+                      <Separator />
+
+                      {/* Input grid */}
+                      <div>
+                        <p className="text-[11px] font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Parâmetros Ajustáveis</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Nº de Painéis</label>
+                            <Input type="number" min={1} step={1} value={manual.numPaineis}
+                              onChange={e => setManual(m => m ? { ...m, numPaineis: Math.max(1, +e.target.value) } : m)} />
+                            <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.numPaineis} un.</p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Potência/Painel (Wp)</label>
+                            <Input type="number" min={100} max={700} step={5} value={manual.potenciaWp}
+                              onChange={e => setManual(m => m ? { ...m, potenciaWp: Math.max(100, +e.target.value) } : m)} />
+                            <p className="text-[10px] text-muted-foreground mt-1">Auto: 400 Wp</p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Potência Instalada</label>
+                            <div className="h-10 px-3 flex items-center rounded-md border border-dashed bg-muted/40 text-sm font-bold text-primary">
+                              {(manual.numPaineis * manual.potenciaWp / 1000).toFixed(2)} kWp
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.potenciaInstalada} kWp</p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">HSP (h/dia)</label>
+                            <Input type="number" min={1} max={8} step={0.01} value={manual.hsp}
+                              onChange={e => setManual(m => m ? { ...m, hsp: Math.max(1, +e.target.value) } : m)} />
+                            <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.hsp} h/dia</p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Rendimento Global (%)</label>
+                            <Input type="number" min={50} max={100} step={1} value={Math.round(manual.rendimento * 100)}
+                              onChange={e => setManual(m => m ? { ...m, rendimento: Math.max(0.5, Math.min(1, +e.target.value / 100)) } : m)} />
+                            <p className="text-[10px] text-muted-foreground mt-1">Auto: {Math.round(sizing.fatorRendimento * 100)}%</p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Meta de Cobertura (%)</label>
+                            <Input type="number" min={10} max={150} step={1} value={manual.coberturaMeta}
+                              onChange={e => setManual(m => m ? { ...m, coberturaMeta: Math.min(150, Math.max(10, +e.target.value)) } : m)} />
+                            <p className="text-[10px] text-muted-foreground mt-1">Auto: {consumoData.coberturaMeta}%</p>
+                          </div>
+                          {consumoData.incluirBateria && (
+                            <div>
+                              <label className="text-xs font-medium text-muted-foreground block mb-1.5">Capacidade Bateria (kWh)</label>
+                              <Input type="number" min={0} step={0.5} value={manual.capacidadeBateria}
+                                onChange={e => setManual(m => m ? { ...m, capacidadeBateria: Math.max(0, +e.target.value) } : m)} />
+                              <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.capacidadeBateriaRecomendada ?? 0} kWh</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Comparison table + warnings */}
+                      {(() => {
+                        const mPotInstalada = +(manual.numPaineis * manual.potenciaWp / 1000).toFixed(2);
+                        const mEnergiaAnual = Math.round(mPotInstalada * manual.hsp * 365 * manual.rendimento);
+                        const mCobertura = sizing.consumoAnualAjustado > 0
+                          ? Math.round((mEnergiaAnual / sizing.consumoAnualAjustado) * 100) : 0;
+                        const mExcedente = Math.max(0, mEnergiaAnual - sizing.consumoAnualAjustado);
+                        const abaixoMeta = mCobertura < manual.coberturaMeta;
+                        const acimaExcesso = mCobertura > manual.coberturaMeta * 1.3;
+                        const pNeeded = abaixoMeta
+                          ? Math.ceil(((manual.coberturaMeta / 100 * sizing.consumoAnualAjustado) / (manual.hsp * 365 * manual.rendimento) - mPotInstalada) * 1000 / manual.potenciaWp)
+                          : 0;
+                        const rows = [
+                          { label: "Potência Instalada", auto: `${sizing.potenciaInstalada} kWp`,                                       adj: `${mPotInstalada} kWp`,                                   d: mPotInstalada - sizing.potenciaInstalada,           fmt: (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)} kWp` },
+                          { label: "Nº Painéis",         auto: `${sizing.numPaineis} un.`,                                              adj: `${manual.numPaineis} un.`,                               d: manual.numPaineis - sizing.numPaineis,              fmt: (v: number) => `${v > 0 ? "+" : ""}${v} un.` },
+                          { label: "Produção Anual",     auto: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`,            adj: `${mEnergiaAnual.toLocaleString("pt-PT")} kWh`,           d: mEnergiaAnual - sizing.energiaAnualEstimada,        fmt: (v: number) => `${v > 0 ? "+" : ""}${v.toLocaleString("pt-PT")} kWh` },
+                          { label: "Cobertura Real",     auto: `${sizing.coberturaReal}%`,                                             adj: `${mCobertura}%`,                                         d: mCobertura - sizing.coberturaReal,                 fmt: (v: number) => `${v > 0 ? "+" : ""}${v}%` },
+                        ];
+                        return (
+                          <>
+                            <div>
+                              <p className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Comparação Automático vs Ajustado</p>
+                              <div className="rounded-lg border overflow-hidden">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="bg-muted/50 border-b">
+                                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Parâmetro</th>
+                                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Automático</th>
+                                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Ajustado</th>
+                                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Δ</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {rows.map((row, i) => (
+                                      <tr key={row.label} className={cn("border-b last:border-0", i % 2 === 0 ? "bg-background" : "bg-muted/20")}>
+                                        <td className="px-3 py-2 text-xs font-medium">{row.label}</td>
+                                        <td className="px-3 py-2 text-right text-xs text-muted-foreground">{row.auto}</td>
+                                        <td className="px-3 py-2 text-right text-xs font-semibold">{row.adj}</td>
+                                        <td className={cn("px-3 py-2 text-right text-xs font-semibold",
+                                          row.d > 0 ? "text-green-600 dark:text-green-400" :
+                                          row.d < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
+                                        )}>{row.fmt(row.d)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              {abaixoMeta && (
+                                <div className="flex items-start gap-2.5 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                                  <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                                  <div className="text-xs text-amber-700 dark:text-amber-400 space-y-0.5">
+                                    <p className="font-semibold">Sistema subdimensionado</p>
+                                    <p>Automático: {sizing.coberturaReal}% · Ajustado: {mCobertura}% · Meta: {manual.coberturaMeta}%</p>
+                                    {pNeeded > 0 && <p>Adicione {pNeeded} painel{pNeeded > 1 ? "is" : ""} para atingir a meta.</p>}
+                                  </div>
+                                </div>
+                              )}
+                              {acimaExcesso && (
+                                <div className="flex items-start gap-2.5 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                                  <TrendingUp size={14} className="text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                                  <div className="text-xs text-blue-700 dark:text-blue-400 space-y-0.5">
+                                    <p className="font-semibold">Sistema sobredimensionado</p>
+                                    <p>Cobertura ajustada ({mCobertura}%) excede a meta ({manual.coberturaMeta}%) em {mCobertura - manual.coberturaMeta}%.</p>
+                                  </div>
+                                </div>
+                              )}
+                              {mExcedente > 0 && (
+                                <div className="flex items-start gap-2.5 p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
+                                  <Zap size={14} className="text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+                                  <p className="text-xs text-green-700 dark:text-green-400">
+                                    Excedente estimado: <strong>{mExcedente.toLocaleString("pt-PT")} kWh/ano</strong>
+                                    {" "}({Math.round(mExcedente / sizing.consumoAnualAjustado * 100)}% do consumo) — disponível para injeção na rede.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {inverters && inverters.length > 0 && (
+                              <div>
+                                <p className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Compatibilidade Inversores</p>
+                                <div className="space-y-1.5">
+                                  {inverters
+                                    .filter(i => i.potenciaAc >= mPotInstalada * 0.75 && i.potenciaAc <= mPotInstalada * 1.35)
+                                    .slice(0, 4)
+                                    .map(i => {
+                                      const ratio = i.potenciaAc / mPotInstalada;
+                                      const ok = ratio >= 0.85 && ratio <= 1.25;
+                                      return (
+                                        <div key={i.id} className={cn(
+                                          "flex items-center justify-between px-3 py-2 rounded-lg border text-xs",
+                                          ok ? "border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20"
+                                             : "border-border bg-muted/30"
+                                        )}>
+                                          <span className="font-medium">{i.fabricante} {i.nome}</span>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-muted-foreground">{i.potenciaAc} kW AC</span>
+                                            <Badge variant="outline" className={cn("text-[10px] px-1.5", ok
+                                              ? "text-green-700 dark:text-green-400 border-green-300 dark:border-green-700"
+                                              : "text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700")}>
+                                              {ok ? "✓ Adequado" : "≈ Marginal"}
+                                            </Badge>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  {inverters.filter(i => i.potenciaAc >= mPotInstalada * 0.75 && i.potenciaAc <= mPotInstalada * 1.35).length === 0 && (
+                                    <p className="text-xs text-muted-foreground">Nenhum inversor compatível no catálogo. Necessário ≥ {(mPotInstalada * 0.85).toFixed(1)} kW AC.</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {isManualModified && (
+                              <div className="flex justify-end pt-1">
+                                <Button variant="ghost" size="sm" className="text-xs gap-1.5 text-muted-foreground"
+                                  onClick={() => setManual({
+                                    numPaineis: sizing.numPaineis, potenciaWp: 400, hsp: sizing.hsp,
+                                    rendimento: sizing.fatorRendimento,
+                                    capacidadeBateria: sizing.capacidadeBateriaRecomendada ?? 0,
+                                    coberturaMeta: consumoData.coberturaMeta,
+                                  })}>
+                                  <RotateCcw size={12} /> Repor Automático
+                                </Button>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </CardContent>
+                  )}
+                </Card>
+              )}
+
               {locData && (
                 <Card>
                   <CardContent className="pt-4 pb-4">
@@ -511,26 +816,37 @@ export default function Wizard() {
       {/* ── STEP 4: Equipamentos ────────────────────────────────────────────── */}
       {step === 4 && (
         <div className="space-y-4">
-          {sizing && (
-            <div className="flex flex-wrap gap-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
-              <div className="flex items-center gap-2">
-                <Zap size={16} className="text-primary" />
-                <span className="text-sm font-medium">{sizing.potenciaRecomendada} kWp necessários</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Sun size={16} className="text-primary" />
-                <span className="text-sm font-medium">≈ {sizing.numPaineis} painéis de 400 Wp</span>
-              </div>
-              {sizing.capacidadeBateriaRecomendada && (
+          {(effectiveSizing ?? sizing) && (() => {
+            const eff = (effectiveSizing ?? sizing)!;
+            return (
+              <div className="flex flex-wrap gap-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
                 <div className="flex items-center gap-2">
-                  <Battery size={16} className="text-amber-500" />
-                  <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                    Bateria: {sizing.capacidadeBateriaRecomendada} kWh
+                  <Zap size={16} className="text-primary" />
+                  <span className="text-sm font-medium">{eff.potenciaInstalada} kWp instalados</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Sun size={16} className="text-primary" />
+                  <span className="text-sm font-medium">
+                    {eff.numPaineis} painéis{isManualModified && manual ? ` de ${manual.potenciaWp} Wp` : " de 400 Wp"}
                   </span>
                 </div>
-              )}
-            </div>
-          )}
+                {eff.capacidadeBateriaRecomendada && (
+                  <div className="flex items-center gap-2">
+                    <Battery size={16} className="text-amber-500" />
+                    <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                      Bateria: {eff.capacidadeBateriaRecomendada} kWh
+                    </span>
+                  </div>
+                )}
+                {isManualModified && (
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal size={14} className="text-primary" />
+                    <span className="text-xs text-primary font-medium">Valores ajustados manualmente</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <Card>
             <CardHeader>
@@ -553,10 +869,11 @@ export default function Wizard() {
                           ))}
                         </SelectContent>
                       </Select>
-                      {sizing && (equipForm.watch("panelId") ?? 0) > 0 && (() => {
+                      {(effectiveSizing ?? sizing) && (equipForm.watch("panelId") ?? 0) > 0 && (() => {
+                        const eff = (effectiveSizing ?? sizing)!;
                         const panel = panels?.find(p => p.id === equipForm.watch("panelId"));
                         if (!panel) return null;
-                        const n   = Math.ceil((sizing.potenciaRecomendada * 1000) / panel.potencia);
+                        const n   = Math.ceil((eff.potenciaInstalada * 1000) / panel.potencia);
                         const kWp = (n * panel.potencia / 1000).toFixed(2);
                         return (
                           <p className="text-xs text-primary mt-1">
