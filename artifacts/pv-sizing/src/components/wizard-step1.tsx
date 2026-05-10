@@ -137,6 +137,10 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
   const graficoMeses: LeituraMensal[] = [];
   const sazonalidades: string[] = [];
 
+  // Best AI-computed chart annual value across all invoices
+  let melhorConsumoAnualGrafico: number | null = null;
+  let melhorMesesNoGrafico = 0;
+
   for (const inv of done) {
     const d = { ...inv.data!, ...inv.edits };
     const meses = d.periodoMeses ?? 1;
@@ -156,7 +160,14 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
     if (d.precoKwh) precos.push(d.precoKwh);
     if (d.sazonalidade) sazonalidades.push(d.sazonalidade);
 
-    // Prefer chart history over text readings for the monthly bar chart
+    // Track the best AI-computed chart estimate (most months wins)
+    const invMesesGrafico = d.mesesNoGrafico ?? (d.historicoMensalGrafico?.length ?? 0);
+    if (d.consumoAnualGrafico != null && invMesesGrafico > melhorMesesNoGrafico) {
+      melhorConsumoAnualGrafico = d.consumoAnualGrafico;
+      melhorMesesNoGrafico = invMesesGrafico;
+    }
+
+    // Build monthly bar chart: prefer chart history over text readings
     const historico = (d.historicoMensalGrafico?.length ?? 0) > 0
       ? d.historicoMensalGrafico!
       : (d.leiturasMensais ?? []);
@@ -168,46 +179,65 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
       }
     }
 
-    // Accumulate unique chart readings (de-dup by month label)
+    // Accumulate unique chart readings from array (de-dup by parsed month index)
     for (const l of d.historicoMensalGrafico ?? []) {
-      if (!graficoMeses.some(g => g.mes === l.mes)) graficoMeses.push(l);
+      const idx = parseMesIndex(l.mes);
+      if (!graficoMeses.some(g => parseMesIndex(g.mes) === idx)) graficoMeses.push(l);
     }
   }
 
   // ─── Choose best annual estimate ──────────────────────────────────────────
-  // Priority: chart (12m) > chart (partial) > multiple invoices > single invoice
-  const totalMesesGrafico = graficoMeses.length;
+  // Priority:
+  //   1. chart array ≥ 12 months  → real sum
+  //   2. AI consumoAnualGrafico ≥ 12 months → direct AI value
+  //   3. AI consumoAnualGrafico  3–11 months → direct AI value (média×12 done by AI)
+  //   4. chart array 3–11 months → frontend média × 12
+  //   5. multiple invoices       → weighted average
+  //   6. single invoice          → extrapolation (with warning)
+  const totalMesesGraficoArray = graficoMeses.length;
   let consumoAnualEstimado: number;
   let fonteEstimativa: FonteEstimativa;
+  let mesesNoGraficoFinal = 0;
 
-  if (totalMesesGrafico >= 12) {
-    // Best case: full year from chart — use actual sum
+  if (totalMesesGraficoArray >= 12) {
     consumoAnualEstimado = Math.round(graficoMeses.reduce((s, l) => s + l.consumo, 0));
     fonteEstimativa = "grafico_12m";
-  } else if (totalMesesGrafico >= 3) {
-    // Partial chart: average of visible months × 12
-    const mediaGrafico = graficoMeses.reduce((s, l) => s + l.consumo, 0) / totalMesesGrafico;
+    mesesNoGraficoFinal = totalMesesGraficoArray;
+  } else if (melhorConsumoAnualGrafico != null && melhorMesesNoGrafico >= 12) {
+    // AI read a 12-month chart and computed the annual total directly
+    consumoAnualEstimado = Math.round(melhorConsumoAnualGrafico);
+    fonteEstimativa = "grafico_12m";
+    mesesNoGraficoFinal = melhorMesesNoGrafico;
+  } else if (melhorConsumoAnualGrafico != null && melhorMesesNoGrafico >= 3) {
+    // AI read a partial chart and extrapolated to 12 months
+    consumoAnualEstimado = Math.round(melhorConsumoAnualGrafico);
+    fonteEstimativa = "grafico_parcial";
+    mesesNoGraficoFinal = melhorMesesNoGrafico;
+  } else if (totalMesesGraficoArray >= 3) {
+    // Frontend has individual readings from chart array
+    const mediaGrafico = graficoMeses.reduce((s, l) => s + l.consumo, 0) / totalMesesGraficoArray;
     consumoAnualEstimado = Math.round(mediaGrafico * 12);
     fonteEstimativa = "grafico_parcial";
+    mesesNoGraficoFinal = totalMesesGraficoArray;
   } else if (done.length > 1 && totalMonths >= 2) {
-    // Multiple invoices without chart
     const media = totalKwh / totalMonths;
     consumoAnualEstimado = Math.round(media * 12);
     fonteEstimativa = "faturas_multiplas";
+    mesesNoGraficoFinal = 0;
   } else {
-    // Single invoice fallback
     const media = totalMonths > 0 ? totalKwh / totalMonths : 0;
     consumoAnualEstimado = Math.round(media * 12);
     fonteEstimativa = totalMonths === 1 ? "fatura_unica" : "extrapolacao";
+    mesesNoGraficoFinal = 0;
   }
 
   const consumoMensalMedio = Math.round(consumoAnualEstimado / 12);
 
   const alertas: string[] = [];
-  if (totalMesesGrafico > 0 && totalMesesGrafico < 12) {
-    alertas.push(`Gráfico com ${totalMesesGrafico} ${totalMesesGrafico === 1 ? "mês" : "meses"} — consumo anual estimado por média mensal × 12.`);
-  } else if (totalMesesGrafico === 0 && totalMonths < 12) {
-    alertas.push(`Cobertura de ${totalMonths} ${totalMonths === 1 ? "mês" : "meses"} sem histórico no gráfico — estimativa anual por extrapolação.`);
+  if (fonteEstimativa === "grafico_parcial") {
+    alertas.push(`Gráfico com ${mesesNoGraficoFinal} ${mesesNoGraficoFinal === 1 ? "mês" : "meses"} — consumo anual estimado por média mensal × 12.`);
+  } else if (fonteEstimativa === "fatura_unica" || fonteEstimativa === "extrapolacao") {
+    alertas.push(`Sem gráfico de histórico na fatura — estimativa anual por extrapolação do mês atual. Considere carregar mais faturas para maior precisão.`);
   }
   if (totalMonths > 14) alertas.push("Mais de 12 meses de dados detetados — verifique faturas duplicadas.");
 
@@ -221,7 +251,7 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
   return {
     consumoAnualEstimado,
     consumoMensalMedio,
-    mesesCobertos: Math.min(totalMesesGrafico > 0 ? totalMesesGrafico : totalMonths, 12),
+    mesesCobertos: Math.min(mesesNoGraficoFinal > 0 ? mesesNoGraficoFinal : totalMonths, 12),
     percVazio:  tarifaCount > 0 ? Math.round(vazioTotal  / tarifaCount) : null,
     percCheio:  tarifaCount > 0 ? Math.round(cheioTotal  / tarifaCount) : null,
     percPonta:  tarifaCount > 0 ? Math.round(pontaTotal  / tarifaCount) : null,
@@ -232,7 +262,7 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
     monthlyKwh,
     sazonalidade,
     fonteEstimativa,
-    mesesNoGrafico: totalMesesGrafico,
+    mesesNoGrafico: mesesNoGraficoFinal,
     alertas,
   };
 }
@@ -839,6 +869,16 @@ function InvoiceCard({ inv, onRemove, onToggleEdit, onSaveEdit }: InvoiceCardPro
             {d.consumoVazio != null && (
               <Badge variant="secondary" className="text-xs">
                 V:{d.consumoVazio} / C:{d.consumoCheio} / P:{d.consumoPonta} kWh
+              </Badge>
+            )}
+            {/* Chart extraction result */}
+            {(d.mesesNoGrafico != null && d.mesesNoGrafico > 0) ? (
+              <Badge className="text-xs bg-emerald-500 hover:bg-emerald-500 gap-1">
+                <CheckCircle2 size={10} /> Gráfico: {d.mesesNoGrafico}m · {d.consumoAnualGrafico?.toLocaleString("pt-PT")} kWh/ano
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs gap-1 border-amber-300 text-amber-600 dark:text-amber-400">
+                <AlertTriangle size={10} /> Sem gráfico
               </Badge>
             )}
           </div>
