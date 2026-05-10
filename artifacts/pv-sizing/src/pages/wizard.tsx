@@ -19,6 +19,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import {
   Zap, MapPin, Settings2, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown,
@@ -430,6 +431,92 @@ export default function Wizard() {
             </Card>
           ) : sizing ? (
             <>
+              {/* ── Coverage slider ─────────────────────────────────────────── */}
+              {sizing.cenariosDimensionamento && sizing.cenariosDimensionamento.length > 0 && (() => {
+                const cenarios = sizing.cenariosDimensionamento;
+                const minCob = Math.min(...cenarios.map(c => c.coberturaReal));
+                const maxCob = Math.max(...cenarios.map(c => c.coberturaReal));
+                const activeCob = activeCenario?.coberturaReal ?? cenarios[1]?.coberturaReal ?? 80;
+                const handleSlider = ([val]: number[]) => {
+                  const nearest = cenarios.reduce((best, c) =>
+                    Math.abs(c.coberturaReal - val) < Math.abs(best.coberturaReal - val) ? c : best
+                  );
+                  selectCenario(nearest.tipo as CenarioTipo);
+                };
+                return (
+                  <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+                    <CardContent className="pt-5 pb-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">Meta de Cobertura Solar</p>
+                          <p className="text-xs text-muted-foreground">Arraste para comparar cenários e ver a produção mensal</p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-3xl font-bold text-primary">{activeCob}%</span>
+                          <p className="text-xs text-muted-foreground">{activeCenario?.label ?? "—"}</p>
+                        </div>
+                      </div>
+
+                      <div className="relative pt-1">
+                        <Slider
+                          min={Math.max(10, minCob - 5)}
+                          max={Math.min(100, maxCob + 5)}
+                          step={1}
+                          value={[activeCob]}
+                          onValueChange={handleSlider}
+                          className="w-full"
+                        />
+                        {/* Scenario tick marks */}
+                        <div className="relative mt-3">
+                          {cenarios.map(c => {
+                            const rangeMin = Math.max(10, minCob - 5);
+                            const rangeMax = Math.min(100, maxCob + 5);
+                            const pct = ((c.coberturaReal - rangeMin) / (rangeMax - rangeMin)) * 100;
+                            const isActive = c.tipo === selectedCenarioTipo;
+                            const meta = CENARIO_META[c.tipo as CenarioTipo];
+                            return (
+                              <button
+                                key={c.tipo}
+                                onClick={() => selectCenario(c.tipo as CenarioTipo)}
+                                style={{ left: `${pct}%` }}
+                                className="absolute -translate-x-1/2 flex flex-col items-center gap-0.5 group"
+                              >
+                                <div className={cn(
+                                  "w-0.5 h-2 rounded-full transition-colors",
+                                  isActive ? "bg-primary" : "bg-muted-foreground/40"
+                                )} />
+                                <span className={cn(
+                                  "text-[10px] font-medium whitespace-nowrap transition-colors",
+                                  isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                                )}>
+                                  {meta?.label ?? c.tipo} · {c.coberturaReal}%
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Mini KPI strip */}
+                      <div className="flex gap-3 pt-5 flex-wrap">
+                        {[
+                          { label: "Potência", val: `${activeCenario?.potenciaInstalada ?? "—"} kWp` },
+                          { label: "Painéis", val: `${activeCenario?.numPaineis ?? "—"} un.` },
+                          { label: "Payback", val: `${activeCenario?.paybackAnos ?? "—"} anos` },
+                          { label: "Investimento", val: activeCenario ? `${activeCenario.investimentoEstimado.toLocaleString("pt-PT")} €` : "—" },
+                          { label: "Poupança/ano", val: activeCenario ? `${activeCenario.poupancaAnual.toLocaleString("pt-PT")} €` : "—" },
+                        ].map(({ label, val }) => (
+                          <div key={label} className="flex items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground">{label}:</span>
+                            <span className="text-xs font-bold">{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
               {/* ── Scenario selector ───────────────────────────────────────── */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {sizing.cenariosDimensionamento?.map(c => {
