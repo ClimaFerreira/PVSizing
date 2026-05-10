@@ -203,6 +203,7 @@ export default function WizardStep1({ data, onChange }: Props) {
       patch.percCheio = c.percCheio!;
       patch.percPonta = c.percPonta!;
     }
+    if (c.precoKwh) patch.precoKwh = c.precoKwh;
     onChangeRef.current({ ...dataRef.current, ...patch });
     setAutoApplied(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,6 +246,7 @@ export default function WizardStep1({ data, onChange }: Props) {
     if (!c) return;
     const patch: Partial<ConsumoData> = { consumoAnual: c.consumoAnualEstimado };
     if (c.percVazio != null) { patch.percVazio = c.percVazio; patch.percCheio = c.percCheio!; patch.percPonta = c.percPonta!; }
+    if (c.precoKwh) patch.precoKwh = c.precoKwh;
     onChange({ ...data, ...patch });
     setAutoApplied(true);
     toast({ title: `Consumo atualizado: ${c.consumoAnualEstimado.toLocaleString("pt-PT")} kWh/ano` });
@@ -342,11 +344,21 @@ export default function WizardStep1({ data, onChange }: Props) {
                     { label: "Consumo Mensal Médio", value: `${consolidated.consumoMensalMedio} kWh` },
                     { label: "Consumo Anual Estimado", value: `${consolidated.consumoAnualEstimado.toLocaleString("pt-PT")} kWh`, highlight: true },
                     consolidated.potenciaContratada ? { label: "Potência Contratada", value: `${consolidated.potenciaContratada} kVA` } : null,
-                    consolidated.precoKwh ? { label: "Preço Médio", value: `${consolidated.precoKwh.toFixed(4)} €/kWh` } : null,
+                    consolidated.precoKwh ? { label: "Preço Médio (fatura)", value: `${consolidated.precoKwh.toFixed(4)} €/kWh`, isPrice: true } : null,
                   ].filter(Boolean).map(s => s && (
-                    <div key={s.label} className={cn("rounded-lg p-3 text-center", s.highlight ? "bg-primary/10 border border-primary/20" : "bg-background border")}>
-                      <p className="text-xs text-muted-foreground">{s.label}</p>
-                      <p className={cn("font-bold text-sm mt-0.5", s.highlight ? "text-primary" : "")}>{s.value}</p>
+                    <div
+                      key={s.label}
+                      onClick={() => s.isPrice && consolidated.precoKwh && set({ precoKwh: consolidated.precoKwh })}
+                      className={cn(
+                        "rounded-lg p-3 text-center",
+                        s.highlight ? "bg-primary/10 border border-primary/20" : "bg-background border",
+                        s.isPrice ? "cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors" : ""
+                      )}
+                      title={s.isPrice ? "Clique para usar este preço no cálculo financeiro" : undefined}
+                    >
+                      <p className="text-xs text-muted-foreground">{s.label}{s.isPrice ? " ↗" : ""}</p>
+                      <p className={cn("font-bold text-sm mt-0.5", s.highlight ? "text-primary" : s.isPrice ? "text-amber-600 dark:text-amber-400" : "")}>{s.value}</p>
+                      {s.isPrice && <p className="text-[10px] text-muted-foreground mt-0.5">toque para usar</p>}
                     </div>
                   ))}
                 </div>
@@ -559,6 +571,33 @@ export default function WizardStep1({ data, onChange }: Props) {
       <Separator />
 
       {/* ── Common bottom section ─────────────────────────────────────────── */}
+
+      {/* Electricity price */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">Preço Médio de Eletricidade</label>
+          <span className="text-xs text-muted-foreground">usado no cálculo financeiro</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Input
+              type="number" step="0.001" min={0.01} max={1}
+              value={data.precoKwh}
+              onChange={e => {
+                const v = parseFloat(e.target.value);
+                if (!isNaN(v) && v > 0) set({ precoKwh: Math.round(v * 10000) / 10000 });
+              }}
+              className="pr-12"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">€/kWh</span>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-sm font-bold text-foreground">{(data.precoKwh * data.consumoAnual).toLocaleString("pt-PT", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} €/ano</p>
+            <p className="text-[10px] text-muted-foreground">fatura estimada atual</p>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">Valor médio ponderado (inclui energia + redes + impostos). EDP Simples: ~0,1862 €/kWh</p>
+      </div>
 
       {/* Coverage target */}
       <div className="space-y-2">
