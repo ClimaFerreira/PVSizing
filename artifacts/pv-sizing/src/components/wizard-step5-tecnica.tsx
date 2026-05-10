@@ -1,10 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { SolarPanel, Inverter, Battery } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, AlertTriangle, XCircle, Info, Zap, Sun, Battery as BatteryIcon, GitBranch } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { CheckCircle2, AlertTriangle, XCircle, Info, Zap, Sun, Battery as BatteryIcon, GitBranch, RotateCcw, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { calcStringSizing, type StringSizingResult } from "@/lib/string-sizing";
+import { calcStringSizing, calcStringSizingManual, type StringSizingResult } from "@/lib/string-sizing";
 import { checkPanelInverter, checkBatteryInverter, type CompatResult } from "@/lib/compat-check";
 
 interface Props {
@@ -13,13 +15,7 @@ interface Props {
   battery: Battery | null;
   numPaineis: number;
   potenciaInstalada: number;
-}
-
-function StatusIcon({ status }: { status: string }) {
-  if (status === "ok") return <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />;
-  if (status === "aviso") return <AlertTriangle size={15} className="text-amber-500 shrink-0" />;
-  if (status === "erro") return <XCircle size={15} className="text-red-500 shrink-0" />;
-  return <Info size={15} className="text-blue-500 shrink-0" />;
+  onNumPaineisChange?: (n: number) => void;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -74,32 +70,166 @@ function CompatTable({ result, title }: { result: CompatResult; title: string })
   );
 }
 
-function StringSizingCard({ result, numMppt }: { result: StringSizingResult; numMppt: number }) {
+/* ─────────────────────────────────────────────────────────────────────────────
+   Stepper – small +/- control used inside the string config editor
+───────────────────────────────────────────────────────────────────────────── */
+function Stepper({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        className="w-6 h-6 rounded border flex items-center justify-center text-sm font-bold disabled:opacity-30 hover:bg-muted transition-colors"
+        disabled={value <= min}
+        onClick={() => onChange(Math.max(min, value - 1))}
+      >−</button>
+      <span className="w-6 text-center text-sm font-semibold tabular-nums">{value}</span>
+      <button
+        className="w-6 h-6 rounded border flex items-center justify-center text-sm font-bold disabled:opacity-30 hover:bg-muted transition-colors"
+        disabled={value >= max}
+        onClick={() => onChange(Math.min(max, value + 1))}
+      >+</button>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   String sizing card — editable configuration
+───────────────────────────────────────────────────────────────────────────── */
+interface StringSizingCardProps {
+  autoResult: StringSizingResult;
+  numMppt: number;
+  maxStringsPorMppt: number;
+  panelElec: { voc: number; vmp: number; isc: number; imp: number; potencia: number; coeficienteTemperaturaVoc: number | null; noct: number | null };
+  invElec: { mpptMin: number; mpptMax: number; corrMaxMppt: number; numMppt: number; stringsPorMppt: number; potenciaDcMax: number; vdcMax: number | null };
+  onConfigChange?: (paineisPerString: number, stringsPorMppt: number[]) => void;
+}
+
+function StringSizingCard({ autoResult, numMppt, maxStringsPorMppt, panelElec, invElec, onConfigChange }: StringSizingCardProps) {
+  const [editMode, setEditMode] = useState(false);
+  const [paineisEdit, setPaineisEdit] = useState(autoResult.config.paineisPerString);
+  const [mpptEdit, setMpptEdit] = useState<number[]>(autoResult.config.stringsPorMppt);
+
+  // When auto result changes (e.g. numPaineis changed externally), reset overrides
+  useEffect(() => {
+    if (!editMode) {
+      setPaineisEdit(autoResult.config.paineisPerString);
+      setMpptEdit(autoResult.config.stringsPorMppt);
+    }
+  }, [autoResult, editMode]);
+
+  const result = useMemo<StringSizingResult>(() => {
+    if (!editMode) return autoResult;
+    return calcStringSizingManual(panelElec, invElec, paineisEdit, mpptEdit);
+  }, [editMode, autoResult, panelElec, invElec, paineisEdit, mpptEdit]);
+
   const { config, alertas, tMinPortugal, tMaxCelula, vdcMaxUsado } = result;
   const erros = alertas.filter(a => a.tipo === "erro");
   const avisos = alertas.filter(a => a.tipo === "aviso");
   const ok = alertas.filter(a => a.tipo === "ok");
 
+  const totalStrings = mpptEdit.reduce((a, b) => a + b, 0);
+  const totalPaineis = paineisEdit * totalStrings;
+
+  function handleResetAuto() {
+    setPaineisEdit(autoResult.config.paineisPerString);
+    setMpptEdit(autoResult.config.stringsPorMppt);
+    setEditMode(false);
+    onConfigChange?.(autoResult.config.paineisPerString, autoResult.config.stringsPorMppt);
+  }
+
+  function handleMpptChange(idx: number, val: number) {
+    const next = mpptEdit.map((v, i) => (i === idx ? val : v));
+    setMpptEdit(next);
+    onConfigChange?.(paineisEdit, next);
+  }
+
+  function handlePaineisChange(val: number) {
+    setPaineisEdit(val);
+    onConfigChange?.(val, mpptEdit);
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <GitBranch size={18} className="text-primary" />
-          Dimensionamento de Strings
-        </CardTitle>
-        <CardDescription>Cálculo automático da configuração elétrica</CardDescription>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <GitBranch size={18} className="text-primary" />
+              Dimensionamento de Strings
+            </CardTitle>
+            <CardDescription className="mt-0.5">
+              {editMode ? "Modo edição — ajuste a configuração manualmente" : "Cálculo automático da configuração elétrica"}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {editMode && (
+              <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={handleResetAuto}>
+                <RotateCcw size={12} /> Automático
+              </Button>
+            )}
+            <Button
+              variant={editMode ? "default" : "outline"}
+              size="sm"
+              className="text-xs gap-1"
+              onClick={() => { setEditMode(e => !e); if (editMode) handleResetAuto(); }}
+            >
+              <Pencil size={12} />
+              {editMode ? "Fechar edição" : "Editar config."}
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-5">
+
+        {/* Edit panel – only shown in edit mode */}
+        {editMode && (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Configuração manual</p>
+
+            {/* Painéis per string */}
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium w-40 shrink-0">Painéis por string</label>
+              <div className="flex items-center gap-2">
+                <Stepper value={paineisEdit} min={1} max={30} onChange={handlePaineisChange} />
+                <span className="text-xs text-muted-foreground ml-1">módulos</span>
+              </div>
+            </div>
+
+            {/* Strings per MPPT */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Strings por MPPT</label>
+              <div className="flex flex-wrap gap-3">
+                {mpptEdit.map((n, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1.5 rounded-lg border px-3 py-2 bg-background min-w-[80px]">
+                    <span className="text-xs font-semibold text-muted-foreground">MPPT {i + 1}</span>
+                    <Stepper value={n} min={0} max={maxStringsPorMppt} onChange={v => handleMpptChange(i, v)} />
+                    <span className="text-xs text-muted-foreground">{n} string{n !== 1 ? "s" : ""}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Live total */}
+            <div className="flex items-center gap-3 pt-1 border-t">
+              <div className="text-sm text-muted-foreground">Total:</div>
+              <div className="flex items-center gap-4 text-sm font-medium">
+                <span>{totalStrings} strings × {paineisEdit} painéis = <strong>{totalPaineis} painéis</strong></span>
+                <span className="text-muted-foreground">·</span>
+                <span>{((totalPaineis * Number(panelElec.potencia)) / 1000).toFixed(2)} kWp</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Summary boxes */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "Painéis/String", value: config.paineisPerString, unit: "" },
-            { label: "Nº de Strings", value: config.numStrings, unit: "" },
-            { label: "DC/AC Ratio", value: `${(config.dcAcRatio * 100).toFixed(0)}%`, unit: "" },
-            { label: "Potência DC", value: `${(config.potenciaDCTotal / 1000).toFixed(2)}`, unit: "kWp" },
+            { label: "Painéis/String", value: config.paineisPerString },
+            { label: "Nº de Strings", value: config.numStrings },
+            { label: "DC/AC Ratio", value: `${(config.dcAcRatio * 100).toFixed(0)}%` },
+            { label: "Potência DC", value: `${(config.potenciaDCTotal / 1000).toFixed(2)} kWp` },
           ].map(b => (
-            <div key={b.label} className="bg-muted/40 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-foreground">{b.value}{b.unit && <span className="text-sm ml-1 text-muted-foreground">{b.unit}</span>}</div>
+            <div key={b.label} className={cn("rounded-lg p-3 text-center", editMode ? "bg-primary/10" : "bg-muted/40")}>
+              <div className="text-xl font-bold text-foreground">{b.value}</div>
               <div className="text-xs text-muted-foreground mt-0.5">{b.label}</div>
             </div>
           ))}
@@ -159,7 +289,7 @@ function StringSizingCard({ result, numMppt }: { result: StringSizingResult; num
           ))}
         </div>
 
-        {/* Resumo técnico */}
+        {/* Technical summary */}
         <div className="bg-muted/30 rounded-lg p-4 font-mono text-xs space-y-1">
           <p className="font-semibold text-foreground not-italic mb-2">Resumo técnico</p>
           <p>{config.numStrings} string{config.numStrings !== 1 ? "s" : ""} × {config.paineisPerString} painéis</p>
@@ -175,6 +305,9 @@ function StringSizingCard({ result, numMppt }: { result: StringSizingResult; num
   );
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   SVG single-line diagram
+───────────────────────────────────────────────────────────────────────────── */
 function SingleLineDiagram({ panel, inverter, battery, numStrings, paineisPerString, stringsPorMppt }: {
   panel: SolarPanel;
   inverter: Inverter;
@@ -193,26 +326,23 @@ function SingleLineDiagram({ panel, inverter, battery, numStrings, paineisPerStr
       </CardHeader>
       <CardContent>
         <svg viewBox="0 0 700 280" className="w-full h-auto max-h-72" style={{ fontFamily: "inherit" }}>
-          {/* Strings / Painéis */}
           {Array.from({ length: numMppt }, (_, mi) => {
             const stringsOnMppt = stringsPorMppt[mi] ?? 0;
             return Array.from({ length: stringsOnMppt }, (_, si) => {
               const totalRows = stringsPorMppt.reduce((a, b) => a + b, 0);
               const rowIndex = stringsPorMppt.slice(0, mi).reduce((a, b) => a + b, 0) + si;
               const y = 30 + (rowIndex / Math.max(totalRows - 1, 1)) * 220;
-              const x0 = 10;
               return (
                 <g key={`${mi}-${si}`}>
-                  <rect x={x0} y={y - 14} width={50} height={28} rx="4" fill="#fef3c7" stroke="#f59e0b" strokeWidth="1.5" />
-                  <text x={x0 + 25} y={y - 2} textAnchor="middle" fontSize="7" fill="#92400e">{paineisPerString}× {panel.potencia}W</text>
-                  <text x={x0 + 25} y={y + 8} textAnchor="middle" fontSize="6" fill="#92400e">String {rowIndex + 1}</text>
-                  <line x1={x0 + 50} y1={y} x2={170} y2={y} stroke="#6b7280" strokeWidth="1.5" />
+                  <rect x={10} y={y - 14} width={50} height={28} rx="4" fill="#fef3c7" stroke="#f59e0b" strokeWidth="1.5" />
+                  <text x={35} y={y - 2} textAnchor="middle" fontSize="7" fill="#92400e">{paineisPerString}× {panel.potencia}W</text>
+                  <text x={35} y={y + 8} textAnchor="middle" fontSize="6" fill="#92400e">String {rowIndex + 1}</text>
+                  <line x1={60} y1={y} x2={170} y2={y} stroke="#6b7280" strokeWidth="1.5" />
                 </g>
               );
             });
           })}
 
-          {/* MPPT blocks inside inverter area */}
           {Array.from({ length: numMppt }, (_, mi) => {
             const totalRows = stringsPorMppt.reduce((a, b) => a + b, 0);
             const rowsBeforeThis = stringsPorMppt.slice(0, mi).reduce((a, b) => a + b, 0);
@@ -220,28 +350,23 @@ function SingleLineDiagram({ panel, inverter, battery, numStrings, paineisPerStr
             const yCentre = rowsThis > 0
               ? 30 + ((rowsBeforeThis + (rowsThis - 1) / 2) / Math.max(totalRows - 1, 1)) * 220
               : 140;
-            const xMppt = 170;
             return (
               <g key={mi}>
-                <rect x={xMppt} y={yCentre - 14} width={60} height={28} rx="4" fill="#eff6ff" stroke="#3b82f6" strokeWidth="1.5" />
-                <text x={xMppt + 30} y={yCentre - 2} textAnchor="middle" fontSize="8" fill="#1e40af">MPPT {mi + 1}</text>
-                <text x={xMppt + 30} y={yCentre + 8} textAnchor="middle" fontSize="6.5" fill="#1e40af">{stringsPorMppt[mi]}s × {paineisPerString}p</text>
-                <line x1={xMppt + 60} y1={yCentre} x2={270} y2={140} stroke="#6b7280" strokeWidth="1.5" />
+                <rect x={170} y={yCentre - 14} width={60} height={28} rx="4" fill="#eff6ff" stroke="#3b82f6" strokeWidth="1.5" />
+                <text x={200} y={yCentre - 2} textAnchor="middle" fontSize="8" fill="#1e40af">MPPT {mi + 1}</text>
+                <text x={200} y={yCentre + 8} textAnchor="middle" fontSize="6.5" fill="#1e40af">{stringsPorMppt[mi]}s × {paineisPerString}p</text>
+                <line x1={230} y1={yCentre} x2={270} y2={140} stroke="#6b7280" strokeWidth="1.5" />
               </g>
             );
           })}
 
-          {/* Inverter */}
           <rect x={270} y={100} width={110} height={80} rx="8" fill="#f0fdf4" stroke="#22c55e" strokeWidth="2" />
           <text x={325} y={128} textAnchor="middle" fontSize="9" fontWeight="bold" fill="#15803d">Inversor</text>
           <text x={325} y={142} textAnchor="middle" fontSize="7.5" fill="#16a34a">{inverter.fabricante}</text>
           <text x={325} y={155} textAnchor="middle" fontSize="7" fill="#16a34a">{inverter.potenciaAc} kW AC</text>
           <text x={325} y={166} textAnchor="middle" fontSize="7" fill="#16a34a">{inverter.numMppt} MPPT</text>
-
-          {/* AC line from inverter to grid */}
           <line x1={380} y1={140} x2={hasBat ? 440 : 560} y2={140} stroke="#22c55e" strokeWidth="2" />
 
-          {/* Battery */}
           {hasBat && (
             <g>
               <rect x={440} y={100} width={80} height={80} rx="8" fill="#fff7ed" stroke="#f97316" strokeWidth="1.5" />
@@ -252,19 +377,15 @@ function SingleLineDiagram({ panel, inverter, battery, numStrings, paineisPerStr
             </g>
           )}
 
-          {/* Quadro / UPAC */}
           <rect x={560} y={108} width={70} height={64} rx="6" fill="#faf5ff" stroke="#8b5cf6" strokeWidth="1.5" />
           <text x={595} y={135} textAnchor="middle" fontSize="8" fontWeight="bold" fill="#6d28d9">Quadro</text>
           <text x={595} y={148} textAnchor="middle" fontSize="7" fill="#7c3aed">Geral</text>
           <text x={595} y={162} textAnchor="middle" fontSize="7" fill="#7c3aed">UPAC</text>
-
-          {/* Grid */}
           <line x1={630} y1={140} x2={680} y2={140} stroke="#6b7280" strokeWidth="2" strokeDasharray="6 3" />
           <rect x={652} y={124} width={38} height={32} rx="4" fill="#f9fafb" stroke="#9ca3af" strokeWidth="1.5" />
           <text x={671} y={138} textAnchor="middle" fontSize="8" fontWeight="bold" fill="#374151">Rede</text>
           <text x={671} y={149} textAnchor="middle" fontSize="7" fill="#6b7280">230V AC</text>
 
-          {/* Labels */}
           <text x={70} y={18} textAnchor="middle" fontSize="8" fill="#78716c">Módulos FV</text>
           <text x={200} y={18} textAnchor="middle" fontSize="8" fill="#2563eb">Entradas DC</text>
           <text x={325} y={95} textAnchor="middle" fontSize="8" fill="#15803d">Inversor</text>
@@ -276,78 +397,65 @@ function SingleLineDiagram({ panel, inverter, battery, numStrings, paineisPerStr
   );
 }
 
-export default function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInstalada }: Props) {
-  const stringSizing = useMemo<StringSizingResult | null>(() => {
-    if (!panel || !inverter || numPaineis <= 0) return null;
-    return calcStringSizing(
-      {
-        voc: Number(panel.voc),
-        vmp: Number(panel.vmp),
-        isc: Number(panel.isc),
-        imp: Number(panel.imp),
-        potencia: Number(panel.potencia),
-        coeficienteTemperaturaVoc: panel.coeficienteTemperaturaVoc != null ? Number(panel.coeficienteTemperaturaVoc) : null,
-        noct: panel.noct != null ? Number(panel.noct) : null,
-      },
-      {
-        mpptMin: Number(inverter.mpptMin),
-        mpptMax: Number(inverter.mpptMax),
-        corrMaxMppt: Number(inverter.corrMaxMppt),
-        numMppt: inverter.numMppt,
-        stringsPorMppt: inverter.stringsPorMppt,
-        potenciaDcMax: Number(inverter.potenciaDcMax),
-        vdcMax: inverter.vdcMax != null ? Number(inverter.vdcMax) : null,
-      },
-      numPaineis
-    );
-  }, [panel, inverter, numPaineis]);
+/* ─────────────────────────────────────────────────────────────────────────────
+   Main export
+───────────────────────────────────────────────────────────────────────────── */
+export default function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInstalada, onNumPaineisChange }: Props) {
+  // Active string config — starts from auto-calc, may be overridden via the card
+  const [manualConfig, setManualConfig] = useState<{ paineisPerString: number; stringsPorMppt: number[] } | null>(null);
+
+  const panelElec = useMemo(() => panel ? {
+    voc: Number(panel.voc),
+    vmp: Number(panel.vmp),
+    isc: Number(panel.isc),
+    imp: Number(panel.imp),
+    potencia: Number(panel.potencia),
+    coeficienteTemperaturaVoc: panel.coeficienteTemperaturaVoc != null ? Number(panel.coeficienteTemperaturaVoc) : null,
+    noct: panel.noct != null ? Number(panel.noct) : null,
+  } : null, [panel]);
+
+  const invElec = useMemo(() => inverter ? {
+    mpptMin: Number(inverter.mpptMin),
+    mpptMax: Number(inverter.mpptMax),
+    corrMaxMppt: Number(inverter.corrMaxMppt),
+    numMppt: inverter.numMppt,
+    stringsPorMppt: inverter.stringsPorMppt,
+    potenciaDcMax: Number(inverter.potenciaDcMax),
+    vdcMax: inverter.vdcMax != null ? Number(inverter.vdcMax) : null,
+  } : null, [inverter]);
+
+  // Reset manual config whenever panel/inverter/numPaineis changes
+  useEffect(() => { setManualConfig(null); }, [panel?.id, inverter?.id, numPaineis]);
+
+  const autoSizing = useMemo<StringSizingResult | null>(() => {
+    if (!panelElec || !invElec || numPaineis <= 0) return null;
+    return calcStringSizing(panelElec, invElec, numPaineis);
+  }, [panelElec, invElec, numPaineis]);
+
+  const activeSizing = useMemo<StringSizingResult | null>(() => {
+    if (!panelElec || !invElec || !autoSizing) return autoSizing;
+    if (!manualConfig) return autoSizing;
+    return calcStringSizingManual(panelElec, invElec, manualConfig.paineisPerString, manualConfig.stringsPorMppt);
+  }, [panelElec, invElec, autoSizing, manualConfig]);
 
   const compatPanelInv = useMemo<CompatResult | null>(() => {
-    if (!panel || !inverter) return null;
+    if (!panel || !inverter || !panelElec || !invElec) return null;
     return checkPanelInverter(
-      {
-        potencia: Number(panel.potencia),
-        voc: Number(panel.voc),
-        vmp: Number(panel.vmp),
-        isc: Number(panel.isc),
-        imp: Number(panel.imp),
-      },
-      {
-        potenciaAc: Number(inverter.potenciaAc),
-        potenciaDcMax: Number(inverter.potenciaDcMax),
-        mpptMin: Number(inverter.mpptMin),
-        mpptMax: Number(inverter.mpptMax),
-        corrMaxMppt: Number(inverter.corrMaxMppt),
-        numMppt: inverter.numMppt,
-        stringsPorMppt: inverter.stringsPorMppt,
-        vdcMax: inverter.vdcMax != null ? Number(inverter.vdcMax) : null,
-      },
+      { potencia: panelElec.potencia, voc: panelElec.voc, vmp: panelElec.vmp, isc: panelElec.isc, imp: panelElec.imp },
+      { potenciaAc: Number(inverter.potenciaAc), potenciaDcMax: invElec.potenciaDcMax, mpptMin: invElec.mpptMin, mpptMax: invElec.mpptMax, corrMaxMppt: invElec.corrMaxMppt, numMppt: invElec.numMppt, stringsPorMppt: invElec.stringsPorMppt, vdcMax: invElec.vdcMax },
       numPaineis
     );
-  }, [panel, inverter, numPaineis]);
+  }, [panel, inverter, panelElec, invElec, numPaineis]);
 
   const compatBatInv = useMemo<CompatResult | null>(() => {
-    if (!battery || !inverter) return null;
+    if (!battery || !inverter || !invElec) return null;
     return checkBatteryInverter(
-      {
-        capacidade: Number(battery.capacidade),
-        tensao: Number(battery.tensao),
-        tecnologia: battery.tecnologia ?? null,
-      },
-      {
-        potenciaAc: Number(inverter.potenciaAc),
-        potenciaDcMax: Number(inverter.potenciaDcMax),
-        mpptMin: Number(inverter.mpptMin),
-        mpptMax: Number(inverter.mpptMax),
-        corrMaxMppt: Number(inverter.corrMaxMppt),
-        numMppt: inverter.numMppt,
-        stringsPorMppt: inverter.stringsPorMppt,
-        vdcMax: inverter.vdcMax != null ? Number(inverter.vdcMax) : null,
-      }
+      { capacidade: Number(battery.capacidade), tensao: Number(battery.tensao), tecnologia: battery.tecnologia ?? null },
+      { potenciaAc: Number(inverter.potenciaAc), potenciaDcMax: invElec.potenciaDcMax, mpptMin: invElec.mpptMin, mpptMax: invElec.mpptMax, corrMaxMppt: invElec.corrMaxMppt, numMppt: invElec.numMppt, stringsPorMppt: invElec.stringsPorMppt, vdcMax: invElec.vdcMax }
     );
-  }, [battery, inverter]);
+  }, [battery, inverter, invElec]);
 
-  if (!panel || !inverter) {
+  if (!panel || !inverter || !panelElec || !invElec) {
     return (
       <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
         Selecione um painel e um inversor no passo anterior para ver a análise técnica.
@@ -355,12 +463,14 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
     );
   }
 
-  const hasErrors = (stringSizing?.alertas.some(a => a.tipo === "erro") ?? false) || (compatPanelInv?.temErros ?? false);
-  const hasWarnings = (stringSizing?.alertas.some(a => a.tipo === "aviso") ?? false) || (compatPanelInv?.temAvisos ?? false) || (compatBatInv?.temAvisos ?? false);
+  const hasErrors = (activeSizing?.alertas.some(a => a.tipo === "erro") ?? false) || (compatPanelInv?.temErros ?? false);
+  const hasWarnings = (activeSizing?.alertas.some(a => a.tipo === "aviso") ?? false) || (compatPanelInv?.temAvisos ?? false) || (compatBatInv?.temAvisos ?? false);
+
+  const displayConfig = activeSizing?.config;
 
   return (
     <div className="space-y-6">
-      {/* Global status banner */}
+      {/* Global status */}
       <div className={cn(
         "flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium",
         hasErrors
@@ -374,7 +484,7 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
           ? "Sistema com erros de dimensionamento — corrija antes de avançar para proposta."
           : hasWarnings
             ? "Sistema dimensionado com atenções — reveja os alertas abaixo."
-            : `Sistema tecnicamente validado — ${numPaineis} painéis ${panel.fabricante} ${panel.nome} com ${inverter.fabricante} ${inverter.nome}.`}
+            : `Sistema tecnicamente validado — ${displayConfig?.numStrings ?? 0} strings × ${displayConfig?.paineisPerString ?? 0} painéis (${((displayConfig?.potenciaDCTotal ?? 0) / 1000).toFixed(2)} kWp).`}
       </div>
 
       {/* Equipment summary */}
@@ -407,20 +517,31 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
         )}
       </div>
 
-      {/* String sizing */}
-      {stringSizing && (
-        <StringSizingCard result={stringSizing} numMppt={inverter.numMppt} />
+      {/* String sizing card with inline editor */}
+      {autoSizing && (
+        <StringSizingCard
+          autoResult={autoSizing}
+          numMppt={inverter.numMppt}
+          maxStringsPorMppt={inverter.stringsPorMppt}
+          panelElec={panelElec}
+          invElec={invElec}
+          onConfigChange={(pps, spm) => {
+            setManualConfig({ paineisPerString: pps, stringsPorMppt: spm });
+            const total = pps * spm.reduce((a, b) => a + b, 0);
+            if (total > 0) onNumPaineisChange?.(total);
+          }}
+        />
       )}
 
       {/* Single line diagram */}
-      {stringSizing && (
+      {activeSizing && (
         <SingleLineDiagram
           panel={panel}
           inverter={inverter}
           battery={battery}
-          numStrings={stringSizing.config.numStrings}
-          paineisPerString={stringSizing.config.paineisPerString}
-          stringsPorMppt={stringSizing.config.stringsPorMppt}
+          numStrings={activeSizing.config.numStrings}
+          paineisPerString={activeSizing.config.paineisPerString}
+          stringsPorMppt={activeSizing.config.stringsPorMppt}
         />
       )}
 
@@ -433,12 +554,8 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {compatPanelInv && (
-            <CompatTable result={compatPanelInv} title="Painel ↔ Inversor" />
-          )}
-          {compatBatInv && (
-            <CompatTable result={compatBatInv} title="Bateria ↔ Inversor" />
-          )}
+          {compatPanelInv && <CompatTable result={compatPanelInv} title="Painel ↔ Inversor" />}
+          {compatBatInv && <CompatTable result={compatBatInv} title="Bateria ↔ Inversor" />}
         </CardContent>
       </Card>
     </div>

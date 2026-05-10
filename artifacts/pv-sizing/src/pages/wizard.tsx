@@ -1471,6 +1471,7 @@ export default function Wizard() {
               battery={battery}
               numPaineis={numPaineis}
               potenciaInstalada={potenciaRealKwp}
+              onNumPaineisChange={setNumPaineisStep5}
             />
 
             <Card className="border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
