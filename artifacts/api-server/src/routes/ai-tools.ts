@@ -144,7 +144,8 @@ router.post("/tools/parse-invoice", upload.single("file"), async (req, res): Pro
             contentBlock,
             {
               type: "text",
-              text: `Analisa esta fatura de eletricidade portuguesa e extrai os dados em JSON com exactamente estes campos:
+              text: `Analisa esta fatura de eletricidade portuguesa com atenção especial ao GRÁFICO DE CONSUMO MENSAL (barras) que existe na maioria das faturas portuguesas. Extrai os dados em JSON com exactamente estes campos:
+
 {
   "consumoTotal": kWh total neste período de faturação (não anualizado) ou null,
   "consumoMensal": média mensal em kWh se o período for >1 mês, senão igual a consumoTotal, ou null,
@@ -159,9 +160,13 @@ router.post("/tools/parse-invoice", upload.single("file"), async (req, res): Pro
   "dataInicio": data início do período em formato YYYY-MM-DD ou null,
   "dataFim": data fim do período em formato YYYY-MM-DD ou null,
   "periodoMeses": número de meses cobertos por esta fatura (normalmente 1 ou 2) ou null,
-  "leiturasMensais": array de {"mes": "Abr 2024", "consumo": 312} com leituras individuais se disponíveis ou [],
-  "confianca": número entre 0 e 1 representando confiança global na extração,
-  "notas": observações relevantes ou null
+  "leiturasMensais": array de {"mes": "Abr 2024", "consumo": 312} com leituras individuais mencionadas em texto ou tabela, ou [],
+  "historicoMensalGrafico": MUITO IMPORTANTE — analisa o gráfico de barras de consumo mensal (histórico dos últimos 12 meses ou mais) que aparece nas faturas. Para cada barra visível, estima o valor em kWh lendo o eixo Y ou os rótulos de valor. Formato: [{"mes": "Jan 2024", "consumo": 245}, {"mes": "Fev 2024", "consumo": 198}, ...]. Se não existir gráfico ou não for possível ler os valores, retorna []. Inclui TODOS os meses visíveis no gráfico, mesmo os que estão em anos anteriores. Meses com barra mas sem rótulo: estima o valor pelo tamanho relativo da barra em relação às outras.
+  "mesesNoGrafico": número de meses de histórico visíveis no gráfico (0 se não houver gráfico),
+  "consumoAnualGrafico": se o gráfico tiver 12 meses, soma de todos os valores do gráfico; se tiver menos de 12 meses, média dos meses visíveis × 12; null se não houver gráfico,
+  "sazonalidade": analisa o perfil de consumo ao longo dos meses — "verao_pico" se os meses de verão (Jun-Set) têm consumo claramente superior, "inverno_pico" se os meses de inverno (Nov-Mar) têm consumo claramente superior, "uniforme" se não há sazonalidade clara, ou null se não há dados suficientes,
+  "confianca": número entre 0 e 1 representando confiança global na extração (reduz confiança se o gráfico foi estimado visualmente),
+  "notas": observações relevantes, incluindo se o gráfico foi identificado e quantos meses contém, ou null
 }
 Responde APENAS com o JSON, sem texto adicional.`,
             },

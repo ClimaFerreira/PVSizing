@@ -36,6 +36,10 @@ export interface InvoiceData {
   dataFim?: string;
   periodoMeses?: number;
   leiturasMensais?: LeituraMensal[];
+  historicoMensalGrafico?: LeituraMensal[];
+  mesesNoGrafico?: number;
+  consumoAnualGrafico?: number;
+  sazonalidade?: string;
   confianca: number;
   notas?: string;
 }
@@ -97,6 +101,8 @@ function parseMesIndex(mes: string): number {
 }
 
 // ─── Consolidation ────────────────────────────────────────────────────────────
+type FonteEstimativa = "grafico_12m" | "grafico_parcial" | "faturas_multiplas" | "fatura_unica" | "extrapolacao";
+
 interface ConsolidatedData {
   consumoAnualEstimado: number;
   consumoMensalMedio: number;
@@ -109,6 +115,9 @@ interface ConsolidatedData {
   potenciaContratada?: number;
   precoKwh?: number;
   monthlyKwh: (number | null)[];
+  sazonalidade?: string;
+  fonteEstimativa: FonteEstimativa;
+  mesesNoGrafico: number;
   alertas: string[];
 }
 
@@ -123,6 +132,10 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
   const potencias: number[] = [];
   const precos: number[] = [];
   const monthlyKwh: (number | null)[] = Array(12).fill(null);
+
+  // Collect chart-based monthly history across all invoices
+  const graficoMeses: LeituraMensal[] = [];
+  const sazonalidades: string[] = [];
 
   for (const inv of done) {
     const d = { ...inv.data!, ...inv.edits };
@@ -141,24 +154,74 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
     if (d.tarifario) tarifariosSet.add(d.tarifario);
     if (d.potenciaContratada) potencias.push(d.potenciaContratada);
     if (d.precoKwh) precos.push(d.precoKwh);
+    if (d.sazonalidade) sazonalidades.push(d.sazonalidade);
 
-    for (const l of d.leiturasMensais ?? []) {
+    // Prefer chart history over text readings for the monthly bar chart
+    const historico = (d.historicoMensalGrafico?.length ?? 0) > 0
+      ? d.historicoMensalGrafico!
+      : (d.leiturasMensais ?? []);
+
+    for (const l of historico) {
       const idx = parseMesIndex(l.mes);
       if (idx >= 0 && idx < 12) {
         monthlyKwh[idx] = (monthlyKwh[idx] ?? 0) + l.consumo;
       }
     }
+
+    // Accumulate unique chart readings (de-dup by month label)
+    for (const l of d.historicoMensalGrafico ?? []) {
+      if (!graficoMeses.some(g => g.mes === l.mes)) graficoMeses.push(l);
+    }
   }
 
-  const consumoMensalMedio = totalMonths > 0 ? totalKwh / totalMonths : 0;
+  // ─── Choose best annual estimate ──────────────────────────────────────────
+  // Priority: chart (12m) > chart (partial) > multiple invoices > single invoice
+  const totalMesesGrafico = graficoMeses.length;
+  let consumoAnualEstimado: number;
+  let fonteEstimativa: FonteEstimativa;
+
+  if (totalMesesGrafico >= 12) {
+    // Best case: full year from chart — use actual sum
+    consumoAnualEstimado = Math.round(graficoMeses.reduce((s, l) => s + l.consumo, 0));
+    fonteEstimativa = "grafico_12m";
+  } else if (totalMesesGrafico >= 3) {
+    // Partial chart: average of visible months × 12
+    const mediaGrafico = graficoMeses.reduce((s, l) => s + l.consumo, 0) / totalMesesGrafico;
+    consumoAnualEstimado = Math.round(mediaGrafico * 12);
+    fonteEstimativa = "grafico_parcial";
+  } else if (done.length > 1 && totalMonths >= 2) {
+    // Multiple invoices without chart
+    const media = totalKwh / totalMonths;
+    consumoAnualEstimado = Math.round(media * 12);
+    fonteEstimativa = "faturas_multiplas";
+  } else {
+    // Single invoice fallback
+    const media = totalMonths > 0 ? totalKwh / totalMonths : 0;
+    consumoAnualEstimado = Math.round(media * 12);
+    fonteEstimativa = totalMonths === 1 ? "fatura_unica" : "extrapolacao";
+  }
+
+  const consumoMensalMedio = Math.round(consumoAnualEstimado / 12);
+
   const alertas: string[] = [];
-  if (totalMonths < 12) alertas.push(`Cobertura de ${totalMonths} ${totalMonths === 1 ? "mês" : "meses"} (estimativa anual por extrapolação).`);
+  if (totalMesesGrafico > 0 && totalMesesGrafico < 12) {
+    alertas.push(`Gráfico com ${totalMesesGrafico} ${totalMesesGrafico === 1 ? "mês" : "meses"} — consumo anual estimado por média mensal × 12.`);
+  } else if (totalMesesGrafico === 0 && totalMonths < 12) {
+    alertas.push(`Cobertura de ${totalMonths} ${totalMonths === 1 ? "mês" : "meses"} sem histórico no gráfico — estimativa anual por extrapolação.`);
+  }
   if (totalMonths > 14) alertas.push("Mais de 12 meses de dados detetados — verifique faturas duplicadas.");
 
+  // Determine dominant seasonality
+  const sazonalidade = sazonalidades.length > 0
+    ? sazonalidades.sort((a, b) =>
+        sazonalidades.filter(s => s === b).length - sazonalidades.filter(s => s === a).length
+      )[0]
+    : undefined;
+
   return {
-    consumoAnualEstimado: Math.round(consumoMensalMedio * 12),
-    consumoMensalMedio: Math.round(consumoMensalMedio),
-    mesesCobertos: Math.min(totalMonths, 12),
+    consumoAnualEstimado,
+    consumoMensalMedio,
+    mesesCobertos: Math.min(totalMesesGrafico > 0 ? totalMesesGrafico : totalMonths, 12),
     percVazio:  tarifaCount > 0 ? Math.round(vazioTotal  / tarifaCount) : null,
     percCheio:  tarifaCount > 0 ? Math.round(cheioTotal  / tarifaCount) : null,
     percPonta:  tarifaCount > 0 ? Math.round(pontaTotal  / tarifaCount) : null,
@@ -167,6 +230,9 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
     potenciaContratada:  potencias[0],
     precoKwh:            precos.length ? precos.reduce((a,b)=>a+b,0)/precos.length : undefined,
     monthlyKwh,
+    sazonalidade,
+    fonteEstimativa,
+    mesesNoGrafico: totalMesesGrafico,
     alertas,
   };
 }
@@ -321,10 +387,33 @@ export default function WizardStep1({ data, onChange }: Props) {
           {/* Consolidated summary */}
           {doneInvoices.length > 0 && consolidated && (
             <div className="rounded-xl border bg-muted/30 overflow-hidden">
-              <div className="px-4 py-3 bg-muted/50 flex items-center justify-between">
-                <p className="text-sm font-semibold">Resumo Consolidado</p>
+              <div className="px-4 py-3 bg-muted/50 flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{doneInvoices.length} {doneInvoices.length === 1 ? "fatura" : "faturas"} · {consolidated.mesesCobertos} {consolidated.mesesCobertos === 1 ? "mês" : "meses"}</Badge>
+                  <p className="text-sm font-semibold">Resumo Consolidado</p>
+                  <Badge variant="outline" className="text-xs">{doneInvoices.length} {doneInvoices.length === 1 ? "fatura" : "faturas"}</Badge>
+                  {/* Source badge */}
+                  {consolidated.fonteEstimativa === "grafico_12m" && (
+                    <Badge className="text-xs bg-emerald-500 hover:bg-emerald-500 gap-1">
+                      <CheckCircle2 size={10} /> Gráfico 12 meses
+                    </Badge>
+                  )}
+                  {consolidated.fonteEstimativa === "grafico_parcial" && (
+                    <Badge className="text-xs bg-blue-500 hover:bg-blue-500 gap-1">
+                      <TrendingUp size={10} /> Gráfico {consolidated.mesesNoGrafico}m
+                    </Badge>
+                  )}
+                  {consolidated.fonteEstimativa === "faturas_multiplas" && (
+                    <Badge variant="outline" className="text-xs gap-1">
+                      <FileText size={10} /> {consolidated.mesesCobertos} meses
+                    </Badge>
+                  )}
+                  {(consolidated.fonteEstimativa === "fatura_unica" || consolidated.fonteEstimativa === "extrapolacao") && (
+                    <Badge variant="outline" className="text-xs gap-1 border-amber-300 text-amber-700 dark:text-amber-400">
+                      <AlertTriangle size={10} /> Extrapolação
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
                   {autoApplied ? (
                     <div className="flex items-center gap-1.5">
                       <Badge variant="secondary" className="text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800 gap-1">
@@ -363,25 +452,54 @@ export default function WizardStep1({ data, onChange }: Props) {
                   ))}
                 </div>
 
-                {/* Operator/tariff info */}
-                {(consolidated.operador || consolidated.tarifario) && (
-                  <p className="text-xs text-muted-foreground">
-                    {consolidated.operador && <><span className="font-medium">{consolidated.operador}</span> · </>}
-                    {consolidated.tarifario && consolidated.tarifario}
-                  </p>
-                )}
+                {/* Operator/tariff + seasonality info */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {(consolidated.operador || consolidated.tarifario) && (
+                    <p className="text-xs text-muted-foreground">
+                      {consolidated.operador && <><span className="font-medium">{consolidated.operador}</span>{consolidated.tarifario ? " · " : ""}</>}
+                      {consolidated.tarifario && consolidated.tarifario}
+                    </p>
+                  )}
+                  {consolidated.sazonalidade && consolidated.sazonalidade !== "uniforme" && (
+                    <p className="text-xs text-muted-foreground">
+                      Sazonalidade:{" "}
+                      <span className="font-medium">
+                        {consolidated.sazonalidade === "verao_pico" ? "pico no verão ☀️" : "pico no inverno 🌧️"}
+                      </span>
+                    </p>
+                  )}
+                </div>
 
-                {/* Seasonality chart */}
+                {/* Monthly consumption chart */}
                 {consolidated.monthlyKwh.some(v => v != null) && (
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Sazonalidade mensal</p>
-                    <div className="flex items-end gap-1 h-16">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {consolidated.mesesNoGrafico > 0
+                          ? `Histórico do gráfico da fatura (${consolidated.mesesNoGrafico} ${consolidated.mesesNoGrafico === 1 ? "mês" : "meses"})`
+                          : "Sazonalidade mensal"}
+                      </p>
+                      {consolidated.fonteEstimativa === "grafico_12m" && (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                          Soma real: {consolidated.consumoAnualEstimado.toLocaleString("pt-PT")} kWh/ano
+                        </span>
+                      )}
+                      {consolidated.fonteEstimativa === "grafico_parcial" && (
+                        <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
+                          Média × 12: {consolidated.consumoAnualEstimado.toLocaleString("pt-PT")} kWh/ano
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-end gap-1 h-20">
                       {consolidated.monthlyKwh.map((v, i) => (
                         <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                          {v != null && (
+                            <span className="text-[8px] text-muted-foreground leading-none mb-0.5 tabular-nums">{v}</span>
+                          )}
                           <div
-                            className={cn("w-full rounded-t-sm transition-all", v != null ? "bg-primary/70" : "bg-muted")}
-                            style={{ height: v != null ? `${Math.max(4, (v / maxMonthly) * 52)}px` : "4px" }}
-                            title={v != null ? `${MES_LABELS[i]}: ${v} kWh` : "Sem dados"}
+                            className={cn("w-full rounded-t-sm transition-all", v != null ? "bg-primary/70" : "bg-muted/40 border border-dashed border-muted-foreground/20")}
+                            style={{ height: v != null ? `${Math.max(6, (v / maxMonthly) * 56)}px` : "6px" }}
+                            title={v != null ? `${MES_LABELS[i]}: ${v} kWh` : `${MES_LABELS[i]}: sem dados`}
                           />
                           <span className="text-[9px] text-muted-foreground leading-none">{MES_LABELS[i].slice(0,1)}</span>
                         </div>

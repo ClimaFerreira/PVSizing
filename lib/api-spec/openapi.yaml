@@ -1735,12 +1735,24 @@ components:
     InvoiceData:
       type: object
       properties:
+        consumoTotal:
+          type: number
+          description: Total kWh for the billing period (not annualised)
         consumoMensal:
           type: number
           description: Average monthly consumption in kWh
         consumoAnual:
           type: number
-          description: Total annual consumption in kWh
+          description: Total annual consumption in kWh if stated on invoice
+        consumoPonta:
+          type: number
+          description: kWh at peak hours (bi/tri-hourly tariffs)
+        consumoCheio:
+          type: number
+          description: kWh at full hours (bi/tri-hourly tariffs)
+        consumoVazio:
+          type: number
+          description: kWh at off-peak/super-off-peak hours
         potenciaContratada:
           type: number
           description: Contracted power in kVA
@@ -1752,12 +1764,19 @@ components:
           description: Electricity supplier name
         tarifario:
           type: string
-          description: Tariff plan name
-        periodo:
+          description: Tariff plan type (simples, bi-horária, tri-horária)
+        dataInicio:
           type: string
-          description: Invoice period description
-        leituras:
+          description: Billing period start date YYYY-MM-DD
+        dataFim:
+          type: string
+          description: Billing period end date YYYY-MM-DD
+        periodoMeses:
+          type: number
+          description: Number of months covered by this invoice
+        leiturasMensais:
           type: array
+          description: Individual monthly readings from invoice text/table
           items:
             type: object
             properties:
@@ -1766,6 +1785,26 @@ components:
               consumo:
                 type: number
             required: [mes, consumo]
+        historicoMensalGrafico:
+          type: array
+          description: Monthly consumption extracted from the visual bar chart on the invoice
+          items:
+            type: object
+            properties:
+              mes:
+                type: string
+              consumo:
+                type: number
+            required: [mes, consumo]
+        mesesNoGrafico:
+          type: integer
+          description: Number of months visible in the consumption chart (0 if no chart)
+        consumoAnualGrafico:
+          type: number
+          description: Annual estimate from chart — sum if 12 months, else average × 12
+        sazonalidade:
+          type: string
+          description: Detected seasonality profile (verao_pico, inverno_pico, uniforme)
         confianca:
           type: number
           description: AI confidence score 0-1

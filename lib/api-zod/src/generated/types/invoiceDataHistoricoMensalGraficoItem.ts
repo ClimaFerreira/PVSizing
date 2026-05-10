@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type InvoiceDataLeiturasItem = {
+export type InvoiceDataHistoricoMensalGraficoItem = {
   mes: string;
   consumo: number;
 };

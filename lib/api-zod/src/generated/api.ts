@@ -744,6 +744,10 @@ export const ParseInvoiceBody = zod.object({
 });
 
 export const ParseInvoiceResponse = zod.object({
+  consumoTotal: zod
+    .number()
+    .optional()
+    .describe("Total kWh for the billing period (not annualised)"),
   consumoMensal: zod
     .number()
     .optional()
@@ -751,23 +755,79 @@ export const ParseInvoiceResponse = zod.object({
   consumoAnual: zod
     .number()
     .optional()
-    .describe("Total annual consumption in kWh"),
+    .describe("Total annual consumption in kWh if stated on invoice"),
+  consumoPonta: zod
+    .number()
+    .optional()
+    .describe("kWh at peak hours (bi\/tri-hourly tariffs)"),
+  consumoCheio: zod
+    .number()
+    .optional()
+    .describe("kWh at full hours (bi\/tri-hourly tariffs)"),
+  consumoVazio: zod
+    .number()
+    .optional()
+    .describe("kWh at off-peak\/super-off-peak hours"),
   potenciaContratada: zod
     .number()
     .optional()
     .describe("Contracted power in kVA"),
   precoKwh: zod.number().optional().describe("Price per kWh in EUR"),
   operador: zod.string().optional().describe("Electricity supplier name"),
-  tarifario: zod.string().optional().describe("Tariff plan name"),
-  periodo: zod.string().optional().describe("Invoice period description"),
-  leituras: zod
+  tarifario: zod
+    .string()
+    .optional()
+    .describe("Tariff plan type (simples, bi-horária, tri-horária)"),
+  dataInicio: zod
+    .string()
+    .optional()
+    .describe("Billing period start date YYYY-MM-DD"),
+  dataFim: zod
+    .string()
+    .optional()
+    .describe("Billing period end date YYYY-MM-DD"),
+  periodoMeses: zod
+    .number()
+    .optional()
+    .describe("Number of months covered by this invoice"),
+  leiturasMensais: zod
     .array(
       zod.object({
         mes: zod.string(),
         consumo: zod.number(),
       }),
     )
-    .optional(),
+    .optional()
+    .describe("Individual monthly readings from invoice text\/table"),
+  historicoMensalGrafico: zod
+    .array(
+      zod.object({
+        mes: zod.string(),
+        consumo: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Monthly consumption extracted from the visual bar chart on the invoice",
+    ),
+  mesesNoGrafico: zod
+    .number()
+    .optional()
+    .describe(
+      "Number of months visible in the consumption chart (0 if no chart)",
+    ),
+  consumoAnualGrafico: zod
+    .number()
+    .optional()
+    .describe(
+      "Annual estimate from chart — sum if 12 months, else average × 12",
+    ),
+  sazonalidade: zod
+    .string()
+    .optional()
+    .describe(
+      "Detected seasonality profile (verao_pico, inverno_pico, uniforme)",
+    ),
   confianca: zod.number().describe("AI confidence score 0-1"),
   notas: zod.string().optional().describe("Additional notes from AI"),
 });

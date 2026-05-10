@@ -539,27 +539,53 @@ export interface DashboardSummary {
   clientesPorTipo: CountByLabel[];
 }
 
-export type InvoiceDataLeiturasItem = {
+export type InvoiceDataLeiturasMensaisItem = {
+  mes: string;
+  consumo: number;
+};
+
+export type InvoiceDataHistoricoMensalGraficoItem = {
   mes: string;
   consumo: number;
 };
 
 export interface InvoiceData {
+  /** Total kWh for the billing period (not annualised) */
+  consumoTotal?: number;
   /** Average monthly consumption in kWh */
   consumoMensal?: number;
-  /** Total annual consumption in kWh */
+  /** Total annual consumption in kWh if stated on invoice */
   consumoAnual?: number;
+  /** kWh at peak hours (bi/tri-hourly tariffs) */
+  consumoPonta?: number;
+  /** kWh at full hours (bi/tri-hourly tariffs) */
+  consumoCheio?: number;
+  /** kWh at off-peak/super-off-peak hours */
+  consumoVazio?: number;
   /** Contracted power in kVA */
   potenciaContratada?: number;
   /** Price per kWh in EUR */
   precoKwh?: number;
   /** Electricity supplier name */
   operador?: string;
-  /** Tariff plan name */
+  /** Tariff plan type (simples, bi-horária, tri-horária) */
   tarifario?: string;
-  /** Invoice period description */
-  periodo?: string;
-  leituras?: InvoiceDataLeiturasItem[];
+  /** Billing period start date YYYY-MM-DD */
+  dataInicio?: string;
+  /** Billing period end date YYYY-MM-DD */
+  dataFim?: string;
+  /** Number of months covered by this invoice */
+  periodoMeses?: number;
+  /** Individual monthly readings from invoice text/table */
+  leiturasMensais?: InvoiceDataLeiturasMensaisItem[];
+  /** Monthly consumption extracted from the visual bar chart on the invoice */
+  historicoMensalGrafico?: InvoiceDataHistoricoMensalGraficoItem[];
+  /** Number of months visible in the consumption chart (0 if no chart) */
+  mesesNoGrafico?: number;
+  /** Annual estimate from chart — sum if 12 months, else average × 12 */
+  consumoAnualGrafico?: number;
+  /** Detected seasonality profile (verao_pico, inverno_pico, uniforme) */
+  sazonalidade?: string;
   /** AI confidence score 0-1 */
   confianca: number;
   /** Additional notes from AI */
