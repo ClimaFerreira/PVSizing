@@ -144,7 +144,34 @@ router.post("/tools/parse-invoice", upload.single("file"), async (req, res): Pro
             contentBlock,
             {
               type: "text",
-              text: `Analisa esta fatura de eletricidade portuguesa com atenção especial ao GRÁFICO DE CONSUMO MENSAL (barras) que existe na maioria das faturas portuguesas. Extrai os dados em JSON com exactamente estes campos:
+              text: `És um especialista em faturas de eletricidade portuguesas. A tua tarefa principal é extrair dados de consumo, com foco especial no GRÁFICO DE BARRAS DO HISTÓRICO DE CONSUMO.
+
+════════════════════════════════════════
+PASSO 1 — LOCALIZA O GRÁFICO DE BARRAS
+════════════════════════════════════════
+Quase todas as faturas portuguesas (EDP, Endesa, Galp, Iberdrola, BTN, etc.) incluem uma secção visual chamada "Gráfico de consumo mensal" ou "Histórico de consumo". É um gráfico de barras verticais com:
+• Eixo X: abreviações dos meses (jan, fev, mar, abr, mai, jun, jul, ago, set, out, nov, dez)
+• Eixo Y: valores em kWh (ex: 0, 500, 1000, 1500, 2000, 2500, 3000, 3500)
+• Normalmente 12 a 14 barras representando o histórico dos últimos 12-13 meses
+• Pode estar na parte inferior ou lateral da fatura
+
+PROCURA este gráfico mesmo que esteja pequeno, em tons de cinza, ou que as barras não tenham rótulos numéricos.
+
+════════════════════════════════════════
+PASSO 2 — LÊ O GRÁFICO VISUALMENTE (OBRIGATÓRIO)
+════════════════════════════════════════
+Se encontrares o gráfico:
+1. Identifica a escala do eixo Y: lê os valores marcados (ex: 0, 500, 1000, 1500, 2000, 2500, 3000, 3500)
+2. Para cada barra, estima a sua altura como percentagem do valor máximo do eixo Y
+3. Calcula o valor em kWh: altura_percentagem × valor_maximo_eixo_Y
+4. Exemplo: se o eixo Y vai até 3500 kWh e uma barra atinge ~70% da altura → 3500 × 0,70 = 2450 kWh
+
+REGRA ABSOLUTA: Se vires barras no gráfico, TENS de estimar os valores mesmo sem rótulos. Nunca retornes [] se houver barras visíveis. A precisão não precisa de ser perfeita — uma estimativa razoável é muito melhor do que nenhum dado.
+
+════════════════════════════════════════
+PASSO 3 — EXTRAI O JSON
+════════════════════════════════════════
+Devolve APENAS este JSON (sem texto adicional, sem markdown):
 
 {
   "consumoTotal": kWh total neste período de faturação (não anualizado) ou null,
@@ -154,21 +181,20 @@ router.post("/tools/parse-invoice", upload.single("file"), async (req, res): Pro
   "consumoCheio": kWh em horas cheias (se tarifa bi/tri-horária) ou null,
   "consumoVazio": kWh em horas de vazio/super-vazio (se tarifa bi/tri-horária) ou null,
   "potenciaContratada": potência contratada em kVA ou null,
-  "precoKwh": preço médio por kWh em EUR (sem IVA se indicado) ou null,
-  "operador": nome da comercializadora (ex: EDP, Galp, Endesa, Iberdrola) ou null,
-  "tarifario": tipo de tarifário: "simples", "bi-horária", "tri-horária" ou null,
+  "precoKwh": preço médio por kWh em EUR (inclui energia + redes + impostos se possível) ou null,
+  "operador": nome da comercializadora (ex: "EDP", "Galp", "Endesa", "Iberdrola", "Casa do Povo de Valongo do Vouga") ou null,
+  "tarifario": "simples", "bi-horária" ou "tri-horária" ou null,
   "dataInicio": data início do período em formato YYYY-MM-DD ou null,
   "dataFim": data fim do período em formato YYYY-MM-DD ou null,
   "periodoMeses": número de meses cobertos por esta fatura (normalmente 1 ou 2) ou null,
-  "leiturasMensais": array de {"mes": "Abr 2024", "consumo": 312} com leituras individuais mencionadas em texto ou tabela, ou [],
-  "historicoMensalGrafico": MUITO IMPORTANTE — analisa o gráfico de barras de consumo mensal (histórico dos últimos 12 meses ou mais) que aparece nas faturas. Para cada barra visível, estima o valor em kWh lendo o eixo Y ou os rótulos de valor. Formato: [{"mes": "Jan 2024", "consumo": 245}, {"mes": "Fev 2024", "consumo": 198}, ...]. Se não existir gráfico ou não for possível ler os valores, retorna []. Inclui TODOS os meses visíveis no gráfico, mesmo os que estão em anos anteriores. Meses com barra mas sem rótulo: estima o valor pelo tamanho relativo da barra em relação às outras.
-  "mesesNoGrafico": número de meses de histórico visíveis no gráfico (0 se não houver gráfico),
-  "consumoAnualGrafico": se o gráfico tiver 12 meses, soma de todos os valores do gráfico; se tiver menos de 12 meses, média dos meses visíveis × 12; null se não houver gráfico,
-  "sazonalidade": analisa o perfil de consumo ao longo dos meses — "verao_pico" se os meses de verão (Jun-Set) têm consumo claramente superior, "inverno_pico" se os meses de inverno (Nov-Mar) têm consumo claramente superior, "uniforme" se não há sazonalidade clara, ou null se não há dados suficientes,
-  "confianca": número entre 0 e 1 representando confiança global na extração (reduz confiança se o gráfico foi estimado visualmente),
-  "notas": observações relevantes, incluindo se o gráfico foi identificado e quantos meses contém, ou null
-}
-Responde APENAS com o JSON, sem texto adicional.`,
+  "leiturasMensais": array de {"mes": "Abr 2024", "consumo": 312} com leituras de texto/tabela (não do gráfico), ou [],
+  "historicoMensalGrafico": array com TODOS os meses visíveis no gráfico de barras. Formato: [{"mes": "Fev 2025", "consumo": 2000}, {"mes": "Mar 2025", "consumo": 2500}, ...]. Usa os meses do eixo X e o ano da fatura para construir as datas correctas (o mês mais à direita é o mês actual da fatura; os anteriores são meses anteriores em ordem cronológica). Se não existir NENHUM gráfico de barras, retorna []. NUNCA retornas [] se houver barras visíveis.,
+  "mesesNoGrafico": número total de barras/meses visíveis no gráfico (0 apenas se não houver gráfico),
+  "consumoAnualGrafico": soma de todos os valores do historicoMensalGrafico se tiver ≥12 entradas; se tiver <12 entradas, calcula (soma ÷ número_meses) × 12; null se não houver gráfico,
+  "sazonalidade": "verao_pico" se Jun-Set claramente superior, "inverno_pico" se Nov-Mar claramente superior, "uniforme" se sem variação clara, null se sem dados,
+  "confianca": número 0.0 a 1.0 (0.9+ se valores explícitos; 0.6-0.8 se estimados visualmente; reduz se dados contraditórios),
+  "notas": descreve brevemente o gráfico encontrado (ex: "Gráfico de consumo mensal com 13 barras, fev 2025 a fev 2026, pico em dez-jan ~3000 kWh") ou null se sem gráfico
+}`,
             },
           ],
         },
