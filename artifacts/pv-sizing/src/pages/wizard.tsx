@@ -47,7 +47,13 @@ const equipamentosSchema = z.object({
 type LocalizacaoForm  = z.infer<typeof localizacaoSchema>;
 type EquipamentosForm = z.infer<typeof equipamentosSchema>;
 
-interface CenarioPainel { potenciaWp: number; quantidade: number; potenciaInstalada: number; }
+interface CenarioPainel {
+  potenciaWp: number;
+  quantidade: number;
+  potenciaInstalada: number;
+  energiaAnual: number;
+  coberturaReal: number;
+}
 
 interface AutoSizeResult {
   consumoDiario: number;
@@ -56,10 +62,14 @@ interface AutoSizeResult {
   potenciaBruta: number;
   margemPerdas: number;
   fatorRendimento: number;
+  potenciaMinima: number;
+  potenciaInstalada: number;
   potenciaRecomendada: number;
   numPaineis: number;
   energiaAnualEstimada: number;
   coberturaPrevista: number;
+  coberturaAlvo: number;
+  coberturaReal: number;
   capacidadeBateriaRecomendada: number | null;
   hsp: number;
   percVazio: number;
@@ -310,15 +320,16 @@ export default function Wizard() {
                   {/* Key metrics */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
-                      { label: "Potência a Instalar", value: `${sizing.potenciaRecomendada} kWp`, hi: true,  Icon: Zap },
-                      { label: "Nº Painéis (400 Wp)", value: `≈ ${sizing.numPaineis} un.`,        hi: true,  Icon: Sun },
-                      { label: "Produção Anual Est.",  value: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`, hi: false, Icon: TrendingUp },
-                      { label: "Cobertura Prevista",   value: `${sizing.coberturaPrevista}%`,      hi: false, Icon: BarChart3 },
-                    ].map(({ label, value, hi, Icon }) => (
+                      { label: "Potência Instalada",   value: `${sizing.potenciaInstalada} kWp`,                             sub: `mín. teórica: ${sizing.potenciaMinima} kWp`, hi: true,  Icon: Zap },
+                      { label: "Nº Painéis (400 Wp)",  value: `${sizing.numPaineis} un.`,                                     sub: `${sizing.potenciaInstalada} kWp reais`,       hi: true,  Icon: Sun },
+                      { label: "Produção Anual Real",   value: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`,   sub: `base: ${sizing.potenciaInstalada} kWp × HSP`, hi: false, Icon: TrendingUp },
+                      { label: "Cobertura Real",        value: `${sizing.coberturaReal}%`,                                    sub: `alvo: ${sizing.coberturaAlvo}%`,              hi: false, Icon: BarChart3 },
+                    ].map(({ label, value, sub, hi, Icon }) => (
                       <div key={label} className={cn("rounded-xl p-4 text-center border", hi ? "bg-primary/10 border-primary/30" : "bg-background border-border")}>
                         <Icon size={18} className={cn("mx-auto mb-2", hi ? "text-primary" : "text-muted-foreground")} />
                         <p className="text-xs text-muted-foreground leading-tight">{label}</p>
                         <p className={cn("font-bold text-lg mt-1", hi ? "text-primary" : "text-foreground")}>{value}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
                       </div>
                     ))}
                   </div>
@@ -332,10 +343,12 @@ export default function Wizard() {
                     </p>
                     <div className="space-y-2 text-sm">
                       {[
-                        { label: "1. Consumo diário",              formula: `${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh/ano ÷ 365 dias`,                    result: `${sizing.consumoDiario} kWh/dia`,          hi: false },
-                        { label: "2. Energia solar diária alvo",   formula: `${sizing.consumoDiario} kWh/dia × ${consumoData.coberturaMeta}% cobertura`,                    result: `${sizing.energiaAlvoDiaria} kWh/dia`,     hi: false },
-                        { label: "3. Potência bruta (sem perdas)", formula: `${sizing.energiaAlvoDiaria} kWh/dia ÷ ${sizing.hsp} h/dia (HSP)`,                              result: `${sizing.potenciaBruta} kWp`,             hi: false },
-                        { label: `4. Após perdas (${(sizing.margemPerdas*100).toFixed(0)}%)`, formula: `${sizing.potenciaBruta} kWp ÷ ${sizing.fatorRendimento.toFixed(2)} (rendimento)`, result: `${sizing.potenciaRecomendada} kWp`, hi: true },
+                        { label: "1. Consumo diário",                        formula: `${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh/ano ÷ 365 dias`,                                     result: `${sizing.consumoDiario} kWh/dia`,             hi: false },
+                        { label: "2. Energia solar diária alvo",             formula: `${sizing.consumoDiario} kWh/dia × ${consumoData.coberturaMeta}% cobertura`,                                     result: `${sizing.energiaAlvoDiaria} kWh/dia`,        hi: false },
+                        { label: "3. Potência bruta (sem perdas)",           formula: `${sizing.energiaAlvoDiaria} kWh/dia ÷ ${sizing.hsp} h/dia (HSP)`,                                              result: `${sizing.potenciaBruta} kWp`,                hi: false },
+                        { label: `4. Potência mínima teórica (perdas ${(sizing.margemPerdas*100).toFixed(0)}%)`, formula: `${sizing.potenciaBruta} kWp ÷ ${sizing.fatorRendimento.toFixed(2)} (rendimento)`, result: `${sizing.potenciaMinima} kWp`, hi: false },
+                        { label: `5. Arredondamento → painéis reais`,        formula: `⌈${sizing.potenciaMinima} kWp ÷ 0,40 kWp/painel⌉ = ${sizing.numPaineis} × 400 Wp`,                              result: `${sizing.potenciaInstalada} kWp instalados`, hi: true  },
+                        { label: "6. Cobertura real após arredondamento",    formula: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh ÷ ${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh`, result: `${sizing.coberturaReal}%`,           hi: true  },
                       ].map(({ label, formula, result, hi }) => (
                         <div key={label} className={cn(
                           "grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-lg px-3 py-2",
@@ -403,7 +416,9 @@ export default function Wizard() {
                           <tr className="bg-muted/50 border-b">
                             <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Potência Painel</th>
                             <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Nº Painéis</th>
-                            <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Potência Instalada</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Pot. Instalada</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Produção/ano</th>
+                            <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Cobertura real</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -418,11 +433,23 @@ export default function Wizard() {
                               </td>
                               <td className="px-3 py-2 text-center font-bold">{c.quantidade}</td>
                               <td className="px-3 py-2 text-right">{c.potenciaInstalada.toFixed(2)} kWp</td>
+                              <td className="px-3 py-2 text-right">{c.energiaAnual.toLocaleString("pt-PT")} kWh</td>
+                              <td className="px-3 py-2 text-right">
+                                <span className={cn(
+                                  "font-semibold",
+                                  c.coberturaReal >= sizing.coberturaAlvo ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
+                                )}>
+                                  {c.coberturaReal}%
+                                </span>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1.5 pl-1">
+                      Cobertura a verde ≥ {sizing.coberturaAlvo}% (alvo). Os valores incluem arredondamento para cima do nº de painéis.
+                    </p>
                   </div>
 
                   {/* Battery */}

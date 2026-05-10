@@ -130,26 +130,32 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
   // Step 2: brute system size (before losses)  P_bruto = E_dia / HSP
   const potenciaBruta = energiaAlvoDiaria / hsp;
 
-  // Step 3: apply system losses margin (~25%: inverter + temp + wiring + soiling)
-  //   P_ajustado = P_bruto / (1 - perdas) = P_bruto / 0.75
-  //   We use fatorRendimento = 0.78 (slightly optimistic for PT climate)
-  const margemPerdas = 0.22; // 22% total losses
+  // Step 3: theoretical minimum kWp after applying losses margin
+  const margemPerdas = 0.22; // 22% total losses (inverter ~4%, temp ~5%, shading ~3%, wiring+soiling ~5%, mismatch ~5%)
   const fatorRendimento = 1 - margemPerdas;
-  const potenciaRecomendada = potenciaBruta / fatorRendimento;
+  const potenciaMinima = potenciaBruta / fatorRendimento; // theoretical minimum — may not be a whole-panel multiple
 
-  // Step 4: estimated annual production
-  const energiaAnualEstimada = potenciaRecomendada * hsp * 365 * fatorRendimento;
-  const coberturaPrevista = Math.min(100, (energiaAnualEstimada / consumoAnualAjustado) * 100);
+  // Step 4: round up to whole panels (400 Wp reference) → actual installed power
+  const numPaineis = Math.ceil((potenciaMinima * 1000) / 400);
+  const potenciaInstalada = Math.round(numPaineis * 400) / 1000; // kWp after rounding up
 
-  // Step 5: panel count scenarios for common wattages
+  // Step 5: recalculate production and coverage from ACTUAL installed power (not theoretical)
+  const energiaAnualEstimada = potenciaInstalada * hsp * 365 * fatorRendimento;
+  const coberturaReal = Math.min(100, (energiaAnualEstimada / consumoAnualAjustado) * 100);
+
+  // Keep potenciaRecomendada = potenciaInstalada (actual) for API consumers; expose potenciaMinima separately
+  const potenciaRecomendada = potenciaInstalada;
+  const coberturaPrevista = coberturaReal; // real coverage (≥ coberturaMeta due to ceil rounding)
+
+  // Step 6: panel count scenarios — each with its own actual installed power + coverage
   const WATTAGES = [300, 350, 400, 450, 500] as const;
   const cenariosPaineis = WATTAGES.map((wp) => {
-    const quantidade = Math.ceil((potenciaRecomendada * 1000) / wp);
-    return { potenciaWp: wp, quantidade, potenciaInstalada: Math.round(quantidade * wp) / 1000 };
+    const quantidade = Math.ceil((potenciaMinima * 1000) / wp);
+    const potInst = Math.round(quantidade * wp) / 1000;
+    const energiaAnual = Math.round(potInst * hsp * 365 * fatorRendimento);
+    const coberturaScenario = Math.min(100, Math.round((energiaAnual / consumoAnualAjustado) * 1000) / 10);
+    return { potenciaWp: wp, quantidade, potenciaInstalada: potInst, energiaAnual, coberturaReal: coberturaScenario };
   });
-
-  // Panel count at reference 400 Wp
-  const numPaineis = cenariosPaineis.find(c => c.potenciaWp === 400)!.quantidade;
 
   // ── Battery sizing (tariff-aware) ─────────────────────────────────────────
   // Vazio = off-peak hours (PT: 22h–8h ≈ 10h/day) → this is what the battery must cover
@@ -170,11 +176,12 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     : "";
   const explicacao =
     `Consumo base: ${consumoAnualBase.toFixed(0)} kWh/ano${crescimentoTexto} → ${consumoDiario.toFixed(1)} kWh/dia. ` +
-    `Energia solar diária necessária (${coberturaMeta}% cobertura): ${energiaAlvoDiaria.toFixed(2)} kWh/dia. ` +
-    `Com ${hsp.toFixed(2)} h de sol pico (HSP), potência bruta = ${potenciaBruta.toFixed(2)} kWp. ` +
-    `Aplicando margem de ${(margemPerdas * 100).toFixed(0)}% para perdas (inversor, temperatura, sombreamento): ` +
-    `${potenciaRecomendada.toFixed(2)} kWp instalados (≈${numPaineis} painéis de 400 Wp). ` +
-    `Produção anual estimada: ${energiaAnualEstimada.toFixed(0)} kWh (${coberturaPrevista.toFixed(1)}% do consumo).` +
+    `Energia solar diária alvo (${coberturaMeta}% cobertura): ${energiaAlvoDiaria.toFixed(2)} kWh/dia. ` +
+    `Com ${hsp.toFixed(2)} h/dia de sol pico (HSP), potência bruta = ${potenciaBruta.toFixed(2)} kWp. ` +
+    `Após margem de ${(margemPerdas * 100).toFixed(0)}% de perdas: potência mínima teórica = ${potenciaMinima.toFixed(2)} kWp. ` +
+    `Arredondando para cima: ${numPaineis} painéis × 400 Wp = ${potenciaInstalada.toFixed(2)} kWp instalados. ` +
+    `Produção anual real estimada: ${energiaAnualEstimada.toFixed(0)} kWh → cobertura real ${coberturaReal.toFixed(1)}% ` +
+    `(superior aos ${coberturaMeta}% alvo devido ao arredondamento de painéis).` +
     tarifaTexto;
 
   res.json({
@@ -184,10 +191,14 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     potenciaBruta: Math.round(potenciaBruta * 100) / 100,
     margemPerdas,
     fatorRendimento,
-    potenciaRecomendada: Math.round(potenciaRecomendada * 100) / 100,
+    potenciaMinima: Math.round(potenciaMinima * 100) / 100,       // theoretical minimum
+    potenciaInstalada: Math.round(potenciaInstalada * 100) / 100, // actual after rounding panels
+    potenciaRecomendada: Math.round(potenciaRecomendada * 100) / 100, // = potenciaInstalada (compat)
     numPaineis,
     energiaAnualEstimada: Math.round(energiaAnualEstimada),
-    coberturaPrevista: Math.round(coberturaPrevista * 10) / 10,
+    coberturaPrevista: Math.round(coberturaPrevista * 10) / 10,   // = coberturaReal (compat)
+    coberturaAlvo: coberturaMeta,
+    coberturaReal: Math.round(coberturaReal * 10) / 10,
     capacidadeBateriaRecomendada,
     hsp: Math.round(hsp * 100) / 100,
     percVazio,
