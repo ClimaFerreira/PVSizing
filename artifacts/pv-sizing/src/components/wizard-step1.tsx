@@ -60,6 +60,7 @@ export interface ConsumoData {
   percPonta: number;
   perfilConsumo: "residencial" | "comercial" | "industrial";
   equipamentosFuturos: string[];
+  precoKwh: number;
 }
 
 export const DEFAULT_CONSUMO_DATA: ConsumoData = {
@@ -73,6 +74,7 @@ export const DEFAULT_CONSUMO_DATA: ConsumoData = {
   percPonta: 25,
   perfilConsumo: "residencial",
   equipamentosFuturos: [],
+  precoKwh: 0.18,
 };
 
 // ─── Appliances catalogue ─────────────────────────────────────────────────────

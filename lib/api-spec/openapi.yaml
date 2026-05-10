@@ -1782,6 +1782,9 @@ components:
         crescimentoFuturo:
           type: number
           description: Expected annual consumption growth % to factor in (default 0)
+        precoKwh:
+          type: number
+          description: Electricity price per kWh in EUR for financial calculations (default 0.18)
       required:
         - consumoAnual
         - latitude
@@ -1803,6 +1806,92 @@ components:
         - potenciaWp
         - quantidade
         - potenciaInstalada
+
+    CenarioDimensionamento:
+      type: object
+      properties:
+        tipo:
+          type: string
+          enum: [conservador, equilibrado, agressivo]
+          description: Scenario type
+        label:
+          type: string
+          description: Human-readable label (e.g. "Conservador")
+        descricao:
+          type: string
+          description: Short description of the scenario trade-offs
+        potenciaInstalada:
+          type: number
+          description: Installed peak power in kWp
+        numPaineis:
+          type: integer
+          description: Number of 400 Wp panels
+        energiaAnualEstimada:
+          type: number
+          description: Estimated annual production in kWh
+        coberturaReal:
+          type: number
+          description: Real annual coverage percentage
+        producaoMensal:
+          type: array
+          items:
+            type: number
+          description: Monthly production estimates in kWh (12 values)
+        consumoMensal:
+          type: array
+          items:
+            type: number
+          description: Monthly consumption estimates in kWh (12 values, flat)
+        autoconsumoMensal:
+          type: array
+          items:
+            type: number
+          description: Monthly self-consumed energy in kWh (12 values)
+        excessoMensal:
+          type: array
+          items:
+            type: number
+          description: Monthly grid-injected energy in kWh (12 values)
+        autoconsumoAnual:
+          type: number
+          description: Total self-consumed energy per year in kWh
+        excessoAnual:
+          type: number
+          description: Total grid-injected energy per year in kWh
+        autoconsumoPerc:
+          type: number
+          description: Self-consumption ratio (% of production self-consumed)
+        investimentoEstimado:
+          type: number
+          description: Estimated investment in EUR
+        poupancaAnual:
+          type: number
+          description: Estimated annual savings in EUR
+        paybackAnos:
+          type: number
+          description: Simple payback period in years
+        capacidadeBateriaRecomendada:
+          type: ["number", "null"]
+          description: Recommended battery capacity in kWh (null if battery not included)
+      required:
+        - tipo
+        - label
+        - descricao
+        - potenciaInstalada
+        - numPaineis
+        - energiaAnualEstimada
+        - coberturaReal
+        - producaoMensal
+        - consumoMensal
+        - autoconsumoMensal
+        - excessoMensal
+        - autoconsumoAnual
+        - excessoAnual
+        - autoconsumoPerc
+        - investimentoEstimado
+        - poupancaAnual
+        - paybackAnos
+        - capacidadeBateriaRecomendada
 
     AutoSizeResult:
       type: object
@@ -1848,6 +1937,15 @@ components:
           items:
             $ref: "#/components/schemas/CenarioPainel"
           description: Panel count scenarios for common wattages
+        cenariosDimensionamento:
+          type: array
+          items:
+            $ref: "#/components/schemas/CenarioDimensionamento"
+          description: Three sizing scenarios (conservador, equilibrado, agressivo)
+        recomendado:
+          type: string
+          enum: [conservador, equilibrado, agressivo]
+          description: Recommended scenario type based on best payback/autoconsumo balance
         explicacao:
           type: string
           description: Human-readable explanation of the sizing
@@ -1858,6 +1956,8 @@ components:
         - coberturaPrevista
         - hsp
         - fatorRendimento
+        - cenariosDimensionamento
+        - recomendado
         - explicacao
 
     BatterySizeBody:

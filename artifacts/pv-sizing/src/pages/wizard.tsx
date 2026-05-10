@@ -22,14 +22,25 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
   Zap, MapPin, Settings2, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown,
-  Loader2, Sun, Battery, BarChart3, AlertTriangle, TrendingUp,
-  Clock, Lightbulb, ArrowRight, Calculator, SlidersHorizontal, RotateCcw,
+  Loader2, Sun, Battery, BarChart3, AlertTriangle, TrendingUp, TrendingDown,
+  Clock, Lightbulb, ArrowRight, Calculator, SlidersHorizontal, RotateCcw, Target, Euro,
 } from "lucide-react";
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 
 import WizardStep1, { ConsumoData, DEFAULT_CONSUMO_DATA } from "@/components/wizard-step1";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+type CenarioTipo = "conservador" | "equilibrado" | "agressivo";
+
+const CENARIO_META: Record<CenarioTipo, { label: string; Icon: React.ElementType; accent: string; border: string; bg: string }> = {
+  conservador: { label: "Conservador", Icon: TrendingDown, accent: "text-blue-600 dark:text-blue-400",   border: "border-blue-200 dark:border-blue-700",   bg: "bg-blue-50/60 dark:bg-blue-950/20" },
+  equilibrado:  { label: "Equilibrado",  Icon: Target,        accent: "text-primary",                       border: "border-primary/40",                       bg: "bg-primary/5" },
+  agressivo:   { label: "Agressivo",   Icon: TrendingUp,    accent: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-700", bg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
+};
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 const localizacaoSchema = z.object({
@@ -55,6 +66,27 @@ interface CenarioPainel {
   coberturaReal: number;
 }
 
+interface AutoSizeCenario {
+  tipo: CenarioTipo;
+  label: string;
+  descricao: string;
+  potenciaInstalada: number;
+  numPaineis: number;
+  energiaAnualEstimada: number;
+  coberturaReal: number;
+  producaoMensal: number[];
+  consumoMensal: number[];
+  autoconsumoMensal: number[];
+  excessoMensal: number[];
+  autoconsumoAnual: number;
+  excessoAnual: number;
+  autoconsumoPerc: number;
+  investimentoEstimado: number;
+  poupancaAnual: number;
+  paybackAnos: number;
+  capacidadeBateriaRecomendada: number | null;
+}
+
 interface AutoSizeResult {
   consumoDiario: number;
   consumoAnualAjustado: number;
@@ -76,6 +108,8 @@ interface AutoSizeResult {
   percCheio: number;
   percPonta: number;
   cenariosPaineis: CenarioPainel[];
+  cenariosDimensionamento: AutoSizeCenario[];
+  recomendado: CenarioTipo;
   explicacao: string;
 }
 
@@ -103,6 +137,7 @@ export default function Wizard() {
   const [isSizing, setIsSizing]   = useState(false);
   const [showManualAdjust, setShowManualAdjust] = useState(false);
   const [manual, setManual]       = useState<ManualOverride | null>(null);
+  const [selectedCenarioTipo, setSelectedCenarioTipo] = useState<CenarioTipo>("equilibrado");
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -115,15 +150,18 @@ export default function Wizard() {
   const locForm   = useForm<LocalizacaoForm>({ resolver: zodResolver(localizacaoSchema), defaultValues: { latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 } });
   const equipForm = useForm<EquipamentosForm>({ resolver: zodResolver(equipamentosSchema), defaultValues: {} });
 
-  // Reset manual overrides each time a new auto-size result arrives
+  // When new sizing arrives, pick recommended scenario and initialise manual from it
   useEffect(() => {
     if (sizing) {
+      const tipo: CenarioTipo = (sizing.recomendado ?? "equilibrado") as CenarioTipo;
+      setSelectedCenarioTipo(tipo);
+      const c = sizing.cenariosDimensionamento?.find(x => x.tipo === tipo) ?? null;
       setManual({
-        numPaineis: sizing.numPaineis,
+        numPaineis: c?.numPaineis ?? sizing.numPaineis,
         potenciaWp: 400,
         hsp: sizing.hsp,
         rendimento: sizing.fatorRendimento,
-        capacidadeBateria: sizing.capacidadeBateriaRecomendada ?? 0,
+        capacidadeBateria: c?.capacidadeBateriaRecomendada ?? sizing.capacidadeBateriaRecomendada ?? 0,
         coberturaMeta: consumoData.coberturaMeta,
       });
       setShowManualAdjust(false);
@@ -131,7 +169,30 @@ export default function Wizard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sizing]);
 
-  // Effective sizing: auto merged with manual overrides
+  // Currently selected sizing scenario
+  const activeCenario: AutoSizeCenario | null = useMemo(() => {
+    if (!sizing?.cenariosDimensionamento) return null;
+    return sizing.cenariosDimensionamento.find(c => c.tipo === selectedCenarioTipo) ?? null;
+  }, [sizing, selectedCenarioTipo]);
+
+  // Switch scenario and reset manual to match
+  const selectCenario = (tipo: CenarioTipo) => {
+    setSelectedCenarioTipo(tipo);
+    if (sizing) {
+      const c = sizing.cenariosDimensionamento?.find(x => x.tipo === tipo) ?? null;
+      setManual({
+        numPaineis: c?.numPaineis ?? sizing.numPaineis,
+        potenciaWp: 400,
+        hsp: sizing.hsp,
+        rendimento: sizing.fatorRendimento,
+        capacidadeBateria: c?.capacidadeBateriaRecomendada ?? sizing.capacidadeBateriaRecomendada ?? 0,
+        coberturaMeta: consumoData.coberturaMeta,
+      });
+      setShowManualAdjust(false);
+    }
+  };
+
+  // Effective sizing: active scenario base + manual overrides
   const effectiveSizing = useMemo(() => {
     if (!sizing || !manual) return sizing;
     const potenciaInstalada = +(manual.numPaineis * manual.potenciaWp / 1000).toFixed(2);
@@ -153,16 +214,18 @@ export default function Wizard() {
     };
   }, [sizing, manual]);
 
+  // Compare manual vs active cenario (not the equilibrado top-level values)
   const isManualModified = useMemo(() => {
     if (!manual || !sizing) return false;
+    const base = activeCenario ?? sizing;
     return (
-      manual.numPaineis !== sizing.numPaineis ||
+      manual.numPaineis !== base.numPaineis ||
       manual.potenciaWp !== 400 ||
       Math.abs(manual.hsp - sizing.hsp) > 0.01 ||
       Math.abs(manual.rendimento - sizing.fatorRendimento) > 0.005 ||
-      (manual.capacidadeBateria > 0 && manual.capacidadeBateria !== (sizing.capacidadeBateriaRecomendada ?? 0))
+      (manual.capacidadeBateria > 0 && manual.capacidadeBateria !== (base.capacidadeBateriaRecomendada ?? 0))
     );
-  }, [manual, sizing]);
+  }, [manual, activeCenario, sizing]);
 
   // ── Auto-size ─────────────────────────────────────────────────────────────
   const runAutoSize = async (consumo: ConsumoData, loc: LocalizacaoForm) => {
@@ -184,6 +247,7 @@ export default function Wizard() {
           percVazio:         consumo.percVazio,
           percCheio:         consumo.percCheio,
           percPonta:         consumo.percPonta,
+          precoKwh:          consumo.precoKwh ?? 0.18,
         }),
       });
       if (!resp.ok) throw new Error();
@@ -366,6 +430,156 @@ export default function Wizard() {
             </Card>
           ) : sizing ? (
             <>
+              {/* ── Scenario selector ───────────────────────────────────────── */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {sizing.cenariosDimensionamento?.map(c => {
+                  const isSelected = c.tipo === selectedCenarioTipo;
+                  const isRec = c.tipo === sizing.recomendado;
+                  const meta = CENARIO_META[c.tipo as CenarioTipo];
+                  const Icon = meta?.Icon ?? Sun;
+                  return (
+                    <div
+                      key={c.tipo}
+                      onClick={() => selectCenario(c.tipo as CenarioTipo)}
+                      className={cn(
+                        "relative rounded-xl border-2 p-4 cursor-pointer transition-all hover:shadow-sm select-none",
+                        isSelected
+                          ? `border-primary bg-primary/5 shadow-sm`
+                          : "border-border hover:border-primary/40"
+                      )}
+                    >
+                      {isRec && (
+                        <div className="absolute -top-2.5 left-3">
+                          <Badge className="text-[10px] py-0 px-1.5 bg-primary text-primary-foreground">⭐ Recomendado</Badge>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between mb-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <Icon size={16} className={cn(isSelected ? "text-primary" : "text-muted-foreground")} />
+                          <span className={cn("font-semibold text-sm", isSelected ? "text-primary" : "")}>{c.label}</span>
+                        </div>
+                        {isSelected && (
+                          <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center shrink-0">
+                            <div className="w-2 h-2 rounded-full bg-white" />
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mb-3 leading-snug">{c.descricao}</p>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Potência</span>
+                          <span className="font-bold">{c.potenciaInstalada} kWp</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Painéis (400 Wp)</span>
+                          <span className="font-semibold">{c.numPaineis} un.</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Cobertura anual</span>
+                          <span className={cn("font-semibold", c.coberturaReal >= consumoData.coberturaMeta ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400")}>{c.coberturaReal}%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Autoconsumo</span>
+                          <span className="font-semibold">{c.autoconsumoPerc}%</span>
+                        </div>
+                        <Separator className="my-1.5" />
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Investimento est.</span>
+                          <span className="font-semibold">{c.investimentoEstimado.toLocaleString("pt-PT")} €</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Poupança/ano</span>
+                          <span className="font-semibold text-green-600 dark:text-green-400">{c.poupancaAnual.toLocaleString("pt-PT")} €</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Payback simples</span>
+                          <span className={cn("font-bold", isSelected ? "text-primary" : "")}>{c.paybackAnos} anos</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── Monthly chart + financial summary (active scenario) ──────── */}
+              {activeCenario && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <BarChart3 size={18} className="text-primary" />
+                      Perfil Mensal — {activeCenario.label}
+                      {isManualModified && (
+                        <Badge variant="outline" className="text-primary border-primary/40 text-xs ml-1">Ajustado</Badge>
+                      )}
+                    </CardTitle>
+                    <CardDescription>Produção estimada (autoconsumo + excedente) vs consumo mensal</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <ResponsiveContainer width="100%" height={190}>
+                      <ComposedChart
+                        data={activeCenario.producaoMensal.map((_, i) => ({
+                          mes: MONTH_LABELS[i],
+                          autoconsumo: activeCenario.autoconsumoMensal[i],
+                          excesso: activeCenario.excessoMensal[i],
+                          consumo: activeCenario.consumoMensal[i],
+                        }))}
+                        margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
+                      >
+                        <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip
+                          contentStyle={{ fontSize: 11, padding: "6px 10px" }}
+                          formatter={(value: number, name: string) => {
+                            const labels: Record<string, string> = {
+                              autoconsumo: "Autoconsumo", excesso: "Excedente (rede)", consumo: "Consumo",
+                            };
+                            return [`${Math.round(value).toLocaleString("pt-PT")} kWh`, labels[name] ?? name];
+                          }}
+                        />
+                        <Bar dataKey="autoconsumo" stackId="prod" fill="#22c55e" name="autoconsumo" radius={[0, 0, 2, 2]} />
+                        <Bar dataKey="excesso" stackId="prod" fill="#f59e0b" name="excesso" radius={[2, 2, 0, 0]} />
+                        <Line type="monotone" dataKey="consumo" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="4 2" dot={false} name="consumo" />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                    <div className="flex items-center gap-4 text-[10px] text-muted-foreground justify-center flex-wrap">
+                      <span className="flex items-center gap-1"><span className="w-3 h-2.5 rounded-sm bg-green-500 inline-block" /> Autoconsumo</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-2.5 rounded-sm bg-amber-400 inline-block" /> Excedente (rede)</span>
+                      <span className="flex items-center gap-1"><span className="w-4 border-t-2 border-dashed border-muted-foreground inline-block" /> Consumo</span>
+                    </div>
+
+                    <Separator />
+
+                    {/* Financial KPIs */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        { label: "Investimento est.", value: `${activeCenario.investimentoEstimado.toLocaleString("pt-PT")} €`, sub: "painéis + instalação", hi: false, Icon: Euro },
+                        { label: "Poupança/ano",       value: `${activeCenario.poupancaAnual.toLocaleString("pt-PT")} €`,       sub: `${activeCenario.autoconsumoAnual.toLocaleString("pt-PT")} kWh autoconsumo`, hi: false, Icon: TrendingUp },
+                        { label: "Payback simples",    value: `${activeCenario.paybackAnos} anos`,                               sub: "sem subsídios ou injeção", hi: true, Icon: Target },
+                        { label: "Autoconsumo",        value: `${activeCenario.autoconsumoPerc}%`,                               sub: `excedente: ${activeCenario.excessoAnual.toLocaleString("pt-PT")} kWh/ano`, hi: false, Icon: BarChart3 },
+                      ].map(({ label, value, sub, hi, Icon: Ic }) => (
+                        <div key={label} className={cn("rounded-xl p-3 text-center border", hi ? "bg-primary/10 border-primary/30" : "bg-muted/30 border-border")}>
+                          <Ic size={15} className={cn("mx-auto mb-1.5", hi ? "text-primary" : "text-muted-foreground")} />
+                          <p className="text-[10px] text-muted-foreground leading-tight">{label}</p>
+                          <p className={cn("font-bold text-sm mt-0.5", hi ? "text-primary" : "text-foreground")}>{value}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Summer excess warning */}
+                    {activeCenario.excessoMensal.slice(4, 9).some(e => e > (activeCenario.consumoMensal[6] ?? 0) * 0.4) && (
+                      <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                        <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                          <strong>Excedente de verão elevado</strong> — Nos meses de Maio–Setembro a produção excede o consumo.{" "}
+                          {selectedCenarioTipo !== "conservador" && "Considere o cenário Conservador para melhor autoconsumo ou adicione bateria."}
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               <Card className="border-primary/40 bg-primary/5">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-primary">
@@ -391,25 +605,25 @@ export default function Wizard() {
                         {
                           label: "Potência Instalada",
                           value: `${eff.potenciaInstalada} kWp`,
-                          sub: isManualModified ? `auto: ${sizing.potenciaInstalada} kWp` : `mín. teórica: ${sizing.potenciaMinima} kWp`,
+                          sub: isManualModified ? `cenário base: ${(activeCenario ?? sizing).potenciaInstalada} kWp` : `mín. teórica: ${sizing.potenciaMinima} kWp`,
                           hi: true, Icon: Zap,
                         },
                         {
                           label: isManualModified ? `Nº Painéis (${manual!.potenciaWp} Wp)` : "Nº Painéis (400 Wp)",
                           value: `${eff.numPaineis} un.`,
-                          sub: isManualModified ? `auto: ${sizing.numPaineis} un.` : `${eff.potenciaInstalada} kWp reais`,
+                          sub: isManualModified ? `cenário base: ${(activeCenario ?? sizing).numPaineis} un.` : `${eff.potenciaInstalada} kWp reais`,
                           hi: true, Icon: Sun,
                         },
                         {
                           label: "Produção Anual Real",
                           value: `${eff.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`,
-                          sub: isManualModified ? `auto: ${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh` : `base: ${eff.potenciaInstalada} kWp × HSP`,
+                          sub: isManualModified ? `cenário base: ${(activeCenario ?? sizing).energiaAnualEstimada.toLocaleString("pt-PT")} kWh` : `base: ${eff.potenciaInstalada} kWp × HSP`,
                           hi: false, Icon: TrendingUp,
                         },
                         {
                           label: "Cobertura Real",
                           value: `${eff.coberturaReal}%`,
-                          sub: isManualModified ? `auto: ${sizing.coberturaReal}% · alvo: ${eff.coberturaAlvo}%` : `alvo: ${eff.coberturaAlvo}%`,
+                          sub: isManualModified ? `cenário base: ${(activeCenario ?? sizing).coberturaReal}% · alvo: ${eff.coberturaAlvo}%` : `alvo: ${eff.coberturaAlvo}%`,
                           hi: false, Icon: BarChart3,
                         },
                       ];
@@ -770,9 +984,9 @@ export default function Wizard() {
                               <div className="flex justify-end pt-1">
                                 <Button variant="ghost" size="sm" className="text-xs gap-1.5 text-muted-foreground"
                                   onClick={() => setManual({
-                                    numPaineis: sizing.numPaineis, potenciaWp: 400, hsp: sizing.hsp,
+                                    numPaineis: (activeCenario ?? sizing).numPaineis, potenciaWp: 400, hsp: sizing.hsp,
                                     rendimento: sizing.fatorRendimento,
-                                    capacidadeBateria: sizing.capacidadeBateriaRecomendada ?? 0,
+                                    capacidadeBateria: (activeCenario ?? sizing).capacidadeBateriaRecomendada ?? 0,
                                     coberturaMeta: consumoData.coberturaMeta,
                                   })}>
                                   <RotateCcw size={12} /> Repor Automático

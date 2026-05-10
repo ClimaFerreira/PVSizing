@@ -19,6 +19,101 @@ function buildFileBlock(isPdf: boolean, mime: string, base64: string) {
   return { type: "image" as const, source: { type: "base64" as const, media_type: toSafeImageMime(mime), data: base64 } };
 }
 
+// ── Monthly irradiance factors for Portugal (normalized so Σ(days×factor) = 365)
+// Based on typical horizontal irradiation seasonal profile for mainland Portugal
+const PT_MONTHLY_FACTORS = [0.577, 0.721, 0.954, 1.065, 1.243, 1.420, 1.498, 1.376, 1.132, 0.866, 0.621, 0.510];
+const DAYS_PER_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+interface CenarioParams {
+  tipo: "conservador" | "equilibrado" | "agressivo";
+  coberturaMeta: number;         // % coverage target for THIS scenario
+  consumoAnualAjustado: number;
+  hsp: number;
+  fatorRendimento: number;
+  precoKwh: number;
+  custoKwp: number;              // €/kWp installed
+  incluirBateria: boolean;
+  capacidadeBateriaBase: number | null; // from base sizing
+  custoBateria: number;          // €/kWh battery
+}
+
+function buildCenario(p: CenarioParams) {
+  const consumoDiario = p.consumoAnualAjustado / 365;
+
+  // Size for this scenario's coverage target
+  const energiaAlvoDiaria = consumoDiario * (p.coberturaMeta / 100);
+  const potenciaBruta = energiaAlvoDiaria / p.hsp;
+  const potenciaMinima = potenciaBruta / p.fatorRendimento;
+  const numPaineis = Math.ceil((potenciaMinima * 1000) / 400);
+  const potenciaInstalada = Math.round(numPaineis * 400) / 1000;
+
+  // Monthly production (using PT seasonal factors)
+  const producaoMensal = PT_MONTHLY_FACTORS.map((factor, m) =>
+    Math.round(potenciaInstalada * p.hsp * factor * DAYS_PER_MONTH[m] * p.fatorRendimento)
+  );
+
+  // Monthly consumption (flat distribution — evenly split across months)
+  const consumoMensal = DAYS_PER_MONTH.map(days =>
+    Math.round((p.consumoAnualAjustado / 365) * days)
+  );
+
+  // Self-consumption and excess per month
+  const autoconsumoMensal = producaoMensal.map((prod, m) => Math.min(prod, consumoMensal[m]));
+  const excessoMensal      = producaoMensal.map((prod, m) => Math.max(0, prod - consumoMensal[m]));
+
+  const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
+  const coberturaReal = Math.round((energiaAnualEstimada / p.consumoAnualAjustado) * 100);
+  const autoconsumoAnual = autoconsumoMensal.reduce((a, b) => a + b, 0);
+  const excessoAnual     = excessoMensal.reduce((a, b) => a + b, 0);
+  const autoconsumoPerc  = energiaAnualEstimada > 0 ? Math.round((autoconsumoAnual / energiaAnualEstimada) * 100) : 0;
+
+  // Financial model
+  const investPV = Math.round(potenciaInstalada * p.custoKwp);
+  const investBat = p.incluirBateria && p.capacidadeBateriaBase
+    ? Math.round(p.capacidadeBateriaBase * p.custoBateria)
+    : 0;
+  const investimentoEstimado = investPV + investBat;
+  const poupancaAnual = Math.round(autoconsumoAnual * p.precoKwh * 100) / 100;
+  const paybackAnos = poupancaAnual > 0 ? Math.round((investimentoEstimado / poupancaAnual) * 10) / 10 : 99;
+
+  const META: Record<string, { label: string; descricao: string }> = {
+    conservador: {
+      label: "Conservador",
+      descricao: "Menor investimento, melhor autoconsumo relativo e menos excedente nos meses de verão",
+    },
+    equilibrado: {
+      label: "Equilibrado",
+      descricao: "Bom equilíbrio entre cobertura anual, autoconsumo e retorno financeiro",
+    },
+    agressivo: {
+      label: "Agressivo",
+      descricao: "Máxima cobertura anual — maior investimento e excedente elevado nos meses de verão",
+    },
+  };
+
+  return {
+    tipo: p.tipo,
+    label: META[p.tipo].label,
+    descricao: META[p.tipo].descricao,
+    potenciaInstalada: Math.round(potenciaInstalada * 100) / 100,
+    numPaineis,
+    energiaAnualEstimada,
+    coberturaReal,
+    producaoMensal,
+    consumoMensal,
+    autoconsumoMensal,
+    excessoMensal,
+    autoconsumoAnual,
+    excessoAnual,
+    autoconsumoPerc,
+    investimentoEstimado,
+    poupancaAnual,
+    paybackAnos,
+    capacidadeBateriaRecomendada: p.incluirBateria ? p.capacidadeBateriaBase : null,
+  };
+}
+
 // POST /tools/parse-invoice
 router.post("/tools/parse-invoice", upload.single("file"), async (req, res): Promise<void> => {
   if (!req.file) {
@@ -100,7 +195,9 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
   const percVazioInput  = raw.percVazio  !== undefined ? Number(raw.percVazio)  : 40;
   const percCheioInput  = raw.percCheio  !== undefined ? Number(raw.percCheio)  : 35;
   const percPontaInput  = raw.percPonta  !== undefined ? Number(raw.percPonta)  : 25;
-  // Normalize so the three always sum to 100
+  const precoKwh        = raw.precoKwh   !== undefined ? Number(raw.precoKwh)   : 0.18;
+
+  // Normalize tariff percentages
   const totalTarifa = percVazioInput + percCheioInput + percPontaInput || 100;
   const percVazio = Math.round((percVazioInput / totalTarifa) * 100);
   const percCheio = Math.round((percCheioInput / totalTarifa) * 100);
@@ -111,43 +208,65 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     return;
   }
 
-  // Apply future growth factor
+  // ── Common parameters ─────────────────────────────────────────────────────
   const consumoAnualAjustado = consumoAnualBase * (1 + crescimentoFuturo / 100);
   const consumoDiario = consumoAnualAjustado / 365;
 
-  // ── Estimate HSP for Portugal ─────────────────────────────────────────────
-  // Simple irradiance model: base HSP adjusted for latitude, tilt and azimuth
+  // HSP estimation for Portugal (latitude/tilt/azimuth adjusted)
   const latRad = (Math.abs(latitude) * Math.PI) / 180;
   const baseHsp = 5.2 - latRad * 1.8;
-  const tiltFactor = 1 - Math.abs(inclinacao - 35) * 0.005;   // optimal ~35°
-  const azimuthFactor = 1 - Math.abs(azimute) * 0.003;        // optimal = South (0°)
+  const tiltFactor = 1 - Math.abs(inclinacao - 35) * 0.005;
+  const azimuthFactor = 1 - Math.abs(azimute) * 0.003;
   const hsp = Math.max(2.5, baseHsp * tiltFactor * azimuthFactor);
 
-  // ── Sizing formula (as per IEA / industry standard) ───────────────────────
-  // Step 1: daily solar energy target
-  const energiaAlvoDiaria = consumoDiario * (coberturaMeta / 100);
-
-  // Step 2: brute system size (before losses)  P_bruto = E_dia / HSP
-  const potenciaBruta = energiaAlvoDiaria / hsp;
-
-  // Step 3: theoretical minimum kWp after applying losses margin
-  const margemPerdas = 0.22; // 22% total losses (inverter ~4%, temp ~5%, shading ~3%, wiring+soiling ~5%, mismatch ~5%)
+  const margemPerdas = 0.22;
   const fatorRendimento = 1 - margemPerdas;
-  const potenciaMinima = potenciaBruta / fatorRendimento; // theoretical minimum — may not be a whole-panel multiple
 
-  // Step 4: round up to whole panels (400 Wp reference) → actual installed power
-  const numPaineis = Math.ceil((potenciaMinima * 1000) / 400);
-  const potenciaInstalada = Math.round(numPaineis * 400) / 1000; // kWp after rounding up
+  // ── Battery sizing (tariff-aware) ─────────────────────────────────────────
+  let capacidadeBateriaRecomendada: number | null = null;
+  if (incluirBateria) {
+    const energiaVazioDiaria = consumoDiario * (percVazio / 100);
+    const horasVazioWindow = 10;
+    const energiaBateriaNeeded = energiaVazioDiaria * (horasAutonomia / horasVazioWindow);
+    capacidadeBateriaRecomendada = Math.ceil((energiaBateriaNeeded / 0.8) * 2) / 2;
+  }
 
-  // Step 5: recalculate production and coverage from ACTUAL installed power (not theoretical)
-  const energiaAnualEstimada = potenciaInstalada * hsp * 365 * fatorRendimento;
-  const coberturaReal = Math.min(100, (energiaAnualEstimada / consumoAnualAjustado) * 100);
+  // ── Costs (typical PT installed market rates) ─────────────────────────────
+  const custoKwp = 1050;   // €/kWp
+  const custoBateria = 600; // €/kWh
 
-  // Keep potenciaRecomendada = potenciaInstalada (actual) for API consumers; expose potenciaMinima separately
+  // ── Build 3 scenarios ─────────────────────────────────────────────────────
+  // Coverage multipliers per scenario
+  const coberturaConservador = coberturaMeta * 0.68;
+  const coberturaEquilibrado = coberturaMeta * 1.00;
+  const coberturaAgressivo   = coberturaMeta * 1.35;
+
+  const cenParams = { consumoAnualAjustado, hsp, fatorRendimento, precoKwh, custoKwp, incluirBateria, capacidadeBateriaBase: capacidadeBateriaRecomendada, custoBateria };
+
+  const cenConservador = buildCenario({ tipo: "conservador", coberturaMeta: coberturaConservador, ...cenParams });
+  const cenEquilibrado = buildCenario({ tipo: "equilibrado", coberturaMeta: coberturaEquilibrado, ...cenParams });
+  const cenAgressivo   = buildCenario({ tipo: "agressivo",   coberturaMeta: coberturaAgressivo,   ...cenParams });
+
+  // ── Determine recommended scenario ────────────────────────────────────────
+  // Recommend the one with best payback that achieves at least 60% of the target coverage
+  const candidates = [cenConservador, cenEquilibrado, cenAgressivo];
+  const minCoberturaThreshold = coberturaMeta * 0.6;
+  const eligible = candidates.filter(c => c.coberturaReal >= minCoberturaThreshold);
+  const recomendado = (eligible.length > 0
+    ? eligible.reduce((best, c) => c.paybackAnos < best.paybackAnos ? c : best)
+    : cenEquilibrado
+  ).tipo;
+
+  // ── "Equilibrado" as backward-compat top-level values ─────────────────────
+  const potenciaInstalada = cenEquilibrado.potenciaInstalada;
+  const numPaineis = cenEquilibrado.numPaineis;
+  const potenciaMinima = Math.round(((consumoAnualAjustado / 365) * (coberturaMeta / 100) / hsp / fatorRendimento) * 100) / 100;
+  const energiaAnualEstimada = cenEquilibrado.energiaAnualEstimada;
+  const coberturaReal = cenEquilibrado.coberturaReal;
   const potenciaRecomendada = potenciaInstalada;
-  const coberturaPrevista = coberturaReal; // real coverage (≥ coberturaMeta due to ceil rounding)
+  const coberturaPrevista = coberturaReal;
 
-  // Step 6: panel count scenarios — each with its own actual installed power + coverage
+  // ── Panel wattage scenarios (existing feature) ─────────────────────────────
   const WATTAGES = [300, 350, 400, 450, 500] as const;
   const cenariosPaineis = WATTAGES.map((wp) => {
     const quantidade = Math.ceil((potenciaMinima * 1000) / wp);
@@ -157,17 +276,6 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     return { potenciaWp: wp, quantidade, potenciaInstalada: potInst, energiaAnual, coberturaReal: coberturaScenario };
   });
 
-  // ── Battery sizing (tariff-aware) ─────────────────────────────────────────
-  // Vazio = off-peak hours (PT: 22h–8h ≈ 10h/day) → this is what the battery must cover
-  // Battery capacity = (daily vazio consumption × autonomy fraction) / DoD
-  let capacidadeBateriaRecomendada: number | null = null;
-  if (incluirBateria) {
-    const energiaVazioDiaria = consumoDiario * (percVazio / 100);
-    const horasVazioWindow = 10; // PT off-peak window ≈ 10h
-    const energiaBateriaNeeded = energiaVazioDiaria * (horasAutonomia / horasVazioWindow);
-    capacidadeBateriaRecomendada = Math.ceil((energiaBateriaNeeded / 0.8) * 2) / 2; // DoD=80%, round to 0.5 kWh
-  }
-
   const crescimentoTexto = crescimentoFuturo > 0
     ? ` (inclui ${crescimentoFuturo}% de crescimento futuro → ${consumoAnualAjustado.toFixed(0)} kWh/ano)`
     : "";
@@ -176,36 +284,36 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     : "";
   const explicacao =
     `Consumo base: ${consumoAnualBase.toFixed(0)} kWh/ano${crescimentoTexto} → ${consumoDiario.toFixed(1)} kWh/dia. ` +
-    `Energia solar diária alvo (${coberturaMeta}% cobertura): ${energiaAlvoDiaria.toFixed(2)} kWh/dia. ` +
-    `Com ${hsp.toFixed(2)} h/dia de sol pico (HSP), potência bruta = ${potenciaBruta.toFixed(2)} kWp. ` +
-    `Após margem de ${(margemPerdas * 100).toFixed(0)}% de perdas: potência mínima teórica = ${potenciaMinima.toFixed(2)} kWp. ` +
-    `Arredondando para cima: ${numPaineis} painéis × 400 Wp = ${potenciaInstalada.toFixed(2)} kWp instalados. ` +
-    `Produção anual real estimada: ${energiaAnualEstimada.toFixed(0)} kWh → cobertura real ${coberturaReal.toFixed(1)}% ` +
-    `(superior aos ${coberturaMeta}% alvo devido ao arredondamento de painéis).` +
+    `HSP estimado: ${hsp.toFixed(2)} h/dia. Fator de rendimento: ${(fatorRendimento * 100).toFixed(0)}%. ` +
+    `Cenário Equilibrado (${coberturaMeta}% cobertura): ${numPaineis} painéis × 400 Wp = ${potenciaInstalada} kWp instalados, ` +
+    `produção anual ${energiaAnualEstimada.toLocaleString("pt-PT")} kWh → cobertura real ${coberturaReal}%.` +
     tarifaTexto;
 
   res.json({
     consumoDiario: Math.round(consumoDiario * 10) / 10,
     consumoAnualAjustado: Math.round(consumoAnualAjustado),
-    energiaAlvoDiaria: Math.round(energiaAlvoDiaria * 100) / 100,
-    potenciaBruta: Math.round(potenciaBruta * 100) / 100,
+    energiaAlvoDiaria: Math.round((consumoDiario * (coberturaMeta / 100)) * 100) / 100,
+    potenciaBruta: Math.round((consumoDiario * (coberturaMeta / 100) / hsp) * 100) / 100,
     margemPerdas,
     fatorRendimento,
-    potenciaMinima: Math.round(potenciaMinima * 100) / 100,       // theoretical minimum
-    potenciaInstalada: Math.round(potenciaInstalada * 100) / 100, // actual after rounding panels
-    potenciaRecomendada: Math.round(potenciaRecomendada * 100) / 100, // = potenciaInstalada (compat)
+    potenciaMinima,
+    potenciaInstalada: Math.round(potenciaInstalada * 100) / 100,
+    potenciaRecomendada: Math.round(potenciaRecomendada * 100) / 100,
     numPaineis,
-    energiaAnualEstimada: Math.round(energiaAnualEstimada),
-    coberturaPrevista: Math.round(coberturaPrevista * 10) / 10,   // = coberturaReal (compat)
+    energiaAnualEstimada,
+    coberturaPrevista,
     coberturaAlvo: coberturaMeta,
-    coberturaReal: Math.round(coberturaReal * 10) / 10,
+    coberturaReal,
     capacidadeBateriaRecomendada,
     hsp: Math.round(hsp * 100) / 100,
     percVazio,
     percCheio,
     percPonta,
     cenariosPaineis,
+    cenariosDimensionamento: [cenConservador, cenEquilibrado, cenAgressivo],
+    recomendado,
     explicacao,
+    _monthLabels: MONTH_LABELS,
   });
 });
 

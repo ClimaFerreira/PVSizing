@@ -757,10 +757,42 @@ export const AutoSizeSystemBody = zod.object({
     .number()
     .optional()
     .describe("Target battery autonomy hours (default 4)"),
+  crescimentoFuturo: zod
+    .number()
+    .optional()
+    .describe("Expected annual consumption growth % to factor in (default 0)"),
+  precoKwh: zod
+    .number()
+    .optional()
+    .describe(
+      "Electricity price per kWh in EUR for financial calculations (default 0.18)",
+    ),
 });
 
 export const AutoSizeSystemResponse = zod.object({
-  potenciaRecomendada: zod.number().describe("Recommended peak power in kWp"),
+  consumoDiario: zod
+    .number()
+    .optional()
+    .describe("Daily energy consumption in kWh\/day"),
+  consumoAnualAjustado: zod
+    .number()
+    .optional()
+    .describe("Annual consumption adjusted for future growth (kWh)"),
+  energiaAlvoDiaria: zod
+    .number()
+    .optional()
+    .describe("Daily solar energy target (consumption × coverage %)"),
+  potenciaBruta: zod
+    .number()
+    .optional()
+    .describe("System size before losses (kWp)"),
+  margemPerdas: zod
+    .number()
+    .optional()
+    .describe("Loss margin applied (fraction, e.g. 0.25 = 25%)"),
+  potenciaRecomendada: zod
+    .number()
+    .describe("Recommended peak power in kWp (after losses margin)"),
   numPaineis: zod
     .number()
     .describe("Recommended number of panels (at 400Wp typical)"),
@@ -774,6 +806,80 @@ export const AutoSizeSystemResponse = zod.object({
     .describe("Recommended battery capacity in kWh (null if not requested)"),
   hsp: zod.number().describe("Peak sun hours at location"),
   fatorRendimento: zod.number().describe("System efficiency factor used"),
+  cenariosPaineis: zod
+    .array(
+      zod.object({
+        potenciaWp: zod
+          .number()
+          .describe("Panel wattage scenario (e.g. 300, 350, 400, 450, 500)"),
+        quantidade: zod
+          .number()
+          .describe("Number of panels needed for this wattage"),
+        potenciaInstalada: zod
+          .number()
+          .describe("Total installed power in kWp for this scenario"),
+      }),
+    )
+    .optional()
+    .describe("Panel count scenarios for common wattages"),
+  cenariosDimensionamento: zod
+    .array(
+      zod.object({
+        tipo: zod
+          .enum(["conservador", "equilibrado", "agressivo"])
+          .describe("Scenario type"),
+        label: zod
+          .string()
+          .describe('Human-readable label (e.g. \"Conservador\")'),
+        descricao: zod
+          .string()
+          .describe("Short description of the scenario trade-offs"),
+        potenciaInstalada: zod.number().describe("Installed peak power in kWp"),
+        numPaineis: zod.number().describe("Number of 400 Wp panels"),
+        energiaAnualEstimada: zod
+          .number()
+          .describe("Estimated annual production in kWh"),
+        coberturaReal: zod.number().describe("Real annual coverage percentage"),
+        producaoMensal: zod
+          .array(zod.number())
+          .describe("Monthly production estimates in kWh (12 values)"),
+        consumoMensal: zod
+          .array(zod.number())
+          .describe("Monthly consumption estimates in kWh (12 values, flat)"),
+        autoconsumoMensal: zod
+          .array(zod.number())
+          .describe("Monthly self-consumed energy in kWh (12 values)"),
+        excessoMensal: zod
+          .array(zod.number())
+          .describe("Monthly grid-injected energy in kWh (12 values)"),
+        autoconsumoAnual: zod
+          .number()
+          .describe("Total self-consumed energy per year in kWh"),
+        excessoAnual: zod
+          .number()
+          .describe("Total grid-injected energy per year in kWh"),
+        autoconsumoPerc: zod
+          .number()
+          .describe("Self-consumption ratio (% of production self-consumed)"),
+        investimentoEstimado: zod
+          .number()
+          .describe("Estimated investment in EUR"),
+        poupancaAnual: zod.number().describe("Estimated annual savings in EUR"),
+        paybackAnos: zod.number().describe("Simple payback period in years"),
+        capacidadeBateriaRecomendada: zod
+          .number()
+          .nullable()
+          .describe(
+            "Recommended battery capacity in kWh (null if battery not included)",
+          ),
+      }),
+    )
+    .describe("Three sizing scenarios (conservador, equilibrado, agressivo)"),
+  recomendado: zod
+    .enum(["conservador", "equilibrado", "agressivo"])
+    .describe(
+      "Recommended scenario type based on best payback\/autoconsumo balance",
+    ),
   explicacao: zod.string().describe("Human-readable explanation of the sizing"),
 });
 

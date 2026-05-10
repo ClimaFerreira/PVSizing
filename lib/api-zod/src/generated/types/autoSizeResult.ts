@@ -5,9 +5,22 @@
  * PV Sizing Tool API
  * OpenAPI spec version: 0.1.0
  */
+import type { AutoSizeResultRecomendado } from "./autoSizeResultRecomendado";
+import type { CenarioDimensionamento } from "./cenarioDimensionamento";
+import type { CenarioPainel } from "./cenarioPainel";
 
 export interface AutoSizeResult {
-  /** Recommended peak power in kWp */
+  /** Daily energy consumption in kWh/day */
+  consumoDiario?: number;
+  /** Annual consumption adjusted for future growth (kWh) */
+  consumoAnualAjustado?: number;
+  /** Daily solar energy target (consumption × coverage %) */
+  energiaAlvoDiaria?: number;
+  /** System size before losses (kWp) */
+  potenciaBruta?: number;
+  /** Loss margin applied (fraction, e.g. 0.25 = 25%) */
+  margemPerdas?: number;
+  /** Recommended peak power in kWp (after losses margin) */
   potenciaRecomendada: number;
   /** Recommended number of panels (at 400Wp typical) */
   numPaineis: number;
@@ -24,6 +37,12 @@ export interface AutoSizeResult {
   hsp: number;
   /** System efficiency factor used */
   fatorRendimento: number;
+  /** Panel count scenarios for common wattages */
+  cenariosPaineis?: CenarioPainel[];
+  /** Three sizing scenarios (conservador, equilibrado, agressivo) */
+  cenariosDimensionamento: CenarioDimensionamento[];
+  /** Recommended scenario type based on best payback/autoconsumo balance */
+  recomendado: AutoSizeResultRecomendado;
   /** Human-readable explanation of the sizing */
   explicacao: string;
 }

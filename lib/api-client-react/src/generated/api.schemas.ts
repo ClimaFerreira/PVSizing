@@ -554,10 +554,99 @@ export interface AutoSizeBody {
   incluirBateria?: boolean;
   /** Target battery autonomy hours (default 4) */
   horasAutonomia?: number;
+  /** Expected annual consumption growth % to factor in (default 0) */
+  crescimentoFuturo?: number;
+  /** Electricity price per kWh in EUR for financial calculations (default 0.18) */
+  precoKwh?: number;
 }
 
+export interface CenarioPainel {
+  /** Panel wattage scenario (e.g. 300, 350, 400, 450, 500) */
+  potenciaWp: number;
+  /** Number of panels needed for this wattage */
+  quantidade: number;
+  /** Total installed power in kWp for this scenario */
+  potenciaInstalada: number;
+}
+
+/**
+ * Scenario type
+ */
+export type CenarioDimensionamentoTipo =
+  (typeof CenarioDimensionamentoTipo)[keyof typeof CenarioDimensionamentoTipo];
+
+export const CenarioDimensionamentoTipo = {
+  conservador: "conservador",
+  equilibrado: "equilibrado",
+  agressivo: "agressivo",
+} as const;
+
+export interface CenarioDimensionamento {
+  /** Scenario type */
+  tipo: CenarioDimensionamentoTipo;
+  /** Human-readable label (e.g. "Conservador") */
+  label: string;
+  /** Short description of the scenario trade-offs */
+  descricao: string;
+  /** Installed peak power in kWp */
+  potenciaInstalada: number;
+  /** Number of 400 Wp panels */
+  numPaineis: number;
+  /** Estimated annual production in kWh */
+  energiaAnualEstimada: number;
+  /** Real annual coverage percentage */
+  coberturaReal: number;
+  /** Monthly production estimates in kWh (12 values) */
+  producaoMensal: number[];
+  /** Monthly consumption estimates in kWh (12 values, flat) */
+  consumoMensal: number[];
+  /** Monthly self-consumed energy in kWh (12 values) */
+  autoconsumoMensal: number[];
+  /** Monthly grid-injected energy in kWh (12 values) */
+  excessoMensal: number[];
+  /** Total self-consumed energy per year in kWh */
+  autoconsumoAnual: number;
+  /** Total grid-injected energy per year in kWh */
+  excessoAnual: number;
+  /** Self-consumption ratio (% of production self-consumed) */
+  autoconsumoPerc: number;
+  /** Estimated investment in EUR */
+  investimentoEstimado: number;
+  /** Estimated annual savings in EUR */
+  poupancaAnual: number;
+  /** Simple payback period in years */
+  paybackAnos: number;
+  /**
+   * Recommended battery capacity in kWh (null if battery not included)
+   * @nullable
+   */
+  capacidadeBateriaRecomendada: number | null;
+}
+
+/**
+ * Recommended scenario type based on best payback/autoconsumo balance
+ */
+export type AutoSizeResultRecomendado =
+  (typeof AutoSizeResultRecomendado)[keyof typeof AutoSizeResultRecomendado];
+
+export const AutoSizeResultRecomendado = {
+  conservador: "conservador",
+  equilibrado: "equilibrado",
+  agressivo: "agressivo",
+} as const;
+
 export interface AutoSizeResult {
-  /** Recommended peak power in kWp */
+  /** Daily energy consumption in kWh/day */
+  consumoDiario?: number;
+  /** Annual consumption adjusted for future growth (kWh) */
+  consumoAnualAjustado?: number;
+  /** Daily solar energy target (consumption × coverage %) */
+  energiaAlvoDiaria?: number;
+  /** System size before losses (kWp) */
+  potenciaBruta?: number;
+  /** Loss margin applied (fraction, e.g. 0.25 = 25%) */
+  margemPerdas?: number;
+  /** Recommended peak power in kWp (after losses margin) */
   potenciaRecomendada: number;
   /** Recommended number of panels (at 400Wp typical) */
   numPaineis: number;
@@ -574,6 +663,12 @@ export interface AutoSizeResult {
   hsp: number;
   /** System efficiency factor used */
   fatorRendimento: number;
+  /** Panel count scenarios for common wattages */
+  cenariosPaineis?: CenarioPainel[];
+  /** Three sizing scenarios (conservador, equilibrado, agressivo) */
+  cenariosDimensionamento: CenarioDimensionamento[];
+  /** Recommended scenario type based on best payback/autoconsumo balance */
+  recomendado: AutoSizeResultRecomendado;
   /** Human-readable explanation of the sizing */
   explicacao: string;
 }

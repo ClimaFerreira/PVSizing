@@ -21,4 +21,8 @@ export interface AutoSizeBody {
   incluirBateria?: boolean;
   /** Target battery autonomy hours (default 4) */
   horasAutonomia?: number;
+  /** Expected annual consumption growth % to factor in (default 0) */
+  crescimentoFuturo?: number;
+  /** Electricity price per kWh in EUR for financial calculations (default 0.18) */
+  precoKwh?: number;
 }
