@@ -53,6 +53,12 @@ const panelSchema = z.object({
   coeficienteTemperatura: z.coerce.number(),
   coeficienteTemperaturaVoc: z.union([z.coerce.number(), z.null()]).optional(),
   noct: z.union([z.coerce.number(), z.null()]).optional(),
+}).refine(d => d.voc === 0 || d.vmp === 0 || d.voc > d.vmp, {
+  message: "Voc deve ser maior que Vmp (fisicamente impossível: Voc ≤ Vmp)",
+  path: ["voc"],
+}).refine(d => d.isc === 0 || d.imp === 0 || d.isc > d.imp, {
+  message: "Isc deve ser maior que Imp (fisicamente impossível: Isc ≤ Imp)",
+  path: ["isc"],
 });
 
 type PanelFormValues = z.infer<typeof panelSchema>;

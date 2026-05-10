@@ -13,7 +13,7 @@ import {
   calcStringSizing, calcStringSizingManual, maxPaineisPerString,
   type StringSizingResult, type MpptConfig,
 } from "@/lib/string-sizing";
-import { checkPanelInverter, checkBatteryInverter, type CompatResult } from "@/lib/compat-check";
+import { checkPanelData, checkPanelInverter, checkBatteryInverter, type CompatResult } from "@/lib/compat-check";
 
 interface Props {
   panel: SolarPanel | null;
@@ -589,6 +589,17 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
     [panelElec, invElec]
   );
 
+  const sanidadePainel = useMemo<CompatResult | null>(() => {
+    if (!panelElec) return null;
+    return checkPanelData({
+      potencia: panelElec.potencia,
+      voc: panelElec.voc,
+      vmp: panelElec.vmp,
+      isc: panelElec.isc,
+      imp: panelElec.imp,
+    });
+  }, [panelElec]);
+
   const compatPanelInv = useMemo<CompatResult | null>(() => {
     if (!panel || !inverter || !panelElec || !invElec) return null;
     return checkPanelInverter(
@@ -614,7 +625,7 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
     );
   }
 
-  const hasErrors = (activeSizing?.alertas.some(a => a.tipo === "erro") ?? false) || (compatPanelInv?.temErros ?? false);
+  const hasErrors = (activeSizing?.alertas.some(a => a.tipo === "erro") ?? false) || (compatPanelInv?.temErros ?? false) || (sanidadePainel?.temErros ?? false);
   const hasWarnings = (activeSizing?.alertas.some(a => a.tipo === "aviso") ?? false) || (compatPanelInv?.temAvisos ?? false) || (compatBatInv?.temAvisos ?? false);
 
   const displayConfig = activeSizing?.config;
@@ -709,6 +720,9 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {sanidadePainel && sanidadePainel.temErros && (
+            <CompatTable result={sanidadePainel} title="Dados do Painel — Verificação Física" />
+          )}
           {compatPanelInv && <CompatTable result={compatPanelInv} title="Painel ↔ Inversor" />}
           {compatBatInv && <CompatTable result={compatBatInv} title="Bateria ↔ Inversor" />}
         </CardContent>

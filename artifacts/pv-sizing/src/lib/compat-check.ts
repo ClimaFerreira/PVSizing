@@ -43,6 +43,46 @@ export interface BatteryCompat {
   tecnologia: string | null;
 }
 
+/**
+ * Sanity check on panel electrical data (physics constraints).
+ * Voc must be > Vmp, Isc must be > Imp.
+ * Call this before string sizing to catch bad datasheet imports.
+ */
+export function checkPanelData(panel: PanelCompat): CompatResult {
+  const itens: CompatItem[] = [];
+
+  const vocVmpOk = panel.voc > panel.vmp;
+  itens.push({
+    categoria: "Voc vs Vmp",
+    descricao: "Tensão em circuito aberto deve ser superior à tensão de máxima potência",
+    valorObtido: `Voc ${panel.voc} V / Vmp ${panel.vmp} V`,
+    valorLimite: "Voc > Vmp",
+    status: vocVmpOk ? "ok" : "erro",
+  });
+
+  const iscImpOk = panel.isc > panel.imp;
+  itens.push({
+    categoria: "Isc vs Imp",
+    descricao: "Corrente de curto-circuito deve ser superior à corrente de máxima potência",
+    valorObtido: `Isc ${panel.isc} A / Imp ${panel.imp} A`,
+    valorLimite: "Isc > Imp",
+    status: iscImpOk ? "ok" : "erro",
+  });
+
+  const pmppConsistente = panel.vmp > 0 && panel.imp > 0
+    ? Math.abs(panel.vmp * panel.imp - panel.potencia) / panel.potencia < 0.15
+    : true;
+  itens.push({
+    categoria: "Pmpp consistência",
+    descricao: "Potência Vmp × Imp deve aproximar-se da Pmpp declarada (tolerância ±15%)",
+    valorObtido: `${(panel.vmp * panel.imp).toFixed(0)} W`,
+    valorLimite: `~${panel.potencia} Wp`,
+    status: pmppConsistente ? "ok" : "aviso",
+  });
+
+  return buildResult(itens);
+}
+
 export function checkPanelInverter(
   panel: PanelCompat,
   inv: InverterCompat,
