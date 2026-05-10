@@ -907,13 +907,15 @@ export default function Wizard() {
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Nº de Painéis</label>
                             <Input type="number" min={1} step={1} value={manual.numPaineis}
-                              onChange={e => setManual(m => m ? { ...m, numPaineis: Math.max(1, +e.target.value) } : m)} />
+                              onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, numPaineis: v } : m); }}
+                              onBlur={e => { const v = Math.max(1, Math.round(+e.target.value || 1)); setManual(m => m ? { ...m, numPaineis: v } : m); }} />
                             <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.numPaineis} un.</p>
                           </div>
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Potência/Painel (Wp)</label>
                             <Input type="number" min={100} max={700} step={5} value={manual.potenciaWp}
-                              onChange={e => setManual(m => m ? { ...m, potenciaWp: Math.max(100, +e.target.value) } : m)} />
+                              onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, potenciaWp: v } : m); }}
+                              onBlur={e => { const v = Math.max(100, Math.min(700, Math.round(+e.target.value || 400))); setManual(m => m ? { ...m, potenciaWp: v } : m); }} />
                             <p className="text-[10px] text-muted-foreground mt-1">Auto: 400 Wp</p>
                           </div>
                           <div>
@@ -926,26 +928,30 @@ export default function Wizard() {
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">HSP (h/dia)</label>
                             <Input type="number" min={1} max={8} step={0.01} value={manual.hsp}
-                              onChange={e => setManual(m => m ? { ...m, hsp: Math.max(1, +e.target.value) } : m)} />
+                              onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, hsp: v } : m); }}
+                              onBlur={e => { const v = Math.max(1, Math.min(8, +e.target.value || 1)); setManual(m => m ? { ...m, hsp: v } : m); }} />
                             <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.hsp} h/dia</p>
                           </div>
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Rendimento Global (%)</label>
                             <Input type="number" min={50} max={100} step={1} value={Math.round(manual.rendimento * 100)}
-                              onChange={e => setManual(m => m ? { ...m, rendimento: Math.max(0.5, Math.min(1, +e.target.value / 100)) } : m)} />
+                              onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, rendimento: v / 100 } : m); }}
+                              onBlur={e => { const v = Math.max(50, Math.min(100, +e.target.value || 78)); setManual(m => m ? { ...m, rendimento: v / 100 } : m); }} />
                             <p className="text-[10px] text-muted-foreground mt-1">Auto: {Math.round(sizing.fatorRendimento * 100)}%</p>
                           </div>
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Meta de Cobertura (%)</label>
                             <Input type="number" min={10} max={150} step={1} value={manual.coberturaMeta}
-                              onChange={e => setManual(m => m ? { ...m, coberturaMeta: Math.min(150, Math.max(10, +e.target.value)) } : m)} />
+                              onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, coberturaMeta: v } : m); }}
+                              onBlur={e => { const v = Math.max(10, Math.min(150, +e.target.value || 80)); setManual(m => m ? { ...m, coberturaMeta: v } : m); }} />
                             <p className="text-[10px] text-muted-foreground mt-1">Auto: {consumoData.coberturaMeta}%</p>
                           </div>
                           {consumoData.incluirBateria && (
                             <div>
                               <label className="text-xs font-medium text-muted-foreground block mb-1.5">Capacidade Bateria (kWh)</label>
                               <Input type="number" min={0} step={0.5} value={manual.capacidadeBateria}
-                                onChange={e => setManual(m => m ? { ...m, capacidadeBateria: Math.max(0, +e.target.value) } : m)} />
+                                onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, capacidadeBateria: v } : m); }}
+                                onBlur={e => { const v = Math.max(0, +e.target.value || 0); setManual(m => m ? { ...m, capacidadeBateria: v } : m); }} />
                               <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.capacidadeBateriaRecomendada ?? 0} kWh</p>
                             </div>
                           )}

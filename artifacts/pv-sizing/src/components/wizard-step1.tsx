@@ -582,10 +582,17 @@ export default function WizardStep1({ data, onChange }: Props) {
           <div className="relative flex-1">
             <Input
               type="number" step="0.001" min={0.01} max={1}
-              value={data.precoKwh}
+              defaultValue={data.precoKwh}
+              key={data.precoKwh}
               onChange={e => {
                 const v = parseFloat(e.target.value);
                 if (!isNaN(v) && v > 0) set({ precoKwh: Math.round(v * 10000) / 10000 });
+              }}
+              onBlur={e => {
+                const v = parseFloat(e.target.value);
+                const clamped = isNaN(v) || v <= 0 ? 0.18 : Math.min(2, Math.round(v * 10000) / 10000);
+                if (clamped !== data.precoKwh) set({ precoKwh: clamped });
+                e.target.value = String(clamped);
               }}
               className="pr-12"
             />
