@@ -49,6 +49,8 @@ import WizardStep1Cliente, {
 import WizardStep3Perfil from "@/components/wizard-step3-perfil";
 import WizardStep5Tecnica from "@/components/wizard-step5-tecnica";
 import WizardStep7Financeiro from "@/components/wizard-step7-financeiro";
+import WizardOrcamento from "@/components/wizard-orcamento";
+import { type OrcamentoState, defaultOrcamentoState } from "@/lib/orcamento";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -162,6 +164,7 @@ export default function Wizard() {
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
   const [manualMpptConfig, setManualMpptConfig] = useState<import("@/lib/string-sizing").MpptConfig | null>(null);
   const [investimentoManual, setInvestimentoManual] = useState<number | null>(null);
+  const [orcamentoState, setOrcamentoState] = useState<OrcamentoState | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
@@ -197,6 +200,30 @@ export default function Wizard() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sizing]);
+
+  // ── Initialise orçamento when entering step 8 ────────────────────────────
+  useEffect(() => {
+    if (step !== 8 || orcamentoState !== null) return;
+    const eq = equipForm.getValues();
+    const panel    = panels?.find(p => p.id === eq.panelId);
+    const inverter = inverters?.find(i => i.id === eq.inverterId);
+    const battery  = eq.batteryId ? batteries?.find(b => b.id === eq.batteryId) : null;
+    const numPaineis = numPaineisStep5 ?? effectiveSizing?.numPaineis ?? sizing?.numPaineis ?? 0;
+    const investimento = investimentoManual ?? activeCenario?.investimentoEstimado ?? 0;
+    setOrcamentoState(defaultOrcamentoState({
+      panelNome:        panel?.nome,
+      panelFabricante:  panel?.fabricante,
+      panelPotencia:    panel?.potencia ? Number(panel.potencia) : undefined,
+      inversorNome:     inverter?.nome,
+      inversorFabricante: inverter?.fabricante,
+      bateriaNome:      battery?.nome,
+      bateriaFabricante: battery?.fabricante,
+      numeroPaineis:    numPaineis,
+      investimentoTotal: investimento,
+      moradaInstalacao: clienteForm.getValues("morada"),
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // ── Draft: check on mount ──────────────────────────────────────────────────
   useEffect(() => {
@@ -272,6 +299,42 @@ export default function Wizard() {
     };
   }, [sizing, manual]);
 
+  // ── Financial projections for orçamento estudo ─────────────────────────────
+  const PRECO_INJECAO_ORC = 0.06;
+  const estudoFinanceiro = useMemo(() => {
+    if (!activeCenario) return null;
+    const { potenciaInstalada, energiaAnualEstimada, autoconsumoPerc, autoconsumoAnual,
+            poupancaAnual, paybackAnos, excessoAnual } = activeCenario;
+    const receitaExcedente = excessoAnual * PRECO_INJECAO_ORC;
+    const investimento = investimentoManual ?? activeCenario.investimentoEstimado;
+    let poupancaAcum = -investimento;
+    let npvAcum = -investimento;
+    let p10 = 0, p15 = 0, p25 = 0, npv25 = 0, paybackReal = paybackAnos;
+    for (let ano = 1; ano <= 25; ano++) {
+      const d = Math.pow(1 - 0.005, ano - 1);
+      const t = Math.pow(1 + 0.03, ano - 1);
+      const fluxo = poupancaAnual * d * t + receitaExcedente * d;
+      poupancaAcum += fluxo;
+      npvAcum += fluxo / Math.pow(1 + 0.04, ano);
+      if (poupancaAcum >= 0 && paybackReal === paybackAnos) paybackReal = ano;
+      if (ano === 10) p10 = poupancaAcum;
+      if (ano === 15) p15 = poupancaAcum;
+      if (ano === 25) { p25 = poupancaAcum; npv25 = npvAcum; }
+    }
+    return {
+      potenciaInstalada,
+      producaoAnual: energiaAnualEstimada,
+      autoconsumoPerc,
+      poupancaAnual: Math.round(poupancaAnual + receitaExcedente),
+      paybackAnos: paybackReal,
+      poupanca10: Math.round(p10),
+      poupanca15: Math.round(p15),
+      poupanca25: Math.round(p25),
+      npv25: Math.round(npv25),
+      co2Anual: Math.round(autoconsumoAnual * 0.253 / 1000 * 10) / 10,
+    };
+  }, [activeCenario, investimentoManual]);
+
   // Compare manual vs active cenario (not the equilibrado top-level values)
   const isManualModified = useMemo(() => {
     if (!manual || !sizing) return false;
@@ -325,6 +388,7 @@ export default function Wizard() {
     setPerfilDiurnoPct(60);
     setManualMpptConfig(null);
     setInvestimentoManual(null);
+    setOrcamentoState(null);
     clienteForm.reset({ tipoCliente: "particular", morada: "", tipoTarifa: "simples", potenciaContratada: 3.45 });
     locForm.reset({ latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 });
     equipForm.reset({});
@@ -1570,6 +1634,15 @@ export default function Wizard() {
               </div>
             </CardContent>
           </Card>
+
+          {/* ── Orçamento Comercial ──────────────────────────────────────── */}
+          {orcamentoState && (
+            <WizardOrcamento
+              state={orcamentoState}
+              onChange={setOrcamentoState}
+              estudo={estudoFinanceiro}
+            />
+          )}
         </div>
       )}
 
