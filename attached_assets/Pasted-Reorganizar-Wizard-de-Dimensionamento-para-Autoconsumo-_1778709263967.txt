@@ -1,0 +1,130 @@
+Reorganizar Wizard de Dimensionamento para Autoconsumo
+
+O fluxo atual deve ser melhorado. O dimensionamento de autoconsumo deve seguir uma ordem mais lógica, começando pelo cliente e terminando com uma análise financeira clara.
+
+Nova ordem sugerida
+1. Cliente e Localização
+2. Análise de Consumos
+3. Perfil de Autoconsumo
+4. Pré-Dimensionamento FV
+5. Seleção de Equipamentos
+6. Análise Técnica
+7. Estudo de Poupança e Retorno
+8. Proposta Técnica
+1. Cliente e Localização
+
+Começar por:
+
+cliente;
+morada da instalação;
+coordenadas;
+tipo de cliente;
+tipo de tarifa;
+potência contratada;
+orientação e inclinação dos painéis.
+2. Análise de Consumos
+
+Depois analisar:
+
+faturas carregadas;
+gráfico mensal da fatura;
+consumo anual;
+consumo mensal;
+períodos Vazio / Cheio / Ponta;
+preço médio da energia;
+perfil de consumo diário.
+3. Perfil de Autoconsumo
+
+Antes de dimensionar painéis, definir:
+
+consumo diurno;
+consumo noturno;
+percentagem de autoconsumo;
+excedentes previstos;
+necessidade de bateria;
+crescimento futuro.
+4. Pré-Dimensionamento FV
+
+Apresentar cenários:
+
+Conservador;
+Equilibrado;
+Agressivo;
+Personalizado.
+
+Mostrar:
+
+potência kWp;
+número de painéis;
+produção anual;
+cobertura real;
+autoconsumo;
+excedente.
+5. Seleção de Equipamentos
+
+Escolher:
+
+painel;
+inversor;
+bateria;
+proteções;
+estrutura;
+acessórios.
+6. Análise Técnica
+
+Validar:
+
+compatibilidade painel/inversor;
+compatibilidade bateria/inversor;
+potência DC/AC;
+strings;
+MPPT;
+tensão Voc;
+tensão Vmpp;
+corrente Isc;
+limites do inversor;
+diagrama unifilar.
+7. Estudo de Poupança e Retorno
+
+No final, apresentar uma página clara para o cliente justificar o investimento.
+
+Deve incluir:
+investimento estimado;
+produção anual;
+energia autoconsumida;
+energia excedente;
+poupança anual;
+receita com excedente;
+custo atual da energia;
+custo após instalação;
+payback simples;
+poupança acumulada a 10/15/25 anos;
+redução estimada da fatura;
+rentabilidade do investimento.
+Exemplo
+Investimento: 18 500 €
+Poupança anual estimada: 3 200 €
+Payback simples: 5,8 anos
+Poupança a 25 anos: 80 000 €
+8. Proposta Técnica
+
+Só depois da análise financeira deve gerar:
+
+proposta técnica;
+resumo comercial;
+lista de equipamentos;
+análise técnica;
+estudo financeiro;
+anexos técnicos.
+Importante
+
+O Wizard deve separar claramente:
+
+Dimensionamento técnico ≠ Estudo financeiro ≠ Proposta final
+
+Assim o cliente percebe:
+
+quanto vai produzir;
+quanto vai poupar;
+quanto custa;
+em quanto tempo recupera o investimento.
