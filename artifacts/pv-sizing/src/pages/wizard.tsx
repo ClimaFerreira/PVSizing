@@ -161,6 +161,7 @@ export default function Wizard() {
   const [pendingDraft, setPendingDraft] = useState<WizardDraftData | null>(null);
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
   const [manualMpptConfig, setManualMpptConfig] = useState<import("@/lib/string-sizing").MpptConfig | null>(null);
+  const [investimentoManual, setInvestimentoManual] = useState<number | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
@@ -323,6 +324,7 @@ export default function Wizard() {
     setLastSaved(null);
     setPerfilDiurnoPct(60);
     setManualMpptConfig(null);
+    setInvestimentoManual(null);
     clienteForm.reset({ tipoCliente: "particular", morada: "", tipoTarifa: "simples", potenciaContratada: 3.45 });
     locForm.reset({ latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 });
     equipForm.reset({});
@@ -1484,6 +1486,8 @@ export default function Wizard() {
           precoKwh={consumoData.precoKwh ?? 0.18}
           consumoAnual={consumoData.consumoAnual}
           consumoDiurnoPct={perfilDiurnoPct}
+          investimento={investimentoManual ?? undefined}
+          onInvestimentoChange={setInvestimentoManual}
         />
       )}
       {step === 7 && !activeCenario && (

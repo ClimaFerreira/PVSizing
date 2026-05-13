@@ -1,11 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   Euro, TrendingUp, TrendingDown, Zap, Sun, Battery,
-  BarChart3, Target, Clock, Leaf,
+  BarChart3, Target, Clock, Leaf, Pencil, Check, X,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend,
 } from "recharts";
@@ -25,10 +27,12 @@ interface AutoSizeCenario {
 }
 
 interface Props {
-  cenario:       AutoSizeCenario;
-  precoKwh:      number;
-  consumoAnual:  number;
-  consumoDiurnoPct: number;
+  cenario:              AutoSizeCenario;
+  precoKwh:             number;
+  consumoAnual:         number;
+  consumoDiurnoPct:     number;
+  investimento?:        number;
+  onInvestimentoChange: (v: number) => void;
 }
 
 const TAXA_ESCALADA  = 0.03;  // 3% tariff escalation per year
@@ -45,7 +49,7 @@ function fmtEur(n: number) {
   return `${fmt(Math.round(n))} €`;
 }
 
-export default function WizardStep7Financeiro({ cenario, precoKwh, consumoAnual, consumoDiurnoPct }: Props) {
+export default function WizardStep7Financeiro({ cenario, precoKwh, consumoAnual, consumoDiurnoPct, investimento, onInvestimentoChange }: Props) {
   const {
     investimentoEstimado,
     poupancaAnual,
@@ -57,6 +61,31 @@ export default function WizardStep7Financeiro({ cenario, precoKwh, consumoAnual,
     potenciaInstalada,
   } = cenario;
 
+  // Use manual override if set, otherwise fall back to auto estimate
+  const investimentoAtivo = investimento ?? investimentoEstimado;
+
+  // Inline editing state
+  const [editando, setEditando] = useState(false);
+  const [inputVal, setInputVal] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editando) {
+      setInputVal(String(Math.round(investimentoAtivo)));
+      setTimeout(() => inputRef.current?.select(), 0);
+    }
+  }, [editando]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function confirmarEdicao() {
+    const v = parseFloat(inputVal.replace(/\s/g, "").replace(",", "."));
+    if (!isNaN(v) && v > 0) onInvestimentoChange(v);
+    setEditando(false);
+  }
+
+  function cancelarEdicao() {
+    setEditando(false);
+  }
+
   const custoAtual       = consumoAnual * precoKwh;
   const receitaExcedente = excessoAnual * PRECO_INJECAO;
   const poupancaTotal    = poupancaAnual + receitaExcedente;
@@ -66,8 +95,8 @@ export default function WizardStep7Financeiro({ cenario, precoKwh, consumoAnual,
   // Year-by-year projection
   const projecao = useMemo(() => {
     const rows: { ano: number; poupanca: number; poupancaAcum: number; npvAcum: number }[] = [];
-    let poupancaAcum = -investimentoEstimado;
-    let npvAcum      = -investimentoEstimado;
+    let poupancaAcum = -investimentoAtivo;
+    let npvAcum      = -investimentoAtivo;
 
     for (let ano = 1; ano <= ANOS_VIDA; ano++) {
       const degradFactor   = Math.pow(1 - DEGRADACAO, ano - 1);
@@ -80,7 +109,7 @@ export default function WizardStep7Financeiro({ cenario, precoKwh, consumoAnual,
       rows.push({ ano, poupanca: Math.round(fluxoAno), poupancaAcum: Math.round(poupancaAcum), npvAcum: Math.round(npvAcum) });
     }
     return rows;
-  }, [investimentoEstimado, poupancaAnual, receitaExcedente]);
+  }, [investimentoAtivo, poupancaAnual, receitaExcedente]);
 
   const p10  = projecao.find(r => r.ano === 10)?.poupancaAcum ?? 0;
   const p15  = projecao.find(r => r.ano === 15)?.poupancaAcum ?? 0;
@@ -89,7 +118,7 @@ export default function WizardStep7Financeiro({ cenario, precoKwh, consumoAnual,
   const paybackReal = projecao.findIndex(r => r.poupancaAcum >= 0) + 1;
 
   // Simple IRR approximation (annualized return)
-  const irr = p25 > 0 ? Math.pow((investimentoEstimado + p25) / investimentoEstimado, 1 / ANOS_VIDA) - 1 : 0;
+  const irr = p25 > 0 ? Math.pow((investimentoAtivo + p25) / investimentoAtivo, 1 / ANOS_VIDA) - 1 : 0;
 
   // CO2 savings (0.253 kg CO2/kWh — Portuguese grid factor)
   const co2Anual = Math.round(autoconsumoAnual * 0.253 / 1000 * 10) / 10; // tonnes/year
@@ -121,10 +150,44 @@ export default function WizardStep7Financeiro({ cenario, precoKwh, consumoAnual,
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <KPI icon={Euro}      label="Investimento estimado"  value={fmtEur(investimentoEstimado)}         sub={`${potenciaInstalada} kWp`} />
-            <KPI icon={TrendingUp} label="Poupança anual"        value={fmtEur(poupancaTotal)}                sub="energia + injeção" highlight />
-            <KPI icon={Clock}     label="Payback simples"        value={`${paybackReal > 0 ? paybackReal : paybackAnos} anos`}  sub="estimado" highlight />
-            <KPI icon={BarChart3} label="Poupança a 25 anos"     value={fmtEur(p25)}                          sub="valor nominal" />
+            {/* Editable investment card */}
+            <div className={cn("flex items-start gap-3 p-4 rounded-xl border", "border-border bg-muted/20")}>
+              <Euro size={20} className="mt-0.5 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground">
+                  Investimento
+                  {investimento != null && (
+                    <span className="ml-1 text-amber-600 dark:text-amber-400">(editado)</span>
+                  )}
+                </p>
+                {editando ? (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <Input
+                      ref={inputRef}
+                      value={inputVal}
+                      onChange={e => setInputVal(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") confirmarEdicao(); if (e.key === "Escape") cancelarEdicao(); }}
+                      className="h-7 text-sm font-bold px-2 w-28"
+                    />
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-emerald-600" onClick={confirmarEdicao}><Check size={13} /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={cancelarEdicao}><X size={13} /></Button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setEditando(true)}
+                    className="flex items-center gap-1 group"
+                    title="Clique para editar o valor do investimento"
+                  >
+                    <span className="text-lg font-bold leading-tight group-hover:text-primary transition-colors">{fmtEur(investimentoAtivo)}</span>
+                    <Pencil size={12} className="opacity-0 group-hover:opacity-60 transition-opacity shrink-0 mt-0.5" />
+                  </button>
+                )}
+                <p className="text-xs text-muted-foreground mt-0.5">{potenciaInstalada} kWp</p>
+              </div>
+            </div>
+            <KPI icon={TrendingUp} label="Poupança anual"    value={fmtEur(poupancaTotal)}                               sub="energia + injeção" highlight />
+            <KPI icon={Clock}      label="Payback simples"   value={`${paybackReal > 0 ? paybackReal : paybackAnos} anos`} sub="estimado" highlight />
+            <KPI icon={BarChart3}  label="Poupança a 25 anos" value={fmtEur(p25)}                                         sub="valor nominal" />
           </div>
         </CardContent>
       </Card>
