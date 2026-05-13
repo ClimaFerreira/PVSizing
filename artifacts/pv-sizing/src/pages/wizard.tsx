@@ -160,6 +160,7 @@ export default function Wizard() {
   const [showRecovery, setShowRecovery] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<WizardDraftData | null>(null);
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
+  const [manualMpptConfig, setManualMpptConfig] = useState<import("@/lib/string-sizing").MpptConfig | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
@@ -321,6 +322,7 @@ export default function Wizard() {
     setShowManualAdjust(false);
     setLastSaved(null);
     setPerfilDiurnoPct(60);
+    setManualMpptConfig(null);
     clienteForm.reset({ tipoCliente: "particular", morada: "", tipoTarifa: "simples", potenciaContratada: 3.45 });
     locForm.reset({ latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 });
     equipForm.reset({});
@@ -1446,6 +1448,8 @@ export default function Wizard() {
               numPaineis={numPaineis}
               potenciaInstalada={potenciaRealKwp}
               onNumPaineisChange={setNumPaineisStep5}
+              mpptConfig={manualMpptConfig}
+              onMpptConfigChange={setManualMpptConfig}
             />
 
             <Card className="border-green-500/30 bg-green-50/30 dark:bg-green-950/10">

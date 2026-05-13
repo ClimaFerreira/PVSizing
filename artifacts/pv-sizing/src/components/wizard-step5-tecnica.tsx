@@ -22,6 +22,8 @@ interface Props {
   numPaineis: number;
   potenciaInstalada: number;
   onNumPaineisChange?: (n: number) => void;
+  mpptConfig: MpptConfig | null;
+  onMpptConfigChange: (config: MpptConfig | null) => void;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -548,8 +550,7 @@ function SingleLineDiagram({ panel, inverter, battery, mpptConfig }: {
 /* ─────────────────────────────────────────────────────────────────────────────
    Main export
 ───────────────────────────────────────────────────────────────────────────── */
-export default function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInstalada, onNumPaineisChange }: Props) {
-  const [manualMpptConfig, setManualMpptConfig] = useState<MpptConfig | null>(null);
+export default function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInstalada, onNumPaineisChange, mpptConfig: manualMpptConfig, onMpptConfigChange }: Props) {
 
   const panelElec = useMemo(() => panel ? {
     voc: Number(panel.voc),
@@ -571,7 +572,7 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
     vdcMax: inverter.vdcMax != null ? Number(inverter.vdcMax) : null,
   } : null, [inverter]);
 
-  useEffect(() => { setManualMpptConfig(null); }, [panel?.id, inverter?.id, numPaineis]);
+  useEffect(() => { onMpptConfigChange(null); }, [panel?.id, inverter?.id, numPaineis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const autoSizing = useMemo<StringSizingResult | null>(() => {
     if (!panelElec || !invElec || numPaineis <= 0) return null;
@@ -694,7 +695,7 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
           invElec={invElec}
           numPaineisAuto={numPaineis}
           onConfigChange={(mpptConfig) => {
-            setManualMpptConfig(mpptConfig);
+            onMpptConfigChange(mpptConfig);
             const total = mpptConfig.flat().reduce((a, b) => a + b, 0);
             if (total > 0) onNumPaineisChange?.(total);
           }}
