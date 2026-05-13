@@ -42,7 +42,13 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } 
 import { cn } from "@/lib/utils";
 
 import WizardStep1, { ConsumoData, DEFAULT_CONSUMO_DATA } from "@/components/wizard-step1";
+import WizardStep1Cliente, {
+  clienteSchema, localizacaoSchema,
+  type ClienteForm, type LocalizacaoForm,
+} from "@/components/wizard-step1-cliente";
+import WizardStep3Perfil from "@/components/wizard-step3-perfil";
 import WizardStep5Tecnica from "@/components/wizard-step5-tecnica";
+import WizardStep7Financeiro from "@/components/wizard-step7-financeiro";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -57,19 +63,14 @@ const CENARIO_META: Record<CenarioTipo, { label: string; Icon: React.ElementType
 };
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
-const localizacaoSchema = z.object({
-  latitude:  z.coerce.number().min(36).max(42.5),
-  longitude: z.coerce.number().min(-10).max(-6),
-  inclinacao: z.coerce.number().min(0).max(90),
-  azimute:   z.coerce.number().min(-180).max(180),
-});
+// localizacaoSchema and LocalizacaoForm are imported from wizard-step1-cliente
+
 const equipamentosSchema = z.object({
   panelId:   z.coerce.number().min(1, "Selecione um painel"),
   inverterId: z.coerce.number().min(1, "Selecione um inversor"),
   batteryId: z.coerce.number().optional(),
 });
 
-type LocalizacaoForm  = z.infer<typeof localizacaoSchema>;
 type EquipamentosForm = z.infer<typeof equipamentosSchema>;
 
 interface CenarioPainel {
@@ -137,11 +138,14 @@ interface ManualOverride {
 }
 
 const STEPS = [
-  { id: 1, label: "Consumo",      icon: Zap },
-  { id: 2, label: "Localização",  icon: MapPin },
-  { id: 3, label: "Estudo",       icon: BarChart3 },
-  { id: 4, label: "Equipamentos", icon: Settings2 },
-  { id: 5, label: "Análise Téc.", icon: CheckCircle2 },
+  { id: 1, label: "Cliente",   icon: MapPin },
+  { id: 2, label: "Consumo",   icon: Zap },
+  { id: 3, label: "Perfil",    icon: Target },
+  { id: 4, label: "Estudo",    icon: BarChart3 },
+  { id: 5, label: "Equip.",    icon: Settings2 },
+  { id: 6, label: "Técnica",   icon: CheckCircle2 },
+  { id: 7, label: "Poupança",  icon: Euro },
+  { id: 8, label: "Proposta",  icon: Save },
 ];
 
 export default function Wizard() {
@@ -167,8 +171,11 @@ export default function Wizard() {
   const { data: locations } = useListLocations();
   const createProposal      = useCreateProposal();
 
-  const locForm   = useForm<LocalizacaoForm>({ resolver: zodResolver(localizacaoSchema), defaultValues: { latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 } });
-  const equipForm = useForm<EquipamentosForm>({ resolver: zodResolver(equipamentosSchema), defaultValues: {} });
+  const [perfilDiurnoPct, setPerfilDiurnoPct] = useState(60);
+
+  const clienteForm = useForm<ClienteForm>({ resolver: zodResolver(clienteSchema), defaultValues: { tipoCliente: "particular", morada: "", tipoTarifa: "simples", potenciaContratada: 3.45 } });
+  const locForm     = useForm<LocalizacaoForm>({ resolver: zodResolver(localizacaoSchema), defaultValues: { latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 } });
+  const equipForm   = useForm<EquipamentosForm>({ resolver: zodResolver(equipamentosSchema), defaultValues: {} });
 
   // When new sizing arrives, pick recommended scenario and initialise manual from it
   useEffect(() => {
@@ -313,10 +320,12 @@ export default function Wizard() {
     setSelectedCenarioTipo("equilibrado");
     setShowManualAdjust(false);
     setLastSaved(null);
+    setPerfilDiurnoPct(60);
+    clienteForm.reset({ tipoCliente: "particular", morada: "", tipoTarifa: "simples", potenciaContratada: 3.45 });
     locForm.reset({ latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 });
     equipForm.reset({});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locForm, equipForm]);
+  }, [clienteForm, locForm, equipForm]);
 
   // ── Auto-size ─────────────────────────────────────────────────────────────
   const runAutoSize = async (consumo: ConsumoData, loc: LocalizacaoForm) => {
@@ -378,20 +387,26 @@ export default function Wizard() {
   // ── Navigation ────────────────────────────────────────────────────────────
   const goNext = async () => {
     if (step === 1) {
+      // Validate both client data and location
+      const clienteOk = await clienteForm.trigger();
+      const locOk     = await locForm.trigger();
+      if (!clienteOk || !locOk) return;
+      setLocData(locForm.getValues());
+      setStep(2);
+    } else if (step === 2) {
       if (consumoData.consumoAnual < 100) {
         toast({ title: "Consumo deve ser ≥ 100 kWh", variant: "destructive" });
         return;
       }
-      setStep(2);
-    } else if (step === 2) {
-      if (!(await locForm.trigger())) return;
-      const loc = locForm.getValues();
-      setLocData(loc);
-      await runAutoSize(consumoData, loc);
       setStep(3);
     } else if (step === 3) {
+      // Run auto-size with consumption + location data before showing study
+      const loc = locData ?? locForm.getValues();
+      await runAutoSize(consumoData, loc);
       setStep(4);
     } else if (step === 4) {
+      setStep(5);
+    } else if (step === 5) {
       const vals = equipForm.getValues();
       if (!vals.panelId || !vals.inverterId) {
         toast({ title: "Selecione pelo menos um painel e um inversor", variant: "destructive" });
@@ -403,7 +418,11 @@ export default function Wizard() {
         ? Math.ceil((eff.potenciaInstalada * 1000) / (selectedPanel?.potencia ?? 400))
         : (manual?.numPaineis ?? 0);
       setNumPaineisStep5(computed);
-      setStep(5);
+      setStep(6);
+    } else if (step === 6) {
+      setStep(7);
+    } else if (step === 7) {
+      setStep(8);
     }
   };
 
@@ -425,7 +444,7 @@ export default function Wizard() {
                 <p>
                   Foi encontrado um estudo guardado automaticamente{" "}
                   <strong>{pendingDraft ? draftAge(pendingDraft) : ""}</strong>,
-                  no passo <strong>{pendingDraft?.step ?? 1}</strong> de 4.
+                  no passo <strong>{pendingDraft?.step ?? 1}</strong> de 8.
                 </p>
                 {pendingDraft?.sizing && (
                   <p className="text-sm text-muted-foreground">
@@ -502,11 +521,16 @@ export default function Wizard() {
         </div>
       </div>
 
-      {/* ── STEP 1: Consumo ─────────────────────────────────────────────────── */}
+      {/* ── STEP 1: Cliente e Localização ───────────────────────────────────── */}
       {step === 1 && (
+        <WizardStep1Cliente clienteForm={clienteForm} locForm={locForm} />
+      )}
+
+      {/* ── STEP 2: Análise de Consumos ──────────────────────────────────────── */}
+      {step === 2 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Zap size={20} /> Consumo Energético</CardTitle>
+            <CardTitle className="flex items-center gap-2"><Zap size={20} /> Análise de Consumos</CardTitle>
             <CardDescription>
               Carregue faturas elétricas para análise automática com IA, ou introduza os valores manualmente.
             </CardDescription>
@@ -517,68 +541,18 @@ export default function Wizard() {
         </Card>
       )}
 
-      {/* ── STEP 2: Localização ─────────────────────────────────────────────── */}
-      {step === 2 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><MapPin size={20} /> Localização e Orientação</CardTitle>
-            <CardDescription>Defina onde fica a instalação e a orientação dos painéis para calcular o rendimento solar.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {locations && locations.length > 0 && (
-              <div>
-                <label className="text-sm font-medium">Localidade (pré-definida)</label>
-                <Select onValueChange={v => {
-                  const loc = locations.find(l => l.nome === v);
-                  if (loc) { locForm.setValue("latitude", loc.latitude); locForm.setValue("longitude", loc.longitude); }
-                }}>
-                  <SelectTrigger className="mt-1.5"><SelectValue placeholder="Selecionar localidade..." /></SelectTrigger>
-                  <SelectContent>
-                    {locations.map(l => <SelectItem key={l.nome} value={l.nome}>{l.nome} — {l.regiao}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <Form {...locForm}>
-              <form className="grid grid-cols-2 gap-4">
-                <FormField control={locForm.control} name="latitude" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Latitude</FormLabel>
-                    <FormControl><Input type="number" step="0.0001" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={locForm.control} name="longitude" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Longitude</FormLabel>
-                    <FormControl><Input type="number" step="0.0001" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={locForm.control} name="inclinacao" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Inclinação (°)</FormLabel>
-                    <FormControl><Input type="number" min={0} max={90} {...field} /></FormControl>
-                    <p className="text-xs text-muted-foreground">0°=horizontal · Óptimo ≈ 30–35°</p>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={locForm.control} name="azimute" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Azimute (° de Sul)</FormLabel>
-                    <FormControl><Input type="number" min={-180} max={180} {...field} /></FormControl>
-                    <p className="text-xs text-muted-foreground">0°=Sul · -90°=Este · +90°=Oeste</p>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+      {/* ── STEP 3: Perfil de Autoconsumo ───────────────────────────────────── */}
+      {step === 3 && (
+        <WizardStep3Perfil
+          consumoData={consumoData}
+          onConsumoChange={setConsumoData}
+          consumoDiurnoPct={perfilDiurnoPct}
+          onDiurnoChange={setPerfilDiurnoPct}
+        />
       )}
 
-      {/* ── STEP 3: Estudo ──────────────────────────────────────────────────── */}
-      {step === 3 && (
+      {/* ── STEP 4: Pré-Dimensionamento FV ─────────────────────────────────── */}
+      {step === 4 && (
         <div className="space-y-4">
           {isSizing ? (
             <Card>
@@ -1283,8 +1257,8 @@ export default function Wizard() {
         </div>
       )}
 
-      {/* ── STEP 4: Equipamentos ────────────────────────────────────────────── */}
-      {step === 4 && (
+      {/* ── STEP 5: Seleção de Equipamentos ─────────────────────────────────── */}
+      {step === 5 && (
         <div className="space-y-4">
           {(effectiveSizing ?? sizing) && (() => {
             const eff = (effectiveSizing ?? sizing)!;
@@ -1422,8 +1396,8 @@ export default function Wizard() {
         </div>
       )}
 
-      {/* ── STEP 5: Análise Técnica ─────────────────────────────────────────── */}
-      {step === 5 && (() => {
+      {/* ── STEP 6: Análise Técnica ─────────────────────────────────────────── */}
+      {step === 6 && (() => {
         const vals = equipForm.getValues();
         const eff = effectiveSizing ?? sizing;
         const panel = panels?.find(p => p.id === vals.panelId) ?? null;
@@ -1499,15 +1473,107 @@ export default function Wizard() {
         );
       })()}
 
+      {/* ── STEP 7: Estudo de Poupança e Retorno ─────────────────────────────── */}
+      {step === 7 && activeCenario && (
+        <WizardStep7Financeiro
+          cenario={activeCenario}
+          precoKwh={consumoData.precoKwh ?? 0.18}
+          consumoAnual={consumoData.consumoAnual}
+          consumoDiurnoPct={perfilDiurnoPct}
+        />
+      )}
+      {step === 7 && !activeCenario && (
+        <Card>
+          <CardContent className="py-10 text-center text-muted-foreground">
+            <p>Sem estudo de dimensionamento. Regresse ao passo 4 para calcular.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── STEP 8: Proposta Técnica ─────────────────────────────────────────── */}
+      {step === 8 && (
+        <div className="space-y-4">
+          {/* Sizing summary */}
+          {(effectiveSizing ?? sizing) && (() => {
+            const eff = (effectiveSizing ?? sizing)!;
+            const eq  = equipForm.getValues();
+            const panel    = panels?.find(p => p.id === eq.panelId);
+            const inverter = inverters?.find(i => i.id === eq.inverterId);
+            const battery  = eq.batteryId ? batteries?.find(b => b.id === eq.batteryId) : null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><CheckCircle2 size={20} /> Resumo da Proposta</CardTitle>
+                  <CardDescription>Verifique todos os dados antes de guardar.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {[
+                      { label: "Potência instalada",  val: `${eff.potenciaInstalada} kWp` },
+                      { label: "Nº de painéis",       val: `${eff.numPaineis} un.` },
+                      { label: "Produção anual est.", val: `${eff.energiaAnualEstimada.toLocaleString("pt-PT")} kWh` },
+                      { label: "Painel",              val: panel ? `${panel.fabricante} ${panel.nome}` : "—" },
+                      { label: "Inversor",            val: inverter ? `${inverter.fabricante} ${inverter.nome}` : "—" },
+                      { label: "Bateria",             val: battery ? `${battery.fabricante} ${battery.nome}` : "Sem bateria" },
+                    ].map(item => (
+                      <div key={item.label} className="bg-muted/40 rounded-lg p-3">
+                        <p className="text-xs text-muted-foreground">{item.label}</p>
+                        <p className="text-sm font-semibold mt-0.5">{item.val}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {activeCenario && (
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: "Investimento est.", val: `${activeCenario.investimentoEstimado.toLocaleString("pt-PT")} €` },
+                        { label: "Poupança/ano",      val: `${activeCenario.poupancaAnual.toLocaleString("pt-PT")} €` },
+                        { label: "Payback simples",   val: `${activeCenario.paybackAnos} anos` },
+                      ].map(item => (
+                        <div key={item.label} className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-center">
+                          <p className="text-xs text-muted-foreground">{item.label}</p>
+                          <p className="text-base font-bold text-primary mt-0.5">{item.val}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          <Card className="border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
+            <CardContent className="pt-5 pb-5">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium">Guardar como Proposta Técnica</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Cria uma proposta com o estudo, equipamentos e análise técnica</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button onClick={handleSaveProposal} disabled={createProposal.isPending}>
+                    {createProposal.isPending
+                      ? <Loader2 size={16} className="mr-2 animate-spin" />
+                      : <CheckCircle2 size={16} className="mr-2" />}
+                    Guardar Proposta
+                  </Button>
+                  <Button variant="outline" onClick={() => navigate("/sistemas/novo")}>
+                    Criar Sistema Completo
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Navigation */}
       <div className="flex justify-between pt-2">
         <Button variant="outline" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1}>
           <ChevronLeft size={16} className="mr-1" /> Anterior
         </Button>
-        {step < 5 && (
+        {step < 8 && (
           <Button onClick={goNext} disabled={isSizing}>
             {isSizing && <Loader2 size={16} className="mr-1 animate-spin" />}
-            {step === 3 ? "Selecionar Equipamentos" : step === 4 ? "Análise Técnica" : "Seguinte"}
+            {step === 3 ? "Calcular Estudo" : step === 5 ? "Análise Técnica" : step === 7 ? "Gerar Proposta" : "Seguinte"}
             <ChevronRight size={16} className="ml-1" />
           </Button>
         )}
