@@ -368,15 +368,19 @@ export default function Wizard() {
     }
     return {
       potenciaInstalada,
-      producaoAnual: energiaAnualEstimada,
+      numPaineis:        activeCenario.numPaineis,
+      producaoAnual:     energiaAnualEstimada,
+      autoconsumoAnual,
+      excessoAnual,
       autoconsumoPerc,
-      poupancaAnual: Math.round(poupancaAnual + receitaExcedente),
-      paybackAnos: paybackReal,
-      poupanca10: Math.round(p10),
-      poupanca15: Math.round(p15),
-      poupanca25: Math.round(p25),
-      npv25: Math.round(npv25),
-      co2Anual: Math.round(autoconsumoAnual * 0.253 / 1000 * 10) / 10,
+      poupancaAnual:     Math.round(poupancaAnual + receitaExcedente),
+      paybackAnos:       paybackReal,
+      investimento,
+      poupanca10:        Math.round(p10),
+      poupanca15:        Math.round(p15),
+      poupanca25:        Math.round(p25),
+      npv25:             Math.round(npv25),
+      co2Anual:          Math.round(autoconsumoAnual * 0.253 / 1000 * 10) / 10,
     };
   }, [activeCenario, investimentoManual]);
 

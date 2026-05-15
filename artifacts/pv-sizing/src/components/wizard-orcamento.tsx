@@ -9,35 +9,25 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
   Plus, Trash2, Printer, FileText, Building2, User, Package, StickyNote,
+  MapPin, ArrowUp, ArrowDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   type OrcamentoState, type LinhaOrcamento, calcTotais, fmtEurPT,
 } from "@/lib/orcamento";
-import OrcamentoPDF from "@/components/orcamento-pdf";
-
-interface EstudoEnergetico {
-  potenciaInstalada: number;
-  producaoAnual: number;
-  autoconsumoPerc: number;
-  poupancaAnual: number;
-  paybackAnos: number;
-  poupanca10?: number;
-  poupanca15?: number;
-  poupanca25?: number;
-  npv25?: number;
-  co2Anual?: number;
-}
+import OrcamentoPDF, { type EstudoEnergetico } from "@/components/orcamento-pdf";
 
 interface Props {
-  state: OrcamentoState;
+  state:    OrcamentoState;
   onChange: (s: OrcamentoState) => void;
-  estudo?: EstudoEnergetico | null;
+  estudo?:  EstudoEnergetico | null;
 }
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
-function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+function Field({
+  label, children, className,
+}: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("space-y-1", className)}>
       <Label className="text-xs text-muted-foreground">{label}</Label>
@@ -46,9 +36,27 @@ function Field({ label, children, className }: { label: string; children: React.
   );
 }
 
+/* ── Print CSS ──────────────────────────────────────────────────────────── */
+const PRINT_CSS = `
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #111827; background: white; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; font-size: 10px; }
+  th { background: #f3f4f6; font-weight: 600; color: #374151; }
+  .text-right, [style*="text-align:right"] { text-align: right; }
+  .font-bold { font-weight: 700; }
+  .bg-gray-100 { background: #f3f4f6; }
+  .bg-gray-50  { background: #f9fafb; }
+  .whitespace-pre-line { white-space: pre-line; }
+  @page { margin: 10mm 12mm; size: A4; }
+  @media print {
+    body { padding: 0; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+`;
+
 export default function WizardOrcamento({ state, onChange, estudo }: Props) {
   const [tab, setTab] = useState<"editar" | "visualizar">("editar");
-  const [taxaIva, setTaxaIva] = useState(23);
   const printRef = useRef<HTMLDivElement>(null);
 
   function set<K extends keyof OrcamentoState>(key: K, value: OrcamentoState[K]) {
@@ -67,7 +75,7 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
       ...state,
       linhas: [
         ...state.linhas,
-        { id: uid(), codigo: "", descricao: "", quantidade: 1, precoUnitario: 0, ivaPerc: 23 },
+        { id: uid(), codigo: "", descricao: "", quantidade: 1, precoUnitario: 0, ivaPerc: state.taxaIva },
       ],
     });
   }
@@ -89,36 +97,19 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
   function handlePrint() {
     const content = document.getElementById("orcamento-print-content");
     if (!content) return;
-    const win = window.open("", "_blank", "width=900,height=700");
+    const win = window.open("", "_blank", "width=960,height=750");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html lang="pt"><head>
 <meta charset="utf-8">
 <title>${state.codigo} – Orçamento</title>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #111; background: white; padding: 24px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; font-size: 11px; }
-  th { background: #f3f4f6; font-weight: 600; color: #374151; }
-  .text-right { text-align: right; }
-  .font-bold { font-weight: 700; }
-  .bg-gray-100 { background: #f3f4f6; }
-  .bg-gray-50 { background: #f9fafb; }
-  .uppercase { text-transform: uppercase; }
-  .tracking-wide { letter-spacing: 0.05em; }
-  .border-b-2 { border-bottom: 2px solid #374151; }
-  .border { border: 1px solid #d1d5db; }
-  .rounded { border-radius: 4px; }
-  .whitespace-pre-line { white-space: pre-line; }
-  @page { margin: 15mm; size: A4; }
-</style>
+<style>${PRINT_CSS}</style>
 </head><body>${content.innerHTML}</body></html>`);
     win.document.close();
     win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 400);
+    setTimeout(() => { win.print(); win.close(); }, 500);
   }
 
-  const { totalLiquido, totalIva, totalFinal } = calcTotais(state.linhas, taxaIva);
+  const { totalLiquido, totalIva, totalFinal } = calcTotais(state.linhas, state.taxaIva);
 
   return (
     <div className="space-y-4">
@@ -142,7 +133,7 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
         {/* ── EDITAR ─────────────────────────────────────────────────────── */}
         <TabsContent value="editar" className="space-y-4 mt-4">
 
-          {/* Empresa + Orçamento */}
+          {/* Empresa + Orçamento meta */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader className="pb-3">
@@ -152,10 +143,19 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
               </CardHeader>
               <CardContent className="space-y-3">
                 <Field label="Nome / Empresa">
-                  <Input value={state.empresaNome} onChange={e => set("empresaNome", e.target.value)} placeholder="Nome da empresa emissora" />
+                  <Input
+                    value={state.empresaNome}
+                    onChange={e => set("empresaNome", e.target.value)}
+                    placeholder="Nome da empresa emissora"
+                  />
                 </Field>
                 <Field label="Morada">
-                  <Textarea value={state.empresaMorada} onChange={e => set("empresaMorada", e.target.value)} placeholder="Rua, localidade, código postal" rows={2} />
+                  <Textarea
+                    value={state.empresaMorada}
+                    onChange={e => set("empresaMorada", e.target.value)}
+                    placeholder="Rua, localidade, código postal"
+                    rows={2}
+                  />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="NIF">
@@ -165,9 +165,14 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
                     <Input value={state.empresaTelefone} onChange={e => set("empresaTelefone", e.target.value)} placeholder="+351 9xx xxx xxx" />
                   </Field>
                 </div>
-                <Field label="E-mail">
-                  <Input value={state.empresaEmail} onChange={e => set("empresaEmail", e.target.value)} placeholder="email@empresa.pt" type="email" />
-                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="E-mail">
+                    <Input value={state.empresaEmail} onChange={e => set("empresaEmail", e.target.value)} placeholder="email@empresa.pt" type="email" />
+                  </Field>
+                  <Field label="Website">
+                    <Input value={state.empresaWebsite} onChange={e => set("empresaWebsite", e.target.value)} placeholder="www.empresa.pt" />
+                  </Field>
+                </div>
                 <Field label="IBAN">
                   <Input value={state.empresaIban} onChange={e => set("empresaIban", e.target.value)} placeholder="PT50 0000 0000 0000 0000 0000 0" />
                 </Field>
@@ -175,6 +180,7 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
             </Card>
 
             <div className="space-y-4">
+              {/* Cliente */}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -185,46 +191,65 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
                   <Field label="Nome do Cliente">
                     <Input value={state.nomeCliente} onChange={e => set("nomeCliente", e.target.value)} placeholder="Nome completo ou empresa" />
                   </Field>
-                  <Field label="Morada / Instalação">
-                    <Textarea value={state.moradaCliente} onChange={e => set("moradaCliente", e.target.value)} placeholder="Rua, localidade, código postal" rows={2} />
-                  </Field>
-                  <Field label="NIF do Cliente">
-                    <Input value={state.nifCliente} onChange={e => set("nifCliente", e.target.value)} placeholder="NIF" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="NIF do Cliente">
+                      <Input value={state.nifCliente} onChange={e => set("nifCliente", e.target.value)} placeholder="NIF" />
+                    </Field>
+                  </div>
+                  <Field label="Morada de Faturação">
+                    <Textarea
+                      value={state.moradaCliente}
+                      onChange={e => set("moradaCliente", e.target.value)}
+                      placeholder="Rua, localidade, código postal"
+                      rows={2}
+                    />
                   </Field>
                 </CardContent>
               </Card>
 
+              {/* Instalação */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Orçamento</CardTitle>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <MapPin size={15} /> Morada da Instalação
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Código">
-                      <Input value={state.codigo} onChange={e => set("codigo", e.target.value)} />
-                    </Field>
-                    <Field label="Data de Emissão">
-                      <Input value={state.dataEmissao} onChange={e => set("dataEmissao", e.target.value)} type="date" />
-                    </Field>
-                    <Field label="Validade (dias)">
-                      <Input
-                        value={state.validadeDias}
-                        onChange={e => set("validadeDias", Number(e.target.value))}
-                        type="number" min={1}
-                      />
-                    </Field>
-                    <Field label="IVA (%)">
-                      <Input
-                        value={taxaIva}
-                        onChange={e => setTaxaIva(Number(e.target.value))}
-                        type="number" min={0} max={100}
-                      />
-                    </Field>
-                  </div>
+                  <Field label="Endereço do local de instalação">
+                    <Textarea
+                      value={state.moradaInstalacao}
+                      onChange={e => set("moradaInstalacao", e.target.value)}
+                      placeholder="Se diferente da morada de faturação"
+                      rows={2}
+                    />
+                  </Field>
                 </CardContent>
               </Card>
             </div>
           </div>
+
+          {/* Orçamento meta */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Dados do Orçamento</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Field label="Código">
+                  <Input value={state.codigo} onChange={e => set("codigo", e.target.value)} />
+                </Field>
+                <Field label="Data de Emissão">
+                  <Input value={state.dataEmissao} onChange={e => set("dataEmissao", e.target.value)} type="date" />
+                </Field>
+                <Field label="Validade (dias)">
+                  <Input value={state.validadeDias} onChange={e => set("validadeDias", Number(e.target.value))} type="number" min={1} />
+                </Field>
+                <Field label="IVA (%)">
+                  <Input value={state.taxaIva} onChange={e => set("taxaIva", Number(e.target.value))} type="number" min={0} max={100} />
+                </Field>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Items table */}
           <Card>
@@ -235,8 +260,10 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
             </CardHeader>
             <CardContent className="space-y-2">
               {/* Header row */}
-              <div className="grid gap-1 text-xs font-medium text-muted-foreground px-1"
-                style={{ gridTemplateColumns: "60px 1fr 70px 90px 60px 32px 32px" }}>
+              <div
+                className="grid gap-1 text-xs font-medium text-muted-foreground px-1"
+                style={{ gridTemplateColumns: "60px 1fr 70px 90px 60px 32px 32px" }}
+              >
                 <span>Código</span>
                 <span>Descrição</span>
                 <span className="text-right">Quant.</span>
@@ -250,9 +277,11 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
                 {state.linhas.map((l, idx) => {
                   const lineTotal = l.quantidade * l.precoUnitario;
                   return (
-                    <div key={l.id}
+                    <div
+                      key={l.id}
                       className="grid gap-1 items-center"
-                      style={{ gridTemplateColumns: "60px 1fr 70px 90px 60px 32px 32px" }}>
+                      style={{ gridTemplateColumns: "60px 1fr 70px 90px 60px 32px 32px" }}
+                    >
                       <Input
                         value={l.codigo}
                         onChange={e => setLinha(l.id, "codigo", e.target.value)}
@@ -290,7 +319,7 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
                         onClick={() => moveLinha(l.id, idx === 0 ? 1 : -1)}
                         title="Mover"
                       >
-                        <span className="text-xs">{idx === 0 ? "↓" : "↑"}</span>
+                        {idx === 0 ? <ArrowDown size={13} /> : <ArrowUp size={13} />}
                       </Button>
                       <Button
                         size="icon" variant="ghost"
@@ -316,7 +345,7 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
                     <span className="font-medium text-foreground">{fmtEurPT(totalLiquido)}</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
-                    <span>IVA {taxaIva}%</span>
+                    <span>IVA {state.taxaIva}%</span>
                     <span>{fmtEurPT(totalIva)}</span>
                   </div>
                   <div className="flex justify-between font-bold text-base pt-1 border-t">
@@ -371,7 +400,6 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
           <div ref={printRef} className="border rounded-lg overflow-auto bg-white shadow-sm">
             <OrcamentoPDF
               state={state}
-              taxaIva={taxaIva}
               estudo={state.incluirEstudoEnergetico ? estudo : null}
             />
           </div>

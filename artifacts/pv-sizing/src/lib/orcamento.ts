@@ -12,15 +12,18 @@ export interface OrcamentoState {
   dataEmissao: string;
   validadeDias: number;
   moeda: string;
+  taxaIva: number;
   empresaNome: string;
   empresaMorada: string;
   empresaNif: string;
   empresaTelefone: string;
   empresaEmail: string;
+  empresaWebsite: string;
   empresaIban: string;
   nomeCliente: string;
   nifCliente: string;
   moradaCliente: string;
+  moradaInstalacao: string;
   linhas: LinhaOrcamento[];
   observacoes: string;
   condicoesPagamento: string;
@@ -79,9 +82,7 @@ export function defaultOrcamentoState(p: OrcamentoDefaultParams = {}): Orcamento
 
   const linhas: LinhaOrcamento[] = [
     linha(
-      kwp
-        ? `Kit Solar Fotovoltaico ${kwp}`
-        : "Kit Solar Fotovoltaico P/Autoconsumo",
+      kwp ? `Kit Solar Fotovoltaico ${kwp}` : "Kit Solar Fotovoltaico P/Autoconsumo",
       1,
       investimentoTotal > 0 ? investimentoTotal : 0,
     ),
@@ -105,15 +106,18 @@ export function defaultOrcamentoState(p: OrcamentoDefaultParams = {}): Orcamento
     dataEmissao: new Date().toISOString().slice(0, 10),
     validadeDias: 15,
     moeda: "EUR",
+    taxaIva: 23,
     empresaNome: "",
     empresaMorada: "",
     empresaNif: "",
     empresaTelefone: "",
     empresaEmail: "",
+    empresaWebsite: "",
     empresaIban: "",
     nomeCliente: "",
     nifCliente: "",
-    moradaCliente: moradaInstalacao,
+    moradaCliente: "",
+    moradaInstalacao,
     linhas,
     observacoes:
       "Instalação dos equipamentos por técnico/empresa certificado.\nTermo de responsabilidade / legalização da instalação incluído.",
