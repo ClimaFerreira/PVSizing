@@ -106,6 +106,188 @@ function Stepper({ value, min, max, onChange }: { value: number; min: number; ma
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   Comprehensive Technical Validation Table
+   Covers ALL validation points from the spec in one consolidated view.
+───────────────────────────────────────────────────────────────────────────── */
+interface TechSummaryTableProps {
+  sizing: StringSizingResult;
+  invElec: {
+    potenciaAc: number;
+    potenciaDcMax: number;
+    mpptMin: number;
+    mpptMax: number;
+    corrMaxMppt: number;
+    numMppt: number;
+    stringsPorMppt: number;
+  };
+  panelIsc: number;
+  battery: { capacidade: number; tensao: number } | null;
+}
+
+function TechSummaryTable({ sizing, invElec, panelIsc, battery }: TechSummaryTableProps) {
+  const { config, tMinPortugal, tMaxCelula, vdcMaxUsado } = sizing;
+
+  const activeMppts      = config.mpptConfig.filter(s => s.length > 0).length;
+  const maxStringsInMppt = config.mpptConfig.reduce((mx, s) => Math.max(mx, s.length), 0);
+  const maxIscPerMppt    = maxStringsInMppt * panelIsc;
+  const allPanelCounts   = config.mpptConfig.flat().filter(v => v > 0);
+  const maxPaineisPorStr = allPanelCounts.length > 0 ? Math.max(...allPanelCounts) : config.paineisPerString;
+  const minPaineisPorStr = allPanelCounts.length > 0 ? Math.min(...allPanelCounts) : config.paineisPerString;
+
+  type Row = {
+    label: string;
+    sub?: string;
+    obtido: string;
+    limite: string;
+    status: "ok" | "aviso" | "erro" | "info";
+  };
+
+  const rows: Row[] = [
+    {
+      label: "Potência DC Total",
+      obtido: `${(config.potenciaDCTotal / 1000).toFixed(2)} kWp`,
+      limite: `≤ ${invElec.potenciaDcMax} kW DC`,
+      status: config.potenciaDCTotal / 1000 > invElec.potenciaDcMax * 1.05 ? "aviso" : "ok",
+    },
+    {
+      label: "Potência AC Inversor",
+      obtido: `${invElec.potenciaAc} kW AC`,
+      limite: "referência dimensionamento",
+      status: "info",
+    },
+    {
+      label: "DC/AC Ratio",
+      obtido: `${(config.dcAcRatio * 100).toFixed(1)}%`,
+      limite: "100–140%",
+      status: config.dcAcRatio < 0.95 ? "aviso" : config.dcAcRatio > 1.5 ? "aviso" : "ok",
+    },
+    {
+      label: "Nº de MPPTs em uso",
+      obtido: `${activeMppts} de ${invElec.numMppt} disponíveis`,
+      limite: `≤ ${invElec.numMppt}`,
+      status: activeMppts > invElec.numMppt ? "erro" : "ok",
+    },
+    {
+      label: "Strings por MPPT",
+      sub: maxStringsInMppt > 1 ? `${maxStringsInMppt} strings no MPPT mais carregado` : undefined,
+      obtido: `máx. ${maxStringsInMppt}`,
+      limite: `≤ ${invElec.stringsPorMppt}`,
+      status: maxStringsInMppt > invElec.stringsPorMppt
+        ? "erro"
+        : maxStringsInMppt === invElec.stringsPorMppt
+          ? "aviso"
+          : "ok",
+    },
+    {
+      label: "Painéis por String",
+      sub: config.isMixed ? "configuração mista — pior caso para tensão" : undefined,
+      obtido: config.isMixed
+        ? `${minPaineisPorStr}–${maxPaineisPorStr} módulos`
+        : `${config.paineisPerString} módulos`,
+      limite: "janela de tensão Voc/Vmpp",
+      status: "ok",
+    },
+    {
+      label: `Voc em Frio (${tMinPortugal} °C)`,
+      sub: "pior caso — string com mais painéis",
+      obtido: `${config.vocFrio.toFixed(0)} V`,
+      limite: `< ${vdcMaxUsado.toFixed(0)} V (Vdc máx.)`,
+      status: config.vocFrio >= vdcMaxUsado
+        ? "erro"
+        : config.vocFrio >= vdcMaxUsado * 0.95
+          ? "aviso"
+          : "ok",
+    },
+    {
+      label: `Vmpp em Calor (${tMaxCelula.toFixed(0)} °C célula)`,
+      sub: "pior caso — string com menos painéis",
+      obtido: `${config.vmpQuente.toFixed(0)} V`,
+      limite: `> ${invElec.mpptMin} V (MPPT mín.)`,
+      status: config.vmpQuente < invElec.mpptMin ? "aviso" : "ok",
+    },
+    {
+      label: "Corrente Isc por MPPT",
+      sub: maxStringsInMppt > 1
+        ? `${maxStringsInMppt} strings em paralelo × ${panelIsc.toFixed(2)} A`
+        : `${panelIsc.toFixed(2)} A por string`,
+      obtido: `${maxIscPerMppt.toFixed(2)} A`,
+      limite: `≤ ${invElec.corrMaxMppt} A`,
+      status: maxIscPerMppt > invElec.corrMaxMppt
+        ? "erro"
+        : maxIscPerMppt > invElec.corrMaxMppt * 0.9
+          ? "aviso"
+          : "ok",
+    },
+  ];
+
+  if (battery) {
+    rows.push({
+      label: "Compatibilidade Bateria",
+      obtido: `${battery.tensao} V / ${battery.capacidade} kWh`,
+      limite: "40–60 V (tensão típica LiFePO4/Li-ion)",
+      status: battery.tensao >= 40 && battery.tensao <= 60 ? "ok" : "aviso",
+    });
+  }
+
+  const hasErros  = rows.some(r => r.status === "erro");
+  const hasAvisos = rows.some(r => r.status === "aviso");
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-primary" />
+              Verificações Técnicas
+            </CardTitle>
+            <CardDescription className="mt-0.5">
+              Validação eléctrica completa do sistema dimensionado
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {hasErros  && <Badge variant="destructive" className="text-xs">Erros</Badge>}
+            {!hasErros && hasAvisos && <Badge className="text-xs bg-amber-500 hover:bg-amber-500">Atenções</Badge>}
+            {!hasErros && !hasAvisos && <Badge className="text-xs bg-emerald-500 hover:bg-emerald-500">Tudo OK</Badge>}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0 pb-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-t">
+            <thead>
+              <tr className="bg-muted/50 border-b">
+                <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Parâmetro</th>
+                <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Obtido</th>
+                <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground hidden sm:table-cell">Limite / Referência</th>
+                <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-20">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={i} className={cn(
+                  "border-b last:border-0",
+                  row.status === "erro"  && "bg-red-50/50 dark:bg-red-950/20",
+                  row.status === "aviso" && "bg-amber-50/50 dark:bg-amber-950/20",
+                )}>
+                  <td className="px-4 py-2.5">
+                    <div className="text-xs font-medium">{row.label}</div>
+                    {row.sub && <div className="text-[10px] text-muted-foreground mt-0.5">{row.sub}</div>}
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-xs font-mono font-semibold">{row.obtido}</td>
+                  <td className="px-3 py-2.5 text-right text-xs font-mono text-muted-foreground hidden sm:table-cell">{row.limite}</td>
+                  <td className="px-3 py-2.5 text-center"><StatusBadge status={row.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    String sizing card — editable per-string configuration
 ───────────────────────────────────────────────────────────────────────────── */
 interface StringSizingCardProps {
@@ -684,7 +866,27 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
         )}
       </div>
 
-      {/* String sizing card */}
+      {/* Technical validation table — comprehensive view of all checks */}
+      {activeSizing && (
+        <TechSummaryTable
+          sizing={activeSizing}
+          invElec={{
+            potenciaAc:    Number(inverter.potenciaAc),
+            potenciaDcMax: invElec.potenciaDcMax,
+            mpptMin:       invElec.mpptMin,
+            mpptMax:       invElec.mpptMax,
+            corrMaxMppt:   invElec.corrMaxMppt,
+            numMppt:       invElec.numMppt,
+            stringsPorMppt: invElec.stringsPorMppt,
+          }}
+          panelIsc={panelElec.isc}
+          battery={battery
+            ? { capacidade: Number(battery.capacidade), tensao: Number(battery.tensao) }
+            : null}
+        />
+      )}
+
+      {/* String sizing card — editable MPPT/string configuration */}
       {autoSizing && (
         <StringSizingCard
           autoResult={autoSizing}
