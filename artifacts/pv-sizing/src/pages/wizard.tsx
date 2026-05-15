@@ -25,7 +25,7 @@ import {
   Zap, MapPin, Settings2, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown,
   Loader2, Sun, Battery, BarChart3, AlertTriangle, TrendingUp, TrendingDown,
   Clock, Lightbulb, ArrowRight, Calculator, SlidersHorizontal, RotateCcw, Target, Euro,
-  Save, HistoryIcon,
+  Save, HistoryIcon, Plus, Trash2,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -53,9 +53,11 @@ import WizardStep1Cliente, {
 } from "@/components/wizard-step1-cliente";
 import WizardStep3Perfil from "@/components/wizard-step3-perfil";
 import WizardStep5Tecnica from "@/components/wizard-step5-tecnica";
+import WizardStep6MultiTecnica from "@/components/wizard-step6-multi-tecnica";
 import WizardStep7Financeiro from "@/components/wizard-step7-financeiro";
 import WizardOrcamento from "@/components/wizard-orcamento";
 import { type OrcamentoState, defaultOrcamentoState } from "@/lib/orcamento";
+import { type InverterUnit, criarUnidade } from "@/lib/multi-inverter";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -179,6 +181,7 @@ export default function Wizard() {
   const [pendingDraft, setPendingDraft] = useState<WizardDraftData | null>(null);
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
   const [manualMpptConfig, setManualMpptConfig] = useState<import("@/lib/string-sizing").MpptConfig | null>(null);
+  const [inverterUnits, setInverterUnits] = useState<InverterUnit[]>([]);
   const [investimentoManual, setInvestimentoManual] = useState<number | null>(null);
   const [orcamentoState, setOrcamentoState] = useState<OrcamentoState | null>(null);
   const [lastSaved, setLastSaved]   = useState<Date | null>(null);
@@ -530,9 +533,15 @@ export default function Wizard() {
       setStep(5);
     } else if (step === 5) {
       const vals = equipForm.getValues();
-      if (!vals.panelId || !vals.inverterId) {
+      const hasInverter = inverterUnits.length > 0
+        ? inverterUnits.some(u => u.inverterId > 0)
+        : Boolean(vals.inverterId);
+      if (!vals.panelId || !hasInverter) {
         toast({ title: "Selecione pelo menos um painel e um inversor", variant: "destructive" });
         return;
+      }
+      if (inverterUnits.length > 0 && inverterUnits[0].inverterId) {
+        equipForm.setValue("inverterId", inverterUnits[0].inverterId);
       }
       const eff = effectiveSizing ?? sizing;
       const selectedPanel = panels?.find(p => p.id === vals.panelId);
@@ -549,6 +558,30 @@ export default function Wizard() {
   };
 
   const progress = ((step - 1) / (STEPS.length - 1)) * 100;
+
+  const addInverterUnit = useCallback(() => {
+    setInverterUnits(prev => {
+      if (prev.length === 0) {
+        const currentId = equipForm.getValues("inverterId");
+        return [criarUnidade(currentId || 0), criarUnidade(0)];
+      }
+      return [...prev, criarUnidade(0)];
+    });
+  }, [equipForm]);
+
+  const removeInverterUnit = useCallback((key: string) => {
+    setInverterUnits(prev => prev.filter(u => u.key !== key));
+  }, []);
+
+  const updateInverterUnit = useCallback((key: string, changes: Partial<InverterUnit>) => {
+    setInverterUnits(prev => {
+      const next = prev.map(u => u.key === key ? { ...u, ...changes } : u);
+      if (next[0]?.key === key && changes.inverterId != null) {
+        equipForm.setValue("inverterId", changes.inverterId);
+      }
+      return next;
+    });
+  }, [equipForm]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto">
@@ -1459,26 +1492,117 @@ export default function Wizard() {
                     </FormItem>
                   )} />
 
-                  <FormField control={equipForm.control} name="inverterId" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Inversor *</FormLabel>
-                      <Select onValueChange={v => field.onChange(Number(v))} value={field.value?.toString()}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Selecionar inversor..." /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          {inverters?.map(i => {
-                            const ok = sizing && i.potenciaAc >= sizing.potenciaRecomendada * 0.9;
-                            return (
-                              <SelectItem key={i.id} value={String(i.id)}>
-                                {i.fabricante} {i.nome} — {i.potenciaAc} kW AC{ok ? " ✓" : ""}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">Inversores com ✓ têm potência adequada ao estudo</p>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
+                  {/* ── Inversores (single or multi) ── */}
+                  {inverterUnits.length === 0 ? (
+                    <FormField control={equipForm.control} name="inverterId" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Inversor *</FormLabel>
+                        <Select onValueChange={v => field.onChange(Number(v))} value={field.value?.toString()}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Selecionar inversor..." /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {inverters?.map(i => {
+                              const ok = sizing && i.potenciaAc >= sizing.potenciaRecomendada * 0.9;
+                              return (
+                                <SelectItem key={i.id} value={String(i.id)}>
+                                  {i.fabricante} {i.nome} — {i.potenciaAc} kW AC{ok ? " ✓" : ""}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="text-xs text-muted-foreground">Inversores com ✓ têm potência adequada ao estudo</p>
+                          <button
+                            type="button"
+                            className="text-xs text-primary underline underline-offset-2 hover:opacity-80 transition-opacity"
+                            onClick={addInverterUnit}
+                          >
+                            + Adicionar segundo inversor
+                          </button>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Inversores *</span>
+                        <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addInverterUnit}>
+                          <Plus size={12} /> Adicionar inversor
+                        </Button>
+                      </div>
+                      {inverterUnits.map((unit, idx) => (
+                        <div key={unit.key} className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-5 shrink-0 text-right">{idx + 1}.</span>
+                          <Select
+                            value={unit.inverterId ? String(unit.inverterId) : ""}
+                            onValueChange={v => updateInverterUnit(unit.key, { inverterId: Number(v) })}
+                          >
+                            <SelectTrigger className="flex-1 h-9">
+                              <SelectValue placeholder="Selecionar inversor..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {inverters?.map(i => {
+                                const ok = sizing && i.potenciaAc >= sizing.potenciaRecomendada * 0.9;
+                                return (
+                                  <SelectItem key={i.id} value={String(i.id)}>
+                                    {i.fabricante} {i.nome} — {i.potenciaAc} kW AC{ok ? " ✓" : ""}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-xs text-muted-foreground">×</span>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={10}
+                              value={unit.quantidade}
+                              onChange={e => {
+                                const v = parseInt(e.target.value, 10);
+                                if (!isNaN(v) && v >= 1) updateInverterUnit(unit.key, { quantidade: v });
+                              }}
+                              className="w-14 h-9 text-center px-1"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeInverterUnit(unit.key)}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      ))}
+                      {/* Global AC/DC totals */}
+                      {inverters && (() => {
+                        const totalAC = inverterUnits.reduce((s, u) => {
+                          const inv = inverters.find(i => i.id === u.inverterId);
+                          return s + (inv ? Number(inv.potenciaAc) * u.quantidade : 0);
+                        }, 0);
+                        const totalDC = inverterUnits.reduce((s, u) => {
+                          const inv = inverters.find(i => i.id === u.inverterId);
+                          return s + (inv ? Number(inv.potenciaDcMax) * u.quantidade : 0);
+                        }, 0);
+                        if (totalAC === 0) return null;
+                        return (
+                          <div className="grid grid-cols-2 gap-2 p-3 bg-muted/40 rounded-lg text-xs">
+                            <div>
+                              <span className="text-muted-foreground">Total AC: </span>
+                              <span className="font-semibold">{totalAC.toFixed(1)} kW</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">DC máx. total: </span>
+                              <span className="font-semibold">{totalDC.toFixed(1)} kW</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                   {consumoData.incluirBateria && (
                     <FormField control={equipForm.control} name="batteryId" render={({ field }) => (
@@ -1531,10 +1655,13 @@ export default function Wizard() {
         const vals = equipForm.getValues();
         const eff = effectiveSizing ?? sizing;
         const panel = panels?.find(p => p.id === vals.panelId) ?? null;
-        const inverter = inverters?.find(i => i.id === vals.inverterId) ?? null;
+        // In multi-inverter mode use the first unit's inverterId; fall back to form field
+        const effectiveInverterId = inverterUnits.length > 0 ? inverterUnits[0].inverterId : vals.inverterId;
+        const inverter = inverters?.find(i => i.id === effectiveInverterId) ?? null;
         const battery = vals.batteryId ? batteries?.find(b => b.id === vals.batteryId) ?? null : null;
         const numPaineis = numPaineisStep5 ?? 0;
         const potenciaRealKwp = panel ? (numPaineis * Number(panel.potencia)) / 1000 : (eff?.potenciaInstalada ?? 0);
+        const isMultiInverter = inverterUnits.length > 1;
 
         return (
           <div className="space-y-4">
@@ -1569,16 +1696,33 @@ export default function Wizard() {
               )}
             </div>
 
-            <WizardStep5Tecnica
-              panel={panel}
-              inverter={inverter}
-              battery={battery}
-              numPaineis={numPaineis}
-              potenciaInstalada={potenciaRealKwp}
-              onNumPaineisChange={setNumPaineisStep5}
-              mpptConfig={manualMpptConfig}
-              onMpptConfigChange={setManualMpptConfig}
-            />
+            {isMultiInverter ? (
+              <WizardStep6MultiTecnica
+                panel={panel}
+                inverterUnits={inverterUnits}
+                allInverters={inverters ?? []}
+                battery={battery}
+                numPaineisTotais={numPaineis}
+                onUnitChange={updateInverterUnit}
+              />
+            ) : (
+              <WizardStep5Tecnica
+                panel={panel}
+                inverter={inverter}
+                battery={battery}
+                numPaineis={numPaineis}
+                potenciaInstalada={potenciaRealKwp}
+                onNumPaineisChange={setNumPaineisStep5}
+                mpptConfig={inverterUnits.length === 1 ? inverterUnits[0].mpptConfig : manualMpptConfig}
+                onMpptConfigChange={(config) => {
+                  if (inverterUnits.length === 1) {
+                    updateInverterUnit(inverterUnits[0].key, { mpptConfig: config });
+                  } else {
+                    setManualMpptConfig(config);
+                  }
+                }}
+              />
+            )}
 
             <Card className="border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
               <CardContent className="pt-5 pb-5">
