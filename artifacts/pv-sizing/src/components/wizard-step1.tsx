@@ -65,6 +65,8 @@ export interface ConsumoData {
   perfilConsumo: "residencial" | "comercial" | "industrial";
   equipamentosFuturos: string[];
   precoKwh: number;
+  /** 12 monthly values (Jan–Dez) in kWh — populated from invoice charts or manual entry */
+  historicoMensal?: (number | null)[];
 }
 
 export const DEFAULT_CONSUMO_DATA: ConsumoData = {
@@ -272,7 +274,11 @@ interface Props { data: ConsumoData; onChange: (d: ConsumoData) => void; }
 
 export default function WizardStep1({ data, onChange }: Props) {
   const [inputMode, setInputMode] = useState<"faturas" | "manual">("faturas");
-  const [manualSubMode, setManualSubMode] = useState<"basico" | "avancado">("basico");
+  const [manualSubMode, setManualSubMode] = useState<"anual" | "mensal" | "avancado">("anual");
+  const [monthlyInputs, setMonthlyInputs] = useState<string[]>(() =>
+    data.historicoMensal?.map(v => (v != null ? String(v) : "")) ?? Array(12).fill("")
+  );
+  const [showMonthlyGrid, setShowMonthlyGrid] = useState(false);
   const [invoices, setInvoices] = useState<ParsedInvoice[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [showAppliances, setShowAppliances] = useState(false);
@@ -300,6 +306,8 @@ export default function WizardStep1({ data, onChange }: Props) {
       patch.percPonta = c.percPonta!;
     }
     if (c.precoKwh) patch.precoKwh = c.precoKwh;
+    // Carry monthly chart history into ConsumoData
+    if (c.monthlyKwh.some(v => v != null)) patch.historicoMensal = c.monthlyKwh;
     onChangeRef.current({ ...dataRef.current, ...patch });
     setAutoApplied(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -577,27 +585,157 @@ export default function WizardStep1({ data, onChange }: Props) {
 
         {/* ── MANUAL TAB ───────────────────────────────────────────────── */}
         <TabsContent value="manual" className="mt-4 space-y-4">
-          <div className="flex gap-2">
-            {(["basico", "avancado"] as const).map(m => (
-              <button key={m} onClick={() => setManualSubMode(m)}
+          <div className="flex gap-2 flex-wrap">
+            {([
+              { id: "anual",    label: "Consumo Anual" },
+              { id: "mensal",   label: "Consumo Mensal" },
+              { id: "avancado", label: "Avançado" },
+            ] as const).map(m => (
+              <button key={m.id} onClick={() => setManualSubMode(m.id)}
                 className={cn("px-4 py-1.5 rounded-full text-sm font-medium border transition-colors",
-                  manualSubMode === m ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50")}>
-                {m === "basico" ? "Básico" : "Avançado"}
+                  manualSubMode === m.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50")}>
+                {m.label}
               </button>
             ))}
           </div>
 
-          {/* Consumo input */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Consumo Anual (kWh)</label>
-            <Input
-              type="number" step="10" min={100} value={data.consumoAnual}
-              onChange={e => set({ consumoAnual: Math.max(100, Number(e.target.value)) })}
-            />
-            <p className="text-xs text-muted-foreground">
-              ≈ {Math.round(data.consumoAnual / 12).toLocaleString("pt-PT")} kWh/mês · {(data.consumoAnual / 365).toFixed(1)} kWh/dia
-            </p>
-          </div>
+          {/* ── ANUAL mode ───────────────────────────────────────────── */}
+          {manualSubMode === "anual" && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Consumo Anual (kWh)</label>
+              <Input
+                type="number" step="10" min={100} value={data.consumoAnual}
+                onChange={e => set({ consumoAnual: Math.max(100, Number(e.target.value)), historicoMensal: undefined })}
+              />
+              <p className="text-xs text-muted-foreground">
+                ≈ {Math.round(data.consumoAnual / 12).toLocaleString("pt-PT")} kWh/mês · {(data.consumoAnual / 365).toFixed(1)} kWh/dia
+              </p>
+            </div>
+          )}
+
+          {/* ── MENSAL mode ──────────────────────────────────────────── */}
+          {manualSubMode === "mensal" && (() => {
+            const vals = monthlyInputs.map(v => { const n = parseFloat(v); return isNaN(n) || n < 0 ? null : Math.round(n); });
+            const filled = vals.filter((v): v is number => v != null && v > 0);
+            const totalFilled = filled.reduce((s, v) => s + v, 0);
+            const annualFromMonthly = filled.length === 12
+              ? totalFilled
+              : filled.length > 0 ? Math.round((totalFilled / filled.length) * 12) : 0;
+            const maxVal = Math.max(...filled, 1);
+
+            const updateMonth = (i: number, raw: string) => {
+              const next = monthlyInputs.map((v, idx) => idx === i ? raw : v);
+              setMonthlyInputs(next);
+              const nextVals = next.map(v => { const n = parseFloat(v); return isNaN(n) || n < 0 ? null : Math.round(n); });
+              const nextFilled = nextVals.filter((v): v is number => v != null && v > 0);
+              const nextTotal = nextFilled.length === 12
+                ? nextFilled.reduce((s, v) => s + v, 0)
+                : nextFilled.length > 0 ? Math.round((nextFilled.reduce((s, v) => s + v, 0) / nextFilled.length) * 12) : data.consumoAnual;
+              if (nextTotal > 0) set({ consumoAnual: nextTotal, historicoMensal: nextVals });
+            };
+
+            const applyMonthlyAvg = (avgStr: string) => {
+              const avg = parseFloat(avgStr);
+              if (isNaN(avg) || avg <= 0) return;
+              const filled12 = Array(12).fill(String(Math.round(avg)));
+              setMonthlyInputs(filled12);
+              set({ consumoAnual: Math.round(avg) * 12, historicoMensal: Array(12).fill(Math.round(avg)) });
+            };
+
+            return (
+              <div className="space-y-4">
+                {/* Quick monthly average */}
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Consumo Mensal Médio (kWh)</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number" step="10" min={10} placeholder="ex: 280"
+                      defaultValue={filled.length > 0 ? Math.round(totalFilled / filled.length) : ""}
+                      key={`avg-${filled.length}`}
+                      onBlur={e => applyMonthlyAvg(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && applyMonthlyAvg((e.target as HTMLInputElement).value)}
+                      className="flex-1"
+                    />
+                    <span className="flex items-center text-sm text-muted-foreground shrink-0">kWh/mês</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Preenche todos os meses com o mesmo valor · ou edite mês a mês abaixo</p>
+                </div>
+
+                {/* Toggle monthly grid */}
+                <button
+                  className="flex items-center gap-2 text-sm text-primary font-medium"
+                  onClick={() => setShowMonthlyGrid(g => !g)}
+                >
+                  {showMonthlyGrid ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  {showMonthlyGrid ? "Ocultar grelha mensal" : "Introduzir valores por mês"}
+                </button>
+
+                {/* Monthly grid */}
+                {showMonthlyGrid && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-6 gap-2">
+                      {MES_LABELS.map((mes, i) => (
+                        <div key={mes} className="space-y-1">
+                          <label className="text-[11px] font-medium text-muted-foreground text-center block">{mes}</label>
+                          <Input
+                            type="number" step="10" min={0}
+                            value={monthlyInputs[i]}
+                            placeholder="—"
+                            className="h-8 text-xs text-center px-1 tabular-nums"
+                            onChange={e => updateMonth(i, e.target.value)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    {/* Mini bar chart */}
+                    {filled.length > 0 && (
+                      <div className="flex items-end gap-1 h-16 pt-1">
+                        {vals.map((v, i) => (
+                          <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                            <div
+                              className={cn("w-full rounded-t-sm transition-all", v != null && v > 0 ? "bg-primary/70" : "bg-muted/30 border border-dashed border-muted-foreground/20")}
+                              style={{ height: v != null && v > 0 ? `${Math.max(4, (v / maxVal) * 48)}px` : "4px" }}
+                              title={v != null ? `${MES_LABELS[i]}: ${v} kWh` : `${MES_LABELS[i]}: sem dados`}
+                            />
+                            <span className="text-[9px] text-muted-foreground leading-none">{MES_LABELS[i].slice(0, 1)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Summary */}
+                {annualFromMonthly > 0 && (
+                  <div className="rounded-lg bg-primary/5 border border-primary/20 px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        {filled.length === 12 ? "Soma real dos 12 meses" : filled.length > 0 ? `Média de ${filled.length} meses × 12` : ""}
+                      </p>
+                      <p className="text-lg font-bold text-primary">{annualFromMonthly.toLocaleString("pt-PT")} kWh/ano</p>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      <p>{Math.round(annualFromMonthly / 12).toLocaleString("pt-PT")} kWh/mês</p>
+                      <p>{(annualFromMonthly / 365).toFixed(1)} kWh/dia</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {manualSubMode === "avancado" && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Consumo Anual (kWh)</label>
+              <Input
+                type="number" step="10" min={100} value={data.consumoAnual}
+                onChange={e => set({ consumoAnual: Math.max(100, Number(e.target.value)) })}
+              />
+              <p className="text-xs text-muted-foreground">
+                ≈ {Math.round(data.consumoAnual / 12).toLocaleString("pt-PT")} kWh/mês · {(data.consumoAnual / 365).toFixed(1)} kWh/dia
+              </p>
+            </div>
+          )}
 
           {manualSubMode === "avancado" && (
             <div className="space-y-5">
