@@ -6,8 +6,13 @@ import { Button } from "@/components/ui/button";
 import {
   CheckCircle2, AlertTriangle, XCircle, Zap, Sun,
   Battery as BatteryIcon, GitBranch, RotateCcw, Pencil,
-  ChevronLeft, ChevronRight, Plus, Trash2,
+  ChevronLeft, ChevronRight, Plus, Trash2, ChevronDown,
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import {
   calcStringSizing, calcStringSizingManual, maxPaineisPerString,
@@ -48,39 +53,51 @@ function StatusBadge({ status }: { status: string }) {
    CompatTable
 ───────────────────────────────────────────────────────────────────────────── */
 function CompatTable({ result, title }: { result: CompatResult; title: string }) {
+  const [open, setOpen] = useState(result.temErros || result.temAvisos);
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <h3 className="font-semibold text-sm">{title}</h3>
-        {result.temErros && <Badge variant="destructive" className="text-xs">Erros</Badge>}
-        {!result.temErros && result.temAvisos && <Badge className="text-xs bg-amber-500 hover:bg-amber-500">Atenções</Badge>}
-        {!result.temErros && !result.temAvisos && <Badge className="text-xs bg-emerald-500 hover:bg-emerald-500">Compatível</Badge>}
-      </div>
-      <div className="rounded-lg border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-muted/50 border-b">
-              <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-32">Verificação</th>
-              <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Descrição</th>
-              <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Obtido</th>
-              <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Limite</th>
-              <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-20">Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.itens.map((item, i) => (
-              <tr key={i} className={cn("border-b last:border-0", item.status === "erro" && "bg-red-50/50 dark:bg-red-950/20", item.status === "aviso" && "bg-amber-50/50 dark:bg-amber-950/20")}>
-                <td className="px-3 py-2 font-medium text-xs text-muted-foreground">{item.categoria}</td>
-                <td className="px-3 py-2 text-xs">{item.descricao}</td>
-                <td className="px-3 py-2 text-right text-xs font-mono">{item.valorObtido}</td>
-                <td className="px-3 py-2 text-right text-xs font-mono text-muted-foreground">{item.valorLimite}</td>
-                <td className="px-3 py-2 text-center"><StatusBadge status={item.status} /></td>
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button className="flex items-center gap-2 w-full text-left mb-2 hover:opacity-75 transition-opacity group">
+          <ChevronDown
+            size={13}
+            className={cn(
+              "text-muted-foreground transition-transform duration-200 shrink-0",
+              open && "rotate-180",
+            )}
+          />
+          <h3 className="font-semibold text-sm">{title}</h3>
+          {result.temErros && <Badge variant="destructive" className="text-xs">Erros</Badge>}
+          {!result.temErros && result.temAvisos && <Badge className="text-xs bg-amber-500 hover:bg-amber-500">Atenções</Badge>}
+          {!result.temErros && !result.temAvisos && <Badge className="text-xs bg-emerald-500 hover:bg-emerald-500">Compatível</Badge>}
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="rounded-lg border overflow-hidden mb-1">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/50 border-b">
+                <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-32">Verificação</th>
+                <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Descrição</th>
+                <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Obtido</th>
+                <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Limite</th>
+                <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-20">Estado</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            </thead>
+            <tbody>
+              {result.itens.map((item, i) => (
+                <tr key={i} className={cn("border-b last:border-0", item.status === "erro" && "bg-red-50/50 dark:bg-red-950/20", item.status === "aviso" && "bg-amber-50/50 dark:bg-amber-950/20")}>
+                  <td className="px-3 py-2 font-medium text-xs text-muted-foreground">{item.categoria}</td>
+                  <td className="px-3 py-2 text-xs">{item.descricao}</td>
+                  <td className="px-3 py-2 text-right text-xs font-mono">{item.valorObtido}</td>
+                  <td className="px-3 py-2 text-right text-xs font-mono text-muted-foreground">{item.valorLimite}</td>
+                  <td className="px-3 py-2 text-center"><StatusBadge status={item.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

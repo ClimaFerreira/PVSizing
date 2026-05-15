@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
@@ -697,25 +697,34 @@ export default function Wizard() {
       </div>
 
       {/* Step indicators */}
-      <div className="space-y-3">
-        <Progress value={progress} className="h-2" />
-        <div className="flex justify-between">
+      <div className="relative">
+        <div className="absolute top-4 left-0 right-0 h-[2px] bg-border/60 rounded-full" />
+        <div
+          className="absolute top-4 left-0 h-[2px] bg-primary rounded-full transition-all duration-500 ease-out"
+          style={{ width: `${progress}%` }}
+        />
+        <div className="relative flex justify-between">
           {STEPS.map(s => {
-            const Icon   = s.icon;
             const active = step === s.id;
             const done   = step > s.id;
             return (
-              <div key={s.id} className="flex flex-col items-center gap-1">
+              <div key={s.id} className="flex flex-col items-center gap-1.5">
                 <div className={cn(
-                  "w-9 h-9 rounded-full flex items-center justify-center border-2 transition-colors",
-                  done   ? "bg-primary border-primary text-primary-foreground" :
-                  active ? "border-primary text-primary bg-primary/10" :
-                           "border-muted text-muted-foreground"
+                  "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 bg-background",
+                  done   ? "bg-primary border-primary text-primary-foreground shadow-sm" :
+                  active ? "border-primary text-primary ring-4 ring-primary/10 shadow-sm" :
+                           "border-border text-muted-foreground/50 bg-muted/20",
                 )}>
-                  {done ? <CheckCircle2 size={18} /> : <Icon size={18} />}
+                  {done
+                    ? <CheckCircle2 size={13} />
+                    : <span className="text-[11px] font-bold leading-none">{s.id}</span>
+                  }
                 </div>
-                <span className={cn("text-xs font-medium hidden sm:block",
-                  active ? "text-primary" : done ? "text-foreground" : "text-muted-foreground")}>
+                <span className={cn(
+                  "text-[10px] font-medium hidden sm:block text-center leading-tight",
+                  active ? "text-primary font-semibold" :
+                  done   ? "text-muted-foreground" : "text-muted-foreground/40",
+                )}>
                   {s.label}
                 </span>
               </div>
@@ -725,21 +734,34 @@ export default function Wizard() {
       </div>
 
       {/* ── Step section header ──────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3">
-        <span className="inline-flex items-center rounded-full bg-primary/10 border border-primary/20 px-3 py-0.5 text-xs font-semibold text-primary">
-          Passo {step} de {STEPS.length}
-        </span>
-        <h2 className="text-base font-semibold text-foreground">{STEP_TITLES[step - 1]}</h2>
+      <div className="flex items-center gap-3 border-l-2 border-primary pl-3 py-0.5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">
+            Passo {step} de {STEPS.length}
+          </p>
+          <h2 className="text-base font-semibold text-foreground leading-tight">
+            {STEP_TITLES[step - 1]}
+          </h2>
+        </div>
       </div>
 
       <Suspense fallback={
         <Card>
-          <CardContent className="py-16 flex justify-center">
-            <Loader2 size={32} className="animate-spin text-primary" />
+          <CardHeader className="pb-3">
+            <Skeleton className="h-5 w-52" />
+            <Skeleton className="h-4 w-72 mt-2" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+            </div>
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-10 w-full rounded-xl" />
           </CardContent>
         </Card>
       }>
 
+      <div key={step} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
       {/* ── STEP 1: Cliente e Localização ───────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
@@ -2047,19 +2069,30 @@ export default function Wizard() {
         </div>
       )}
 
+      </div>
       </Suspense>
 
       {/* Navigation */}
-      <div className="flex justify-between pt-2">
-        <Button variant="outline" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1}>
-          <ChevronLeft size={16} className="mr-1" /> Anterior
+      <div className="flex items-center justify-between pt-4 border-t border-border/50 gap-4">
+        <Button
+          variant="outline"
+          onClick={() => setStep(s => Math.max(1, s - 1))}
+          disabled={step === 1}
+          className="gap-1.5"
+        >
+          <ChevronLeft size={15} /> Anterior
         </Button>
-        {step < 8 && (
-          <Button onClick={goNext} disabled={isSizing}>
-            {isSizing && <Loader2 size={16} className="mr-1 animate-spin" />}
-            {step === 3 ? "Calcular Dimensionamento" : step === 5 ? "Análise Técnica" : step === 7 ? "Gerar Orçamento" : "Seguinte"}
-            <ChevronRight size={16} className="ml-1" />
+        <span className="text-xs text-muted-foreground font-medium tabular-nums shrink-0">
+          {step} de {STEPS.length}
+        </span>
+        {step < 8 ? (
+          <Button onClick={goNext} disabled={isSizing} className="gap-1.5">
+            {isSizing && <Loader2 size={15} className="animate-spin" />}
+            {step === 3 ? "Calcular" : step === 5 ? "Análise Técnica" : step === 7 ? "Gerar Orçamento" : "Seguinte"}
+            {!isSizing && <ChevronRight size={15} />}
           </Button>
+        ) : (
+          <div />
         )}
       </div>
     </div>

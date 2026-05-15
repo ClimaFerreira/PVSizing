@@ -5,6 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   TrendingDown,
   Target,
   TrendingUp,
@@ -94,6 +100,21 @@ function fmt(n: number) {
   return n.toLocaleString("pt-PT");
 }
 
+function MetricTooltip({ label, tip }: { label: string; tip: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="text-muted-foreground cursor-help underline decoration-dashed decoration-muted-foreground/40 underline-offset-2">
+          {label}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-[220px] text-xs leading-snug" side="left">
+        {tip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function AlertBadge({ tipo }: { tipo: "info" | "aviso" | "erro" }) {
   if (tipo === "erro") return <AlertTriangle size={11} className="text-red-500 shrink-0 mt-0.5" />;
   if (tipo === "aviso") return <AlertTriangle size={11} className="text-amber-500 shrink-0 mt-0.5" />;
@@ -114,6 +135,7 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
   if (!cenarios || cenarios.length === 0) return null;
 
   return (
+    <TooltipProvider delayDuration={400}>
     <div className="space-y-4">
       <div>
         <p className="text-sm font-semibold">Comparação de Cenários</p>
@@ -173,19 +195,19 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
                 {/* ── System metrics ── */}
                 <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Potência FV</span>
+                    <MetricTooltip label="Potência FV" tip="Potência de pico total do sistema fotovoltaico instalado (kWp)" />
                     <span className="font-bold text-sm tabular-nums">{c.potenciaInstalada} kWp</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Painéis 400 Wp</span>
+                    <MetricTooltip label="Painéis 400 Wp" tip="Número de módulos solares de 400 Wp necessários para atingir esta potência" />
                     <span className="font-semibold tabular-nums">{c.numPaineis} un.</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Produção anual</span>
+                    <MetricTooltip label="Produção anual" tip="Estimativa de energia eléctrica produzida anualmente, baseada em dados PVGIS para a localização definida" />
                     <span className="font-semibold tabular-nums">{fmt(c.energiaAnualEstimada)} kWh</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Cobertura solar</span>
+                    <MetricTooltip label="Cobertura solar" tip="Percentagem do consumo anual coberta pela produção solar (autoconsumo + excedente utilizado)" />
                     <span
                       className={cn(
                         "font-semibold tabular-nums",
@@ -198,7 +220,7 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Autoconsumo</span>
+                    <MetricTooltip label="Autoconsumo" tip="Percentagem da energia solar produzida que é consumida directamente no local (vs. injectada na rede)" />
                     <span className="font-semibold tabular-nums">{c.autoconsumoPerc}%</span>
                   </div>
                 </div>
@@ -266,17 +288,17 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
                 {/* ── Financial ── */}
                 <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Investimento est.</span>
+                    <MetricTooltip label="Investimento est." tip="Estimativa de investimento baseada em €900–1200/kWp instalado. Sujeito a orçamento definitivo." />
                     <span className="font-bold tabular-nums">{fmt(c.investimentoEstimado)} €</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Poupança / ano</span>
+                    <MetricTooltip label="Poupança / ano" tip="Economia estimada na factura eléctrica no 1.º ano, com base no preço de energia definido" />
                     <span className="font-semibold tabular-nums text-green-600 dark:text-green-400">
                       +{fmt(c.poupancaAnual)} €
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Payback simples</span>
+                    <MetricTooltip label="Payback simples" tip="Anos necessários para recuperar o investimento com as poupanças geradas (sem actualização monetária)" />
                     <PaybackColor anos={c.paybackAnos} />
                   </div>
                 </div>
@@ -346,6 +368,7 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
         </span>
       </div>
     </div>
+    </TooltipProvider>
   );
 }
 
