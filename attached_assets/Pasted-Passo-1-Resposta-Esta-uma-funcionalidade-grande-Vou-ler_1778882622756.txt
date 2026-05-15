@@ -1,0 +1,96 @@
+Passo 1
+Resposta:
+Esta é uma funcionalidade grande. Vou ler os ficheiros principais em paralelo antes de planear a implementação.
+3 actions
+Vou ler os ficheiros relevantes em paralelo para ter o quadro completo.
+4 actions
+Deixa-me ler mais do wizard-step5-tecnica.tsx para entender os componentes internos antes de criar os novos ficheiros.
+3 actions
+Agora tenho o quadro completo. Vou criar um plano de sessão e implementar tudo de forma organizada.
+4 actions
+Vou criar o plano de sessão e implementar o suporte multi-inversor em paralelo, começando pelas leituras de código necessárias.
+4 actions
+Tenho tudo o que preciso. Vou criar o plano de sessão e escrever tudo em paralelo.
+3 actions
+Agora vou escrever o componente multi-inversor (o maior) e as edições ao wizard em paralelo.
+2 actions
+Agora faço os 7 edits cirúrgicos ao wizard.tsx em sequência.
+4 actions
+Continuando com os restantes edits. Vou adicionar o estado e os helpers de seguida.
+2 actions
+Vou agora fazer os 4 edits restantes todos de uma vez — helpers, validação, FormField e step 6.
+2 actions
+A continuar com os 3 edits restantes ao wizard.tsx em paralelo.
+2 actions
+Continuando com os 2 últimos edits — FormField do inversor e render do step 6 — em paralelo.
+2 actions
+Último edit ao wizard.tsx — o render condicional do step 6 — e depois typecheck em paralelo.
+2 actions
+Agora vou correr o typecheck para verificar tudo.
+2 actions
+Typecheck limpo. Vou reiniciar o frontend e verificar visualmente a nova funcionalidade.
+9 actions
+O wizard carrega corretamente. Vou limpar o plano de sessão e dar o trabalho por concluído.
+2 actions
+O suporte multi-inversor está implementado e a funcionar. Aqui está um resumo do que foi criado:
+Novos ficheiros:
+•	src/lib/multi-inverter.ts — tipos e utilitários: InverterUnit, criarUnidade(), distribuirPaineis() (distribuição proporcional por capacidade DC), calcMultiTotais()
+•	src/components/wizard-step6-multi-tecnica.tsx — componente completo de análise multi-inversor com:
+o	Banner de estado global (OK / Atenções / Erros)
+o	Card de totais globais: DC kWp, AC kW, nº painéis, DC/AC ratio global, barra de distribuição proporcional por inversor
+o	Um card colapsável por inversor, cada um com tabela de verificações técnicas (Voc frio, Vmpp calor, Isc/MPPT, DC/AC, strings por MPPT) + editor completo de strings (igual ao modo single-inversor)
+Alterações ao wizard.tsx:
+•	Step 5 — Equipamentos: o campo de inversor agora tem um link "Adicionar segundo inversor"; ao clicar aparece uma lista com dropdown de modelo + campo de quantidade (×1, ×2…) + botão de remover por linha, e um resumo de AC e DC máximo total
+•	Step 6 — Análise Técnica: quando há mais de 1 inversor usa o novo componente; com 1 ou 0 inversores mantém o comportamento existente sem quebras
+•	Validação de navegação atualizada para o modo multi
+•	Retrocompatibilidade total: estudos existentes com 1 inversor continuam a funcionar sem alterações
+
+Passo 2 
+Resposta:
+Vou ler os ficheiros relevantes antes de implementar, para garantir edits precisos.
+3 actions
+Vou ler o render do step 1 e step 7/8 em paralelo para planear os edits.
+4 actions
+Tenho toda a informação necessária. Vou criar o plano de sessão e implementar tudo em paralelo — novos ficheiros primeiro, depois os edits ao wizard.
+3 actions
+Há um erro de redeclaração na upgrade.ts. Vou corrigi-lo e ao mesmo tempo criar os dois componentes em paralelo.
+7 actions
+T001-T003 concluídos. Agora preciso de ler as secções exactas do wizard.tsx para fazer os edits com precisão.
+3 actions
+Vou ler as secções exactas para garantir matches precisos nos edits.
+7 actions
+Tenho todas as linhas exactas. Vou ler mais do step 6 IIFE para confirmar as variáveis disponíveis, depois faço todos os edits de uma vez.
+2 actions
+Tenho tudo o que preciso. Vou fazer todos os 7 edits ao wizard.tsx de uma só vez.
+2 actions
+Bom, imports adicionados. Agora os restantes 6 edits todos em paralelo (state + renders dos steps).
+2 actions
+Agora faço os 5 edits restantes aos steps — todos em paralelo.
+2 actions
+Excelente. Agora os 4 edits restantes (steps 5, 6, 7 e 8) todos em paralelo.
+4 actions
+Continuo com os 2 edits finais (steps 7 e 8) em paralelo.
+2 actions
+Último edit (step 8) e depois typecheck.
+2 actions
+Todos os edits feitos. A correr typecheck agora.
+2 actions
+Typecheck limpo. Vou fazer screenshot para verificar o resultado visual.
+2 actions
+Tudo a funcionar perfeitamente. Vou limpar o plano de sessão.
+2 actions
+Implementação concluída e o typecheck passa limpo. Aqui está o resumo completo do que foi feito:
+________________________________________
+Novos ficheiros criados:
+•	src/lib/upgrade.ts — tipos (TipoProjeto, InstalacaoExistente, UpgradeValidacoes), labels/descrições localizadas, e função calcUpgradeValidacoes() com todas as verificações técnicas
+•	src/components/wizard-step1-upgrade.tsx — formulário completo de dados da instalação existente: painéis (catálogo ou texto livre), inversor (catálogo ou texto livre), potência FV/AC, strings, produção anual, bateria, regime de injeção, com resumo visual no fundo
+•	src/components/wizard-step6-upgrade-analise.tsx — análise de upgrade com tabela comparativa Existente → Após Intervenção, verificações de compatibilidade com badges de estado (OK / Aviso / Erro), e painel de impacto estimado
+Alterações ao wizard.tsx:
+Step	O que foi adicionado
+1 — Cliente	Selector "Tipo de Projeto" (5 opções tipo card clicável) + formulário de instalação existente (condicional)
+5 — Equipamentos	Banner âmbar com resumo da instalação existente como referência
+6 — Técnica	WizardStep6UpgradeAnalise antes da análise normal — compatibilidade + impacto estimado
+7 — Poupança	Card comparativo: Situação Actual → Ganho do Upgrade → Total Pós Upgrade com payback
+8 — Orçamento	Card "Situação Actual vs. Proposta" com 3 colunas: situação actual, solução proposta, ganho estimado + payback
+As validações técnicas implementadas incluem: reutilização de strings, necessidade de novo inversor (DC/AC ratio), possibilidade de AC coupling, retrofit de bateria e limites de potência. Tudo em PT-PT.
+

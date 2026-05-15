@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import {
   CheckCircle2, AlertTriangle, XCircle, GitBranch, Zap, Sun,
   ChevronDown, ChevronRight, Pencil, RotateCcw, Plus, Trash2,
@@ -619,7 +619,7 @@ interface Props {
   onUnitChange: (key: string, changes: Partial<InverterUnit>) => void;
 }
 
-export default function WizardStep6MultiTecnica({
+function WizardStep6MultiTecnica({
   panel, inverterUnits, allInverters, battery, numPaineisTotais, onUnitChange,
 }: Props) {
   const dcMaxMap = useMemo(() => {
@@ -790,3 +790,4 @@ export default function WizardStep6MultiTecnica({
     </div>
   );
 }
+export default memo(WizardStep6MultiTecnica);

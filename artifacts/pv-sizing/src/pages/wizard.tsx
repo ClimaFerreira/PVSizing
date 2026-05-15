@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -51,15 +51,16 @@ import WizardStep1Cliente, {
   clienteSchema, localizacaoSchema,
   type ClienteForm, type LocalizacaoForm,
 } from "@/components/wizard-step1-cliente";
-import WizardStep3Perfil from "@/components/wizard-step3-perfil";
-import WizardStep5Tecnica from "@/components/wizard-step5-tecnica";
-import WizardStep6MultiTecnica from "@/components/wizard-step6-multi-tecnica";
-import WizardStep7Financeiro from "@/components/wizard-step7-financeiro";
-import WizardOrcamento from "@/components/wizard-orcamento";
+// ── Code-split heavy step components ─────────────────────────────────────────
+const WizardStep3Perfil       = lazy(() => import("@/components/wizard-step3-perfil"));
+const WizardStep5Tecnica      = lazy(() => import("@/components/wizard-step5-tecnica"));
+const WizardStep6MultiTecnica = lazy(() => import("@/components/wizard-step6-multi-tecnica"));
+const WizardStep7Financeiro   = lazy(() => import("@/components/wizard-step7-financeiro"));
+const WizardOrcamento         = lazy(() => import("@/components/wizard-orcamento"));
 import { type OrcamentoState, defaultOrcamentoState } from "@/lib/orcamento";
 import { type InverterUnit, criarUnidade } from "@/lib/multi-inverter";
-import WizardStep1Upgrade from "@/components/wizard-step1-upgrade";
-import WizardStep6UpgradeAnalise from "@/components/wizard-step6-upgrade-analise";
+const WizardStep1Upgrade       = lazy(() => import("@/components/wizard-step1-upgrade"));
+const WizardStep6UpgradeAnalise = lazy(() => import("@/components/wizard-step6-upgrade-analise"));
 import {
   type TipoProjeto, type InstalacaoExistente,
   defaultInstalacaoExistente,
@@ -318,7 +319,7 @@ export default function Wizard() {
   }, [sizing, selectedCenarioTipo]);
 
   // Switch scenario and reset manual to match
-  const selectCenario = (tipo: CenarioTipo) => {
+  const selectCenario = useCallback((tipo: CenarioTipo) => {
     setSelectedCenarioTipo(tipo);
     if (sizing) {
       const c = sizing.cenariosDimensionamento?.find(x => x.tipo === tipo) ?? null;
@@ -332,7 +333,7 @@ export default function Wizard() {
       });
       setShowManualAdjust(false);
     }
-  };
+  }, [sizing, consumoData.coberturaMeta]);
 
   // Effective sizing: active scenario base + manual overrides
   const effectiveSizing = useMemo(() => {
@@ -494,7 +495,7 @@ export default function Wizard() {
   };
 
   // ── Save proposal ─────────────────────────────────────────────────────────
-  const handleSaveProposal = () => {
+  const handleSaveProposal = useCallback(() => {
     const eff = effectiveSizing ?? sizing;
     if (!eff) return;
     const eq    = equipForm.getValues();
@@ -516,7 +517,7 @@ export default function Wizard() {
         onError:   () => toast({ title: "Erro ao guardar proposta", variant: "destructive" }),
       }
     );
-  };
+  }, [effectiveSizing, sizing, panels, consumoData.consumoAnual, equipForm, createProposal, clearDraft, toast, navigate]);
 
   // ── Navigation ────────────────────────────────────────────────────────────
   const goNext = async () => {
@@ -591,6 +592,27 @@ export default function Wizard() {
       return next;
     });
   }, [equipForm]);
+
+  const sliderDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleCoverageSlider = useCallback(([val]: number[]) => {
+    if (sliderDebounceRef.current) clearTimeout(sliderDebounceRef.current);
+    sliderDebounceRef.current = setTimeout(() => {
+      const cenarios = sizing?.cenariosDimensionamento;
+      if (!cenarios?.length) return;
+      const nearest = cenarios.reduce((best, c) =>
+        Math.abs(c.coberturaReal - val) < Math.abs(best.coberturaReal - val) ? c : best
+      );
+      selectCenario(nearest.tipo as CenarioTipo);
+    }, 80);
+  }, [sizing, selectCenario]);
+
+  const handleMpptConfigChange = useCallback((config: import("@/lib/string-sizing").MpptConfig) => {
+    if (inverterUnits.length === 1) {
+      updateInverterUnit(inverterUnits[0].key, { mpptConfig: config });
+    } else {
+      setManualMpptConfig(config);
+    }
+  }, [inverterUnits, updateInverterUnit]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto">
@@ -692,6 +714,14 @@ export default function Wizard() {
         </span>
         <h2 className="text-base font-semibold text-foreground">{STEP_TITLES[step - 1]}</h2>
       </div>
+
+      <Suspense fallback={
+        <Card>
+          <CardContent className="py-16 flex justify-center">
+            <Loader2 size={32} className="animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      }>
 
       {/* ── STEP 1: Cliente e Localização ───────────────────────────────────── */}
       {step === 1 && (
@@ -797,12 +827,6 @@ export default function Wizard() {
                 const activeCob = Math.min(rangeMax, Math.max(rangeMin,
                   activeCenario?.coberturaReal ?? cenarios[1]?.coberturaReal ?? 80
                 ));
-                const handleSlider = ([val]: number[]) => {
-                  const nearest = cenarios.reduce((best, c) =>
-                    Math.abs(c.coberturaReal - val) < Math.abs(best.coberturaReal - val) ? c : best
-                  );
-                  selectCenario(nearest.tipo as CenarioTipo);
-                };
                 return (
                   <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
                     <CardContent className="pt-5 pb-4 space-y-3">
@@ -823,7 +847,7 @@ export default function Wizard() {
                           max={rangeMax}
                           step={1}
                           value={[activeCob]}
-                          onValueChange={handleSlider}
+                          onValueChange={handleCoverageSlider}
                           className="w-full"
                         />
                         {/* Scenario tick marks */}
@@ -1813,13 +1837,7 @@ export default function Wizard() {
                 potenciaInstalada={potenciaRealKwp}
                 onNumPaineisChange={setNumPaineisStep5}
                 mpptConfig={inverterUnits.length === 1 ? inverterUnits[0].mpptConfig : manualMpptConfig}
-                onMpptConfigChange={(config) => {
-                  if (inverterUnits.length === 1) {
-                    updateInverterUnit(inverterUnits[0].key, { mpptConfig: config });
-                  } else {
-                    setManualMpptConfig(config);
-                  }
-                }}
+                onMpptConfigChange={handleMpptConfigChange}
               />
             )}
 
@@ -2065,6 +2083,8 @@ export default function Wizard() {
           )}
         </div>
       )}
+
+      </Suspense>
 
       {/* Navigation */}
       <div className="flex justify-between pt-2">

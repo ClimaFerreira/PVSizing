@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, memo } from "react";
 import { SolarPanel, Inverter, Battery } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -732,7 +732,7 @@ function SingleLineDiagram({ panel, inverter, battery, mpptConfig }: {
 /* ─────────────────────────────────────────────────────────────────────────────
    Main export
 ───────────────────────────────────────────────────────────────────────────── */
-export default function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInstalada, onNumPaineisChange, mpptConfig: manualMpptConfig, onMpptConfigChange }: Props) {
+function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInstalada, onNumPaineisChange, mpptConfig: manualMpptConfig, onMpptConfigChange }: Props) {
 
   const panelElec = useMemo(() => panel ? {
     voc: Number(panel.voc),
@@ -933,3 +933,4 @@ export default function WizardStep5Tecnica({ panel, inverter, battery, numPainei
     </div>
   );
 }
+export default memo(WizardStep5Tecnica);

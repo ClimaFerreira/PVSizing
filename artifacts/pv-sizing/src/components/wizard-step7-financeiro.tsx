@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -103,7 +103,7 @@ function KPI({ icon: Icon, label, value, sub, highlight = false, color = "" }: {
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
-export default function WizardStep7Financeiro({
+function WizardStep7Financeiro({
   cenario, precoKwh: precoKwhProp, consumoAnual,
   investimento, onInvestimentoChange,
 }: Props) {
@@ -444,3 +444,4 @@ export default function WizardStep7Financeiro({
     </div>
   );
 }
+export default memo(WizardStep7Financeiro);

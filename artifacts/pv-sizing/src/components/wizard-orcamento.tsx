@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, memo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -55,7 +55,7 @@ const PRINT_CSS = `
   }
 `;
 
-export default function WizardOrcamento({ state, onChange, estudo }: Props) {
+function WizardOrcamento({ state, onChange, estudo }: Props) {
   const [tab, setTab] = useState<"editar" | "visualizar">("editar");
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -411,3 +411,4 @@ export default function WizardOrcamento({ state, onChange, estudo }: Props) {
     </div>
   );
 }
+export default memo(WizardOrcamento);
