@@ -275,6 +275,13 @@ export default function Wizard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Auto-enable battery when project type is "adicionarBateria" ──────────
+  useEffect(() => {
+    if (tipoProjeto === "bateria") {
+      setConsumoData(prev => prev.incluirBateria ? prev : { ...prev, incluirBateria: true });
+    }
+  }, [tipoProjeto]);
+
   // ── Draft: auto-save localStorage (800ms) + DB sync (4s) ─────────────────
   useEffect(() => {
     if (saveTimerRef.current)   clearTimeout(saveTimerRef.current);

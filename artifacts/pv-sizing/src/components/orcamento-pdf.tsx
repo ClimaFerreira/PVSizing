@@ -179,12 +179,12 @@ export default function OrcamentoPDF({ state, estudo }: Props) {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              <th style={{ ...TH as React.CSSProperties, width: "8%" } as React.CSSProperties}>Ref.</th>
-              <th style={{ ...TH as React.CSSProperties, width: "42%" } as React.CSSProperties}>Descrição</th>
-              <th style={{ ...(TH + "text-align:right;") as React.CSSProperties, width: "14%" } as React.CSSProperties}>Preço Unit.</th>
-              <th style={{ ...(TH + "text-align:right;") as React.CSSProperties, width: "8%" } as React.CSSProperties}>Quant.</th>
-              <th style={{ ...(TH + "text-align:right;") as React.CSSProperties, width: "10%" } as React.CSSProperties}>IVA</th>
-              <th style={{ ...(TH + "text-align:right;") as React.CSSProperties, width: "18%" } as React.CSSProperties}>Total</th>
+              <th style={{ ...TH, width: "8%" }}>Ref.</th>
+              <th style={{ ...TH, width: "42%" }}>Descrição</th>
+              <th style={{ ...TH, width: "14%", textAlign: "right" }}>Preço Unit.</th>
+              <th style={{ ...TH, width: "8%",  textAlign: "right" }}>Quant.</th>
+              <th style={{ ...TH, width: "10%", textAlign: "right" }}>IVA</th>
+              <th style={{ ...TH, width: "18%", textAlign: "right" }}>Total</th>
             </tr>
           </thead>
           <tbody>
