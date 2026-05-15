@@ -32,9 +32,11 @@ import type {
   Customer,
   DashboardSummary,
   DatasheetResult,
+  DeleteWizardDraftParams,
   FinancialInputBody,
   FinancialResult,
   GetSystemPvgisParams,
+  GetWizardDraftParams,
   HealthStatus,
   ImportDatasheetBody,
   Inverter,
@@ -52,6 +54,8 @@ import type {
   UpdateInverterBody,
   UpdatePvSystemBody,
   UpdateSolarPanelBody,
+  UpsertWizardDraftBody,
+  WizardDraft,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -3355,6 +3359,282 @@ export const useDeleteProposal = <
   TContext
 > => {
   return useMutation(getDeleteProposalMutationOptions(options));
+};
+
+/**
+ * @summary Get wizard draft by session ID
+ */
+export const getGetWizardDraftUrl = (params: GetWizardDraftParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/wizard/draft?${stringifiedParams}`
+    : `/api/wizard/draft`;
+};
+
+export const getWizardDraft = async (
+  params: GetWizardDraftParams,
+  options?: RequestInit,
+): Promise<WizardDraft> => {
+  return customFetch<WizardDraft>(getGetWizardDraftUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWizardDraftQueryKey = (params?: GetWizardDraftParams) => {
+  return [`/api/wizard/draft`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetWizardDraftQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWizardDraft>>,
+  TError = ErrorType<void>,
+>(
+  params: GetWizardDraftParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWizardDraft>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetWizardDraftQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getWizardDraft>>> = ({
+    signal,
+  }) => getWizardDraft(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWizardDraft>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWizardDraftQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWizardDraft>>
+>;
+export type GetWizardDraftQueryError = ErrorType<void>;
+
+/**
+ * @summary Get wizard draft by session ID
+ */
+
+export function useGetWizardDraft<
+  TData = Awaited<ReturnType<typeof getWizardDraft>>,
+  TError = ErrorType<void>,
+>(
+  params: GetWizardDraftParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWizardDraft>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWizardDraftQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create or update a wizard draft
+ */
+export const getUpsertWizardDraftUrl = () => {
+  return `/api/wizard/draft`;
+};
+
+export const upsertWizardDraft = async (
+  upsertWizardDraftBody: UpsertWizardDraftBody,
+  options?: RequestInit,
+): Promise<WizardDraft> => {
+  return customFetch<WizardDraft>(getUpsertWizardDraftUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertWizardDraftBody),
+  });
+};
+
+export const getUpsertWizardDraftMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertWizardDraft>>,
+    TError,
+    { data: BodyType<UpsertWizardDraftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertWizardDraft>>,
+  TError,
+  { data: BodyType<UpsertWizardDraftBody> },
+  TContext
+> => {
+  const mutationKey = ["upsertWizardDraft"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertWizardDraft>>,
+    { data: BodyType<UpsertWizardDraftBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return upsertWizardDraft(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertWizardDraftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertWizardDraft>>
+>;
+export type UpsertWizardDraftMutationBody = BodyType<UpsertWizardDraftBody>;
+export type UpsertWizardDraftMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create or update a wizard draft
+ */
+export const useUpsertWizardDraft = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertWizardDraft>>,
+    TError,
+    { data: BodyType<UpsertWizardDraftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertWizardDraft>>,
+  TError,
+  { data: BodyType<UpsertWizardDraftBody> },
+  TContext
+> => {
+  return useMutation(getUpsertWizardDraftMutationOptions(options));
+};
+
+/**
+ * @summary Delete a wizard draft
+ */
+export const getDeleteWizardDraftUrl = (params: DeleteWizardDraftParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/wizard/draft?${stringifiedParams}`
+    : `/api/wizard/draft`;
+};
+
+export const deleteWizardDraft = async (
+  params: DeleteWizardDraftParams,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteWizardDraftUrl(params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteWizardDraftMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteWizardDraft>>,
+    TError,
+    { params: DeleteWizardDraftParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteWizardDraft>>,
+  TError,
+  { params: DeleteWizardDraftParams },
+  TContext
+> => {
+  const mutationKey = ["deleteWizardDraft"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteWizardDraft>>,
+    { params: DeleteWizardDraftParams }
+  > = (props) => {
+    const { params } = props ?? {};
+
+    return deleteWizardDraft(params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteWizardDraftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteWizardDraft>>
+>;
+
+export type DeleteWizardDraftMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a wizard draft
+ */
+export const useDeleteWizardDraft = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteWizardDraft>>,
+    TError,
+    { params: DeleteWizardDraftParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteWizardDraft>>,
+  TError,
+  { params: DeleteWizardDraftParams },
+  TContext
+> => {
+  return useMutation(getDeleteWizardDraftMutationOptions(options));
 };
 
 /**

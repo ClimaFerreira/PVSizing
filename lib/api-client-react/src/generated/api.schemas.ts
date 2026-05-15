@@ -816,6 +816,33 @@ export interface Proposal {
   createdAt: string;
 }
 
+/**
+ * Full wizard state snapshot (JSON)
+ */
+export type WizardDraftData = { [key: string]: unknown };
+
+export interface WizardDraft {
+  id: number;
+  sessionId: string;
+  step: number;
+  /** Full wizard state snapshot (JSON) */
+  data: WizardDraftData;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Full wizard state snapshot (JSON)
+ */
+export type UpsertWizardDraftBodyData = { [key: string]: unknown };
+
+export interface UpsertWizardDraftBody {
+  sessionId: string;
+  step: number;
+  /** Full wizard state snapshot (JSON) */
+  data: UpsertWizardDraftBodyData;
+}
+
 export interface CreateProposalBody {
   /** @nullable */
   customerId?: number | null;
@@ -876,4 +903,12 @@ export const ImportDatasheetBodyTipoEquipamento = {
 export type ImportDatasheetBody = {
   file: Blob;
   tipoEquipamento: ImportDatasheetBodyTipoEquipamento;
+};
+
+export type GetWizardDraftParams = {
+  sessionId: string;
+};
+
+export type DeleteWizardDraftParams = {
+  sessionId: string;
 };

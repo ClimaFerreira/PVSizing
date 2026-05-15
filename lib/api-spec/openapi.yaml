@@ -821,6 +821,58 @@ paths:
         "204":
           description: Deleted
 
+  # --- Wizard draft ---
+  /wizard/draft:
+    get:
+      operationId: getWizardDraft
+      tags: [wizard]
+      summary: Get wizard draft by session ID
+      parameters:
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Draft found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WizardDraft"
+        "404":
+          description: No draft found for this session
+    put:
+      operationId: upsertWizardDraft
+      tags: [wizard]
+      summary: Create or update a wizard draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertWizardDraftBody"
+      responses:
+        "200":
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WizardDraft"
+    delete:
+      operationId: deleteWizardDraft
+      tags: [wizard]
+      summary: Delete a wizard draft
+      parameters:
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
   # --- Dashboard / summary ---
   /dashboard/summary:
     get:
@@ -2133,6 +2185,48 @@ components:
         - titulo
         - status
         - createdAt
+
+    # --- Wizard Draft ---
+    WizardDraft:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: string
+        step:
+          type: integer
+        data:
+          type: object
+          description: Full wizard state snapshot (JSON)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - sessionId
+        - step
+        - data
+        - createdAt
+        - updatedAt
+
+    UpsertWizardDraftBody:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        step:
+          type: integer
+        data:
+          type: object
+          description: Full wizard state snapshot (JSON)
+      required:
+        - sessionId
+        - step
+        - data
 
     CreateProposalBody:
       type: object

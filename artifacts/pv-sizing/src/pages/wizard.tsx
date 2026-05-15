@@ -37,7 +37,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { saveDraft, loadDraft, clearDraft, draftAge, type WizardDraftData } from "@/lib/wizard-draft";
+import {
+  saveDraft, loadDraft, clearDraft, draftAge,
+  syncDraftToDb, loadDraftFromDb, clearDraftFromDb,
+  getOrCreateSessionId,
+  type WizardDraftData,
+} from "@/lib/wizard-draft";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 
@@ -176,8 +181,11 @@ export default function Wizard() {
   const [manualMpptConfig, setManualMpptConfig] = useState<import("@/lib/string-sizing").MpptConfig | null>(null);
   const [investimentoManual, setInvestimentoManual] = useState<number | null>(null);
   const [orcamentoState, setOrcamentoState] = useState<OrcamentoState | null>(null);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [lastSaved, setLastSaved]   = useState<Date | null>(null);
+  const [dbSynced, setDbSynced]     = useState(false);
+  const sessionId = useRef<string>(getOrCreateSessionId());
+  const saveTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dbSyncTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -236,32 +244,58 @@ export default function Wizard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // ── Draft: check on mount ──────────────────────────────────────────────────
+  // ── Draft: check on mount (localStorage → DB fallback) ────────────────────
   useEffect(() => {
-    const draft = loadDraft();
-    if (draft && (draft.step > 1 || draft.sizing !== null)) {
-      setPendingDraft(draft);
+    const local = loadDraft();
+    if (local && (local.step > 1 || local.sizing !== null)) {
+      setPendingDraft(local);
       setShowRecovery(true);
+      return;
     }
+    // No local draft — try remote
+    loadDraftFromDb(sessionId.current).then(remote => {
+      if (remote && (remote.step > 1 || remote.sizing !== null)) {
+        setPendingDraft(remote);
+        setShowRecovery(true);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Draft: auto-save (debounced 800ms) ────────────────────────────────────
+  // ── Draft: auto-save localStorage (800ms) + DB sync (4s) ─────────────────
   useEffect(() => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (saveTimerRef.current)   clearTimeout(saveTimerRef.current);
+    if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
+
+    const snapshot = {
+      step,
+      consumoData: consumoData as unknown as Record<string, unknown>,
+      locData: locData as unknown as Record<string, unknown> | null,
+      sizing: sizing as unknown as Record<string, unknown> | null,
+      selectedCenarioTipo,
+      manual: manual as unknown as Record<string, unknown> | null,
+      showManualAdjust,
+      equipFormValues: equipForm.getValues(),
+    };
+
+    // localStorage — fast (800ms)
     saveTimerRef.current = setTimeout(() => {
-      saveDraft({
-        step,
-        consumoData: consumoData as unknown as Record<string, unknown>,
-        locData: locData as unknown as Record<string, unknown> | null,
-        sizing: sizing as unknown as Record<string, unknown> | null,
-        selectedCenarioTipo,
-        manual: manual as unknown as Record<string, unknown> | null,
-        showManualAdjust,
-        equipFormValues: equipForm.getValues(),
-      });
+      saveDraft(snapshot);
       setLastSaved(new Date());
     }, 800);
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+
+    // DB — deferred (4s), fire-and-forget
+    dbSyncTimerRef.current = setTimeout(() => {
+      const saved = loadDraft();
+      if (saved) {
+        syncDraftToDb(saved, sessionId.current).then(() => setDbSynced(true));
+      }
+    }, 4_000);
+
+    return () => {
+      if (saveTimerRef.current)   clearTimeout(saveTimerRef.current);
+      if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust]);
 
@@ -382,12 +416,17 @@ export default function Wizard() {
 
   const discardDraft = useCallback(() => {
     clearDraft();
+    clearDraftFromDb(sessionId.current);
+    setDbSynced(false);
     setShowRecovery(false);
     setPendingDraft(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resetWizard = useCallback(() => {
     clearDraft();
+    clearDraftFromDb(sessionId.current);
+    setDbSynced(false);
     setConsumoData(DEFAULT_CONSUMO_DATA);
     setLocData(null);
     setSizing(null);
@@ -552,9 +591,9 @@ export default function Wizard() {
         </div>
         <div className="flex items-center gap-2 shrink-0 pt-1">
           {lastSaved && (
-            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1" title={`Guardado localmente às ${lastSaved.toLocaleTimeString("pt-PT")}`}>
               <Save size={11} />
-              Guardado
+              {dbSynced ? "Guardado" : "Guardado localmente"}
             </span>
           )}
           {(step > 1 || sizing) && (

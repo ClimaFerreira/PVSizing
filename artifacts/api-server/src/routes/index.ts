@@ -13,6 +13,7 @@ import stringSizingRouter from "./string-sizing";
 import locationsRouter from "./locations";
 import aiToolsRouter from "./ai-tools";
 import proposalsRouter from "./proposals";
+import wizardDraftRouter from "./wizard-draft";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(stringSizingRouter);
 router.use(locationsRouter);
 router.use(aiToolsRouter);
 router.use(proposalsRouter);
+router.use(wizardDraftRouter);
 
 export default router;

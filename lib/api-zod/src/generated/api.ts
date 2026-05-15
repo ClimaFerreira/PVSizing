@@ -1128,6 +1128,56 @@ export const DeleteProposalParams = zod.object({
 });
 
 /**
+ * @summary Get wizard draft by session ID
+ */
+export const GetWizardDraftQueryParams = zod.object({
+  sessionId: zod.coerce.string(),
+});
+
+export const GetWizardDraftResponse = zod.object({
+  id: zod.number(),
+  sessionId: zod.string(),
+  step: zod.number(),
+  data: zod
+    .object({})
+    .passthrough()
+    .describe("Full wizard state snapshot (JSON)"),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Create or update a wizard draft
+ */
+export const UpsertWizardDraftBody = zod.object({
+  sessionId: zod.string(),
+  step: zod.number(),
+  data: zod
+    .object({})
+    .passthrough()
+    .describe("Full wizard state snapshot (JSON)"),
+});
+
+export const UpsertWizardDraftResponse = zod.object({
+  id: zod.number(),
+  sessionId: zod.string(),
+  step: zod.number(),
+  data: zod
+    .object({})
+    .passthrough()
+    .describe("Full wizard state snapshot (JSON)"),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a wizard draft
+ */
+export const DeleteWizardDraftQueryParams = zod.object({
+  sessionId: zod.coerce.string(),
+});
+
+/**
  * @summary Get dashboard summary stats
  */
 export const GetDashboardSummaryResponse = zod.object({
