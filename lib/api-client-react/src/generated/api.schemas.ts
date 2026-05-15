@@ -634,6 +634,44 @@ export const CenarioDimensionamentoTipo = {
   agressivo: "agressivo",
 } as const;
 
+/**
+ * Recommended inverter from catalogue for this scenario (null if catalogue is empty)
+ */
+export type CenarioDimensionamentoInversorRecomendado = {
+  id: number;
+  nome: string;
+  fabricante: string;
+  /** Nominal AC power in kW */
+  potenciaAc: number;
+  /** Number of inverter units required */
+  numUnidades: number;
+} | null;
+
+/**
+ * Recommended battery from catalogue (null if battery not recommended or catalogue is empty)
+ */
+export type CenarioDimensionamentoBateriaRecomendada = {
+  id: number;
+  nome: string;
+  fabricante: string;
+  /** Total capacity in kWh */
+  capacidade: number;
+} | null;
+
+export type CenarioDimensionamentoAlertasItemTipo =
+  (typeof CenarioDimensionamentoAlertasItemTipo)[keyof typeof CenarioDimensionamentoAlertasItemTipo];
+
+export const CenarioDimensionamentoAlertasItemTipo = {
+  info: "info",
+  aviso: "aviso",
+  erro: "erro",
+} as const;
+
+export type CenarioDimensionamentoAlertasItem = {
+  tipo: CenarioDimensionamentoAlertasItemTipo;
+  mensagem: string;
+};
+
 export interface CenarioDimensionamento {
   /** Scenario type */
   tipo: CenarioDimensionamentoTipo;
@@ -674,6 +712,12 @@ export interface CenarioDimensionamento {
    * @nullable
    */
   capacidadeBateriaRecomendada: number | null;
+  /** Recommended inverter from catalogue for this scenario (null if catalogue is empty) */
+  inversorRecomendado: CenarioDimensionamentoInversorRecomendado;
+  /** Recommended battery from catalogue (null if battery not recommended or catalogue is empty) */
+  bateriaRecomendada: CenarioDimensionamentoBateriaRecomendada;
+  /** Technical alerts for this scenario */
+  alertas: CenarioDimensionamentoAlertasItem[];
 }
 
 /**

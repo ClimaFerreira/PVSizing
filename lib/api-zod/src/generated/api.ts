@@ -974,6 +974,39 @@ export const AutoSizeSystemResponse = zod.object({
           .describe(
             "Recommended battery capacity in kWh (null if battery not included)",
           ),
+        inversorRecomendado: zod
+          .object({
+            id: zod.number(),
+            nome: zod.string(),
+            fabricante: zod.string(),
+            potenciaAc: zod.number().describe("Nominal AC power in kW"),
+            numUnidades: zod
+              .number()
+              .describe("Number of inverter units required"),
+          })
+          .nullable()
+          .describe(
+            "Recommended inverter from catalogue for this scenario (null if catalogue is empty)",
+          ),
+        bateriaRecomendada: zod
+          .object({
+            id: zod.number(),
+            nome: zod.string(),
+            fabricante: zod.string(),
+            capacidade: zod.number().describe("Total capacity in kWh"),
+          })
+          .nullable()
+          .describe(
+            "Recommended battery from catalogue (null if battery not recommended or catalogue is empty)",
+          ),
+        alertas: zod
+          .array(
+            zod.object({
+              tipo: zod.enum(["info", "aviso", "erro"]),
+              mensagem: zod.string(),
+            }),
+          )
+          .describe("Technical alerts for this scenario"),
       }),
     )
     .describe("Three sizing scenarios (conservador, equilibrado, agressivo)"),

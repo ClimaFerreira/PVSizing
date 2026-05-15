@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { db, invertersTable, batteriesTable } from "@workspace/db";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -79,16 +80,16 @@ function buildCenario(p: CenarioParams) {
 
   const META: Record<string, { label: string; descricao: string }> = {
     conservador: {
-      label: "Conservador",
-      descricao: "Menor investimento, melhor autoconsumo relativo e menos excedente nos meses de verão",
+      label: "Económico",
+      descricao: "Menor investimento inicial, melhor autoconsumo relativo e retorno mais rápido",
     },
     equilibrado: {
       label: "Equilibrado",
       descricao: "Bom equilíbrio entre cobertura anual, autoconsumo e retorno financeiro",
     },
     agressivo: {
-      label: "Agressivo",
-      descricao: "Máxima cobertura anual — maior investimento e excedente elevado nos meses de verão",
+      label: "Premium",
+      descricao: "Máxima cobertura e produção solar — maior investimento, benefícios a longo prazo",
     },
   };
 
@@ -112,6 +113,76 @@ function buildCenario(p: CenarioParams) {
     paybackAnos,
     capacidadeBateriaRecomendada: p.incluirBateria ? p.capacidadeBateriaBase : null,
   };
+}
+
+// ─── Equipment matching helpers ───────────────────────────────────────────────
+
+type DbInverter = typeof invertersTable.$inferSelect;
+type DbBattery  = typeof batteriesTable.$inferSelect;
+type RawCenario = ReturnType<typeof buildCenario>;
+
+function matchInversor(potenciaKwp: number, allInverters: DbInverter[]) {
+  if (allInverters.length === 0) return null;
+  let best: DbInverter | null = null;
+  let bestUnits = Infinity;
+  let bestOversizing = Infinity;
+  for (const inv of allInverters) {
+    const potAc = Number(inv.potenciaAc);
+    if (!potAc || potAc <= 0) continue;
+    const units = Math.ceil(potenciaKwp / potAc);
+    const oversizing = units * potAc - potenciaKwp;
+    if (units < bestUnits || (units === bestUnits && oversizing < bestOversizing)) {
+      best = inv;
+      bestUnits = units;
+      bestOversizing = oversizing;
+    }
+  }
+  if (!best) return null;
+  return {
+    id: best.id,
+    nome: best.nome,
+    fabricante: best.fabricante,
+    potenciaAc: Number(best.potenciaAc),
+    numUnidades: bestUnits,
+  };
+}
+
+function matchBateria(capacidadeKwh: number | null, allBatteries: DbBattery[]) {
+  if (!capacidadeKwh || capacidadeKwh <= 0 || allBatteries.length === 0) return null;
+  const valid = allBatteries.filter(b => Number(b.capacidade) > 0);
+  if (valid.length === 0) return null;
+  const bigger = valid.filter(b => Number(b.capacidade) >= capacidadeKwh);
+  const best = bigger.length > 0
+    ? bigger.reduce((min, b) => Number(b.capacidade) < Number(min.capacidade) ? b : min)
+    : valid.reduce((max, b) => Number(b.capacidade) > Number(max.capacidade) ? b : max);
+  return {
+    id: best.id,
+    nome: best.nome,
+    fabricante: best.fabricante,
+    capacidade: Number(best.capacidade),
+  };
+}
+
+function generateAlertas(c: RawCenario): Array<{ tipo: "info" | "aviso" | "erro"; mensagem: string }> {
+  const out: Array<{ tipo: "info" | "aviso" | "erro"; mensagem: string }> = [];
+  if (c.coberturaReal < 60) {
+    out.push({ tipo: "aviso", mensagem: `Cobertura de ${c.coberturaReal}% — sistema subdimensionado para o consumo indicado.` });
+  } else if (c.coberturaReal > 115) {
+    out.push({ tipo: "info", mensagem: `Cobertura de ${c.coberturaReal}% — excedente elevado no verão; considere autoconsumo colectivo.` });
+  }
+  if (c.paybackAnos > 13) {
+    out.push({ tipo: "aviso", mensagem: `Retorno em ${c.paybackAnos} anos — verifique subsídios disponíveis (SRP, InvestPortugal).` });
+  }
+  if (c.potenciaInstalada > 10) {
+    out.push({ tipo: "info", mensagem: `Sistema de ${c.potenciaInstalada} kWp pode requerer licenciamento DGEG.` });
+  }
+  if (c.autoconsumoPerc < 50) {
+    out.push({ tipo: "aviso", mensagem: `Autoconsumo de ${c.autoconsumoPerc}% — grande parte da produção é injectada na rede.` });
+  }
+  if (c.capacidadeBateriaRecomendada && c.capacidadeBateriaRecomendada > 0) {
+    out.push({ tipo: "info", mensagem: `Bateria de ${c.capacidadeBateriaRecomendada} kWh recomendada para maximizar autoconsumo nocturno.` });
+  }
+  return out;
 }
 
 // POST /tools/parse-invoice
@@ -320,6 +391,23 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     `produção anual ${energiaAnualEstimada.toLocaleString("pt-PT")} kWh → cobertura real ${coberturaReal}%.` +
     tarifaTexto;
 
+  // ── Equipment matching ─────────────────────────────────────────────────────
+  const [allInverters, allBatteries] = await Promise.all([
+    db.select().from(invertersTable),
+    incluirBateria ? db.select().from(batteriesTable) : Promise.resolve<(typeof batteriesTable.$inferSelect)[]>([]),
+  ]);
+
+  const enrichCenario = (c: RawCenario) => ({
+    ...c,
+    inversorRecomendado: matchInversor(c.potenciaInstalada, allInverters),
+    bateriaRecomendada:  matchBateria(c.capacidadeBateriaRecomendada, allBatteries),
+    alertas:             generateAlertas(c),
+  });
+
+  const enrichedConservador = enrichCenario(cenConservador);
+  const enrichedEquilibrado = enrichCenario(cenEquilibrado);
+  const enrichedAgressivo   = enrichCenario(cenAgressivo);
+
   res.json({
     consumoDiario: Math.round(consumoDiario * 10) / 10,
     consumoAnualAjustado: Math.round(consumoAnualAjustado),
@@ -341,7 +429,7 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     percCheio,
     percPonta,
     cenariosPaineis,
-    cenariosDimensionamento: [cenConservador, cenEquilibrado, cenAgressivo],
+    cenariosDimensionamento: [enrichedConservador, enrichedEquilibrado, enrichedAgressivo],
     recomendado,
     explicacao,
     _monthLabels: MONTH_LABELS,

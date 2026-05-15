@@ -61,6 +61,7 @@ import { type OrcamentoState, defaultOrcamentoState } from "@/lib/orcamento";
 import { type InverterUnit, criarUnidade } from "@/lib/multi-inverter";
 const WizardStep1Upgrade       = lazy(() => import("@/components/wizard-step1-upgrade"));
 const WizardStep6UpgradeAnalise = lazy(() => import("@/components/wizard-step6-upgrade-analise"));
+const WizardCenarios            = lazy(() => import("@/components/wizard-cenarios"));
 import {
   type TipoProjeto, type InstalacaoExistente,
   defaultInstalacaoExistente,
@@ -74,9 +75,9 @@ const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "S
 type CenarioTipo = "conservador" | "equilibrado" | "agressivo";
 
 const CENARIO_META: Record<CenarioTipo, { label: string; Icon: React.ElementType; accent: string; border: string; bg: string }> = {
-  conservador: { label: "Conservador", Icon: TrendingDown, accent: "text-blue-600 dark:text-blue-400",   border: "border-blue-200 dark:border-blue-700",   bg: "bg-blue-50/60 dark:bg-blue-950/20" },
-  equilibrado:  { label: "Equilibrado",  Icon: Target,        accent: "text-primary",                       border: "border-primary/40",                       bg: "bg-primary/5" },
-  agressivo:   { label: "Agressivo",   Icon: TrendingUp,    accent: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-700", bg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
+  conservador: { label: "Económico",   Icon: TrendingDown, accent: "text-blue-600 dark:text-blue-400",      border: "border-blue-200 dark:border-blue-700",      bg: "bg-blue-50/60 dark:bg-blue-950/20" },
+  equilibrado:  { label: "Equilibrado", Icon: Target,       accent: "text-primary",                          border: "border-primary/40",                         bg: "bg-primary/5" },
+  agressivo:   { label: "Premium",     Icon: TrendingUp,   accent: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-700", bg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
 };
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -117,6 +118,9 @@ interface AutoSizeCenario {
   poupancaAnual: number;
   paybackAnos: number;
   capacidadeBateriaRecomendada: number | null;
+  inversorRecomendado?: { id: number; nome: string; fabricante: string; potenciaAc: number; numUnidades: number } | null;
+  bateriaRecomendada?: { id: number; nome: string; fabricante: string; capacidade: number } | null;
+  alertas?: Array<{ tipo: "info" | "aviso" | "erro"; mensagem: string }>;
 }
 
 interface AutoSizeResult {
@@ -325,7 +329,7 @@ export default function Wizard() {
     return sizing.cenariosDimensionamento.find(c => c.tipo === selectedCenarioTipo) ?? null;
   }, [sizing, selectedCenarioTipo]);
 
-  // Switch scenario and reset manual to match
+  // Switch scenario and reset manual to match; pre-populate recommended equipment
   const selectCenario = useCallback((tipo: CenarioTipo) => {
     setSelectedCenarioTipo(tipo);
     if (sizing) {
@@ -339,8 +343,14 @@ export default function Wizard() {
         coberturaMeta: consumoData.coberturaMeta,
       });
       setShowManualAdjust(false);
+      if (c?.inversorRecomendado?.id) {
+        equipForm.setValue("inverterId", c.inversorRecomendado.id);
+      }
+      if (c?.bateriaRecomendada?.id && consumoData.incluirBateria) {
+        equipForm.setValue("batteryId", c.bateriaRecomendada.id);
+      }
     }
-  }, [sizing, consumoData.coberturaMeta]);
+  }, [sizing, consumoData.coberturaMeta, consumoData.incluirBateria, equipForm]);
 
   // Effective sizing: active scenario base + manual overrides
   const effectiveSizing = useMemo(() => {
@@ -906,76 +916,22 @@ export default function Wizard() {
                 );
               })()}
 
-              {/* ── Scenario selector ───────────────────────────────────────── */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {sizing.cenariosDimensionamento?.map(c => {
-                  const isSelected = c.tipo === selectedCenarioTipo;
-                  const isRec = c.tipo === sizing.recomendado;
-                  const meta = CENARIO_META[c.tipo as CenarioTipo];
-                  const Icon = meta?.Icon ?? Sun;
-                  return (
-                    <div
-                      key={c.tipo}
-                      onClick={() => selectCenario(c.tipo as CenarioTipo)}
-                      className={cn(
-                        "relative rounded-xl border-2 p-4 cursor-pointer transition-all hover:shadow-sm select-none",
-                        isSelected
-                          ? `border-primary bg-primary/5 shadow-sm`
-                          : "border-border hover:border-primary/40"
-                      )}
-                    >
-                      {isRec && (
-                        <div className="absolute -top-2.5 left-3">
-                          <Badge className="text-[10px] py-0 px-1.5 bg-primary text-primary-foreground">⭐ Recomendado</Badge>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between mb-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <Icon size={16} className={cn(isSelected ? "text-primary" : "text-muted-foreground")} />
-                          <span className={cn("font-semibold text-sm", isSelected ? "text-primary" : "")}>{c.label}</span>
-                        </div>
-                        {isSelected && (
-                          <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center shrink-0">
-                            <div className="w-2 h-2 rounded-full bg-white" />
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mb-3 leading-snug">{c.descricao}</p>
-                      <div className="space-y-1.5 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Potência</span>
-                          <span className="font-bold">{c.potenciaInstalada} kWp</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Painéis (400 Wp)</span>
-                          <span className="font-semibold">{c.numPaineis} un.</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Cobertura anual</span>
-                          <span className={cn("font-semibold", c.coberturaReal >= consumoData.coberturaMeta ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400")}>{c.coberturaReal}%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Autoconsumo</span>
-                          <span className="font-semibold">{c.autoconsumoPerc}%</span>
-                        </div>
-                        <Separator className="my-1.5" />
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Investimento est.</span>
-                          <span className="font-semibold">{c.investimentoEstimado.toLocaleString("pt-PT")} €</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Poupança/ano</span>
-                          <span className="font-semibold text-green-600 dark:text-green-400">{c.poupancaAnual.toLocaleString("pt-PT")} €</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Payback simples</span>
-                          <span className={cn("font-bold", isSelected ? "text-primary" : "")}>{c.paybackAnos} anos</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {/* ── Scenario comparison (Económico / Equilibrado / Premium) ── */}
+              {sizing.cenariosDimensionamento && sizing.cenariosDimensionamento.length > 0 && (
+                <Suspense fallback={
+                  <div className="flex justify-center py-8">
+                    <Loader2 size={28} className="animate-spin text-muted-foreground" />
+                  </div>
+                }>
+                  <WizardCenarios
+                    cenarios={sizing.cenariosDimensionamento}
+                    recomendado={sizing.recomendado}
+                    selectedTipo={selectedCenarioTipo}
+                    coberturaMeta={consumoData.coberturaMeta}
+                    onSelect={selectCenario}
+                  />
+                </Suspense>
+              )}
 
               {/* ── Monthly chart + financial summary (active scenario) ──────── */}
               {activeCenario && (

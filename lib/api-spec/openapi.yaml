@@ -1985,6 +1985,51 @@ components:
         capacidadeBateriaRecomendada:
           type: ["number", "null"]
           description: Recommended battery capacity in kWh (null if battery not included)
+        inversorRecomendado:
+          type: object
+          nullable: true
+          description: Recommended inverter from catalogue for this scenario (null if catalogue is empty)
+          properties:
+            id:
+              type: integer
+            nome:
+              type: string
+            fabricante:
+              type: string
+            potenciaAc:
+              type: number
+              description: Nominal AC power in kW
+            numUnidades:
+              type: integer
+              description: Number of inverter units required
+          required: [id, nome, fabricante, potenciaAc, numUnidades]
+        bateriaRecomendada:
+          type: object
+          nullable: true
+          description: Recommended battery from catalogue (null if battery not recommended or catalogue is empty)
+          properties:
+            id:
+              type: integer
+            nome:
+              type: string
+            fabricante:
+              type: string
+            capacidade:
+              type: number
+              description: Total capacity in kWh
+          required: [id, nome, fabricante, capacidade]
+        alertas:
+          type: array
+          description: Technical alerts for this scenario
+          items:
+            type: object
+            properties:
+              tipo:
+                type: string
+                enum: [info, aviso, erro]
+              mensagem:
+                type: string
+            required: [tipo, mensagem]
       required:
         - tipo
         - label
@@ -2004,6 +2049,9 @@ components:
         - poupancaAnual
         - paybackAnos
         - capacidadeBateriaRecomendada
+        - inversorRecomendado
+        - bateriaRecomendada
+        - alertas
 
     AutoSizeResult:
       type: object

@@ -5,6 +5,9 @@
  * PV Sizing Tool API
  * OpenAPI spec version: 0.1.0
  */
+import type { CenarioDimensionamentoAlertasItem } from "./cenarioDimensionamentoAlertasItem";
+import type { CenarioDimensionamentoBateriaRecomendada } from "./cenarioDimensionamentoBateriaRecomendada";
+import type { CenarioDimensionamentoInversorRecomendado } from "./cenarioDimensionamentoInversorRecomendado";
 import type { CenarioDimensionamentoTipo } from "./cenarioDimensionamentoTipo";
 
 export interface CenarioDimensionamento {
@@ -47,4 +50,10 @@ export interface CenarioDimensionamento {
    * @nullable
    */
   capacidadeBateriaRecomendada: number | null;
+  /** Recommended inverter from catalogue for this scenario (null if catalogue is empty) */
+  inversorRecomendado: CenarioDimensionamentoInversorRecomendado;
+  /** Recommended battery from catalogue (null if battery not recommended or catalogue is empty) */
+  bateriaRecomendada: CenarioDimensionamentoBateriaRecomendada;
+  /** Technical alerts for this scenario */
+  alertas: CenarioDimensionamentoAlertasItem[];
 }
