@@ -140,14 +140,25 @@ interface ManualOverride {
 }
 
 const STEPS = [
-  { id: 1, label: "Cliente",   icon: MapPin },
-  { id: 2, label: "Consumo",   icon: Zap },
-  { id: 3, label: "Perfil",    icon: Target },
-  { id: 4, label: "Estudo",    icon: BarChart3 },
-  { id: 5, label: "Equip.",    icon: Settings2 },
-  { id: 6, label: "Técnica",   icon: CheckCircle2 },
-  { id: 7, label: "Poupança",  icon: Euro },
-  { id: 8, label: "Proposta",  icon: Save },
+  { id: 1, label: "Cliente",        icon: MapPin },
+  { id: 2, label: "Consumos",       icon: Zap },
+  { id: 3, label: "Perfil",         icon: Target },
+  { id: 4, label: "Pré-dim. FV",    icon: BarChart3 },
+  { id: 5, label: "Equipamentos",   icon: Settings2 },
+  { id: 6, label: "Técnica",        icon: CheckCircle2 },
+  { id: 7, label: "Poupança",       icon: Euro },
+  { id: 8, label: "Orçamento",      icon: Save },
+];
+
+const STEP_TITLES = [
+  "Cliente e Localização",
+  "Análise de Consumos",
+  "Perfil de Autoconsumo",
+  "Pré-dimensionamento FV",
+  "Seleção de Equipamentos",
+  "Análise Técnica",
+  "Estudo de Poupança e Retorno",
+  "Orçamento / Proposta PDF",
 ];
 
 export default function Wizard() {
@@ -587,6 +598,14 @@ export default function Wizard() {
             );
           })}
         </div>
+      </div>
+
+      {/* ── Step section header ──────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3">
+        <span className="inline-flex items-center rounded-full bg-primary/10 border border-primary/20 px-3 py-0.5 text-xs font-semibold text-primary">
+          Passo {step} de {STEPS.length}
+        </span>
+        <h2 className="text-base font-semibold text-foreground">{STEP_TITLES[step - 1]}</h2>
       </div>
 
       {/* ── STEP 1: Cliente e Localização ───────────────────────────────────── */}
@@ -1654,7 +1673,7 @@ export default function Wizard() {
         {step < 8 && (
           <Button onClick={goNext} disabled={isSizing}>
             {isSizing && <Loader2 size={16} className="mr-1 animate-spin" />}
-            {step === 3 ? "Calcular Estudo" : step === 5 ? "Análise Técnica" : step === 7 ? "Gerar Proposta" : "Seguinte"}
+            {step === 3 ? "Calcular Dimensionamento" : step === 5 ? "Análise Técnica" : step === 7 ? "Gerar Orçamento" : "Seguinte"}
             <ChevronRight size={16} className="ml-1" />
           </Button>
         )}
