@@ -58,6 +58,13 @@ import WizardStep7Financeiro from "@/components/wizard-step7-financeiro";
 import WizardOrcamento from "@/components/wizard-orcamento";
 import { type OrcamentoState, defaultOrcamentoState } from "@/lib/orcamento";
 import { type InverterUnit, criarUnidade } from "@/lib/multi-inverter";
+import WizardStep1Upgrade from "@/components/wizard-step1-upgrade";
+import WizardStep6UpgradeAnalise from "@/components/wizard-step6-upgrade-analise";
+import {
+  type TipoProjeto, type InstalacaoExistente,
+  defaultInstalacaoExistente,
+  TIPO_PROJETO_LABELS, TIPO_PROJETO_DESC,
+} from "@/lib/upgrade";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -182,6 +189,8 @@ export default function Wizard() {
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
   const [manualMpptConfig, setManualMpptConfig] = useState<import("@/lib/string-sizing").MpptConfig | null>(null);
   const [inverterUnits, setInverterUnits] = useState<InverterUnit[]>([]);
+  const [tipoProjeto, setTipoProjeto] = useState<TipoProjeto>("nova");
+  const [instalacaoExistente, setInstalacaoExistente] = useState<InstalacaoExistente>(defaultInstalacaoExistente);
   const [investimentoManual, setInvestimentoManual] = useState<number | null>(null);
   const [orcamentoState, setOrcamentoState] = useState<OrcamentoState | null>(null);
   const [lastSaved, setLastSaved]   = useState<Date | null>(null);
@@ -686,7 +695,56 @@ export default function Wizard() {
 
       {/* ── STEP 1: Cliente e Localização ───────────────────────────────────── */}
       {step === 1 && (
-        <WizardStep1Cliente clienteForm={clienteForm} locForm={locForm} />
+        <div className="space-y-4">
+          {/* Tipo de Projeto */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings2 size={18} /> Tipo de Projeto
+              </CardTitle>
+              <CardDescription>Selecione o tipo de intervenção a dimensionar.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {(["nova", "upgrade", "expansao", "bateria", "substituicao"] as const).map(tipo => (
+                  <button
+                    key={tipo}
+                    type="button"
+                    onClick={() => setTipoProjeto(tipo)}
+                    className={cn(
+                      "flex items-start gap-3 p-3 rounded-xl border text-left transition-all",
+                      tipoProjeto === tipo
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "border-border hover:border-primary/50 hover:bg-muted/40",
+                    )}
+                  >
+                    <div className={cn(
+                      "w-2 h-2 rounded-full mt-1.5 shrink-0",
+                      tipoProjeto === tipo ? "bg-primary" : "bg-muted-foreground/30",
+                    )} />
+                    <div>
+                      <div className="text-sm font-medium">{TIPO_PROJETO_LABELS[tipo]}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{TIPO_PROJETO_DESC[tipo]}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Existing installation form — shown for all non-nova types */}
+          {tipoProjeto !== "nova" && (
+            <WizardStep1Upgrade
+              tipoProjeto={tipoProjeto}
+              data={instalacaoExistente}
+              onChange={setInstalacaoExistente}
+              panels={panels ?? []}
+              inverters={inverters ?? []}
+            />
+          )}
+
+          <WizardStep1Cliente clienteForm={clienteForm} locForm={locForm} />
+        </div>
       )}
 
       {/* ── STEP 2: Análise de Consumos ──────────────────────────────────────── */}
@@ -1423,6 +1481,32 @@ export default function Wizard() {
       {/* ── STEP 5: Seleção de Equipamentos ─────────────────────────────────── */}
       {step === 5 && (
         <div className="space-y-4">
+          {/* Existing system reference banner (upgrade mode) */}
+          {tipoProjeto !== "nova" && instalacaoExistente.potenciaFVkWp > 0 && (
+            <Card className="border-amber-200 dark:border-amber-800">
+              <CardContent className="py-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                  <Settings2 size={13} /> Instalação Existente (referência)
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  {[
+                    { label: "FV existente",  val: `${instalacaoExistente.potenciaFVkWp} kWp` },
+                    { label: "Painéis",       val: instalacaoExistente.numPaineis > 0 ? `${instalacaoExistente.numPaineis} un.` : "—" },
+                    { label: "Inversor AC",   val: instalacaoExistente.potenciaACkW > 0 ? `${instalacaoExistente.potenciaACkW} kW` : "—" },
+                    { label: "Produção/ano",  val: instalacaoExistente.producaoAnualkWh > 0 ? `${instalacaoExistente.producaoAnualkWh.toLocaleString("pt-PT")} kWh` : "—" },
+                  ].map(r => (
+                    <div key={r.label} className="rounded-lg bg-amber-50 dark:bg-amber-950/20 p-2.5">
+                      <div className="font-semibold text-amber-900 dark:text-amber-200">{r.val}</div>
+                      <div className="text-muted-foreground">{r.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Selecione os <strong>novos equipamentos a adicionar</strong> nos campos abaixo.
+                </p>
+              </CardContent>
+            </Card>
+          )}
           {(effectiveSizing ?? sizing) && (() => {
             const eff = (effectiveSizing ?? sizing)!;
             return (
@@ -1696,6 +1780,21 @@ export default function Wizard() {
               )}
             </div>
 
+            {/* Upgrade analysis (shown before technical analysis in upgrade mode) */}
+            {tipoProjeto !== "nova" && instalacaoExistente.potenciaFVkWp > 0 && (
+              <WizardStep6UpgradeAnalise
+                tipoProjeto={tipoProjeto}
+                existente={instalacaoExistente}
+                novaPotenciaFVkWp={potenciaRealKwp}
+                novoInversor={inverter}
+                novoPanel={panel}
+                precoKwh={consumoData.precoKwh ?? 0.18}
+                investimentoUpgrade={investimentoManual ?? activeCenario?.investimentoEstimado ?? 0}
+                existingPanel={instalacaoExistente.panelId ? panels?.find(p => p.id === instalacaoExistente.panelId) ?? null : null}
+                existingInverter={instalacaoExistente.inverterId ? inverters?.find(i => i.id === instalacaoExistente.inverterId) ?? null : null}
+              />
+            )}
+
             {isMultiInverter ? (
               <WizardStep6MultiTecnica
                 panel={panel}
@@ -1751,14 +1850,66 @@ export default function Wizard() {
 
       {/* ── STEP 7: Estudo de Poupança e Retorno ─────────────────────────────── */}
       {step === 7 && activeCenario && (
-        <WizardStep7Financeiro
-          cenario={activeCenario}
-          precoKwh={consumoData.precoKwh ?? 0.18}
-          consumoAnual={consumoData.consumoAnual}
-          consumoDiurnoPct={perfilDiurnoPct}
-          investimento={investimentoManual ?? undefined}
-          onInvestimentoChange={setInvestimentoManual}
-        />
+        <div className="space-y-4">
+          {/* Upgrade savings comparison card */}
+          {tipoProjeto !== "nova" && instalacaoExistente.producaoAnualkWh > 0 && (() => {
+            const producaoAdd = activeCenario.energiaAnualEstimada ?? 0;
+            const precoKwhUpg = consumoData.precoKwh ?? 0.18;
+            const poupancaAdd = producaoAdd * precoKwhUpg;
+            const invest = investimentoManual ?? activeCenario.investimentoEstimado;
+            const payback = poupancaAdd > 0 && invest > 0 ? invest / poupancaAdd : null;
+            return (
+              <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/10">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <TrendingUp size={15} className="text-amber-600" />
+                    Comparativo de Poupança — Situação Actual vs. Upgrade
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      {
+                        label: "Situação Actual",
+                        prod: `${instalacaoExistente.producaoAnualkWh.toLocaleString("pt-PT")} kWh/ano`,
+                        delta: null,
+                        cls: "bg-muted/40",
+                      },
+                      {
+                        label: "Ganho do Upgrade",
+                        prod: `+${producaoAdd.toLocaleString("pt-PT")} kWh/ano`,
+                        delta: `+${poupancaAdd.toLocaleString("pt-PT", { maximumFractionDigits: 0 })} €/ano`,
+                        cls: "bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800",
+                      },
+                      {
+                        label: "Total Pós Upgrade",
+                        prod: `${(instalacaoExistente.producaoAnualkWh + producaoAdd).toLocaleString("pt-PT")} kWh/ano`,
+                        delta: payback != null
+                          ? `Payback upgrade: ${payback.toFixed(1)} anos`
+                          : "Defina o investimento abaixo",
+                        cls: "bg-primary/5 border border-primary/20",
+                      },
+                    ].map(r => (
+                      <div key={r.label} className={cn("rounded-xl p-4", r.cls)}>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{r.label}</p>
+                        <p className="text-lg font-bold mt-1">{r.prod}</p>
+                        {r.delta && <p className="text-xs text-muted-foreground mt-0.5">{r.delta}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+          <WizardStep7Financeiro
+            cenario={activeCenario}
+            precoKwh={consumoData.precoKwh ?? 0.18}
+            consumoAnual={consumoData.consumoAnual}
+            consumoDiurnoPct={perfilDiurnoPct}
+            investimento={investimentoManual ?? undefined}
+            onInvestimentoChange={setInvestimentoManual}
+          />
+        </div>
       )}
       {step === 7 && !activeCenario && (
         <Card>
@@ -1840,6 +1991,69 @@ export default function Wizard() {
               </div>
             </CardContent>
           </Card>
+
+          {/* ── Resumo do Upgrade ───────────────────────────────────────── */}
+          {tipoProjeto !== "nova" && instalacaoExistente.potenciaFVkWp > 0 && (() => {
+            const eq8 = equipForm.getValues();
+            const panelUpg = panels?.find(p => p.id === eq8.panelId);
+            const potNovakWp = panelUpg && numPaineisStep5
+              ? (numPaineisStep5 * Number(panelUpg.potencia)) / 1000
+              : (effectiveSizing?.potenciaInstalada ?? 0);
+            const producaoAdd = effectiveSizing?.energiaAnualEstimada ?? activeCenario?.energiaAnualEstimada ?? 0;
+            const precoKwhUpg = consumoData.precoKwh ?? 0.18;
+            const poupancaAdd = producaoAdd * precoKwhUpg;
+            const invest = investimentoManual ?? activeCenario?.investimentoEstimado ?? 0;
+            const payback = poupancaAdd > 0 && invest > 0 ? invest / poupancaAdd : null;
+            return (
+              <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/10">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <TrendingUp size={18} className="text-amber-600" />
+                    Resumo do Upgrade — Situação Actual vs. Proposta
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                    {[
+                      {
+                        label: "Situação Actual",
+                        items: [
+                          `${instalacaoExistente.potenciaFVkWp} kWp instalados`,
+                          instalacaoExistente.numPaineis > 0 ? `${instalacaoExistente.numPaineis} painéis` : "—",
+                          instalacaoExistente.producaoAnualkWh > 0
+                            ? `${instalacaoExistente.producaoAnualkWh.toLocaleString("pt-PT")} kWh/ano`
+                            : "—",
+                        ],
+                      },
+                      {
+                        label: "Solução Proposta",
+                        items: [
+                          `+${potNovakWp.toFixed(2)} kWp novos`,
+                          `Total: ${(instalacaoExistente.potenciaFVkWp + potNovakWp).toFixed(2)} kWp`,
+                          `+${producaoAdd.toLocaleString("pt-PT")} kWh/ano (est.)`,
+                        ],
+                      },
+                      {
+                        label: "Ganho Estimado",
+                        items: [
+                          `+${poupancaAdd.toLocaleString("pt-PT", { maximumFractionDigits: 0 })} €/ano`,
+                          invest > 0 ? `Investimento: ${invest.toLocaleString("pt-PT")} €` : "Investimento: —",
+                          payback != null ? `Payback: ${payback.toFixed(1)} anos` : "Payback: defina o investimento",
+                        ],
+                      },
+                    ].map(col => (
+                      <div key={col.label} className="rounded-lg bg-muted/40 p-3 space-y-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{col.label}</p>
+                        {col.items.map((item, i) => (
+                          <p key={i} className="text-sm font-medium">{item}</p>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* ── Orçamento Comercial ──────────────────────────────────────── */}
           {orcamentoState && (
