@@ -7,6 +7,7 @@ import {
   CheckCircle2, AlertTriangle, XCircle, Zap, Sun,
   Battery as BatteryIcon, GitBranch, RotateCcw, Pencil,
   ChevronLeft, ChevronRight, Plus, Trash2, ChevronDown,
+  Lock, LockOpen, ArrowUp, ArrowDown,
 } from "lucide-react";
 import {
   Collapsible,
@@ -16,7 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   calcStringSizing, calcStringSizingManual, maxPaineisPerString,
-  type StringSizingResult, type MpptConfig,
+  type StringSizingResult, type MpptConfig, type SemSolucaoInfo,
 } from "@/lib/string-sizing";
 import { checkPanelData, checkPanelInverter, checkBatteryInverter, type CompatResult } from "@/lib/compat-check";
 
@@ -747,9 +748,128 @@ function SingleLineDiagram({ panel, inverter, battery, mpptConfig }: {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   SemSolucaoCard — shown when no valid string config exists for numPaineis
+───────────────────────────────────────────────────────────────────────────── */
+interface SemSolucaoCardProps {
+  numPaineis: number;
+  sugestoes: SemSolucaoInfo;
+  vdcMaxUsado: number;
+  mpptMin: number;
+  mpptMax: number;
+  paineis_fixos: boolean;
+  onNumPaineisChange?: (n: number) => void;
+}
+
+function SemSolucaoCard({
+  numPaineis, sugestoes, vdcMaxUsado, mpptMin, mpptMax, paineis_fixos, onNumPaineisChange,
+}: SemSolucaoCardProps) {
+  const { abaixo, acima, minPerStr, maxPerStr } = sugestoes;
+  return (
+    <Card className="border-destructive">
+      <CardHeader className="pb-3">
+        <div className="flex items-start gap-3">
+          <XCircle size={20} className="text-destructive shrink-0 mt-0.5" />
+          <div>
+            <CardTitle className="text-base text-destructive">
+              Sem configuração válida para {numPaineis} painéis
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Não foi possível encontrar nenhuma topologia de strings — simétrica ou assimétrica — que respeite os limites elétricos deste inversor.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Technical reason */}
+        <div className="rounded-lg bg-muted/40 p-3 text-sm space-y-1 font-mono">
+          <p className="font-sans font-semibold text-xs text-muted-foreground uppercase tracking-wide mb-2">Porquê?</p>
+          <p>Janela MPPT: <strong>{mpptMin}–{mpptMax} V</strong></p>
+          <p>Vdc máximo: <strong>{vdcMaxUsado.toFixed(0)} V</strong></p>
+          <p>Painéis por string permitidos: <strong>{minPerStr}–{maxPerStr} módulos</strong></p>
+          <p className="font-sans text-muted-foreground text-xs pt-1">
+            Nenhuma combinação de strings com {minPerStr}–{maxPerStr} módulos totaliza exatamente {numPaineis} painéis dentro dos limites de strings do inversor.
+          </p>
+        </div>
+
+        {/* Suggestions */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Opções</p>
+          <div className="space-y-2">
+            {/* Reduce panels */}
+            {abaixo > 0 && (
+              <div className={cn(
+                "flex items-center gap-3 rounded-lg border p-3",
+                paineis_fixos ? "opacity-60" : "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800",
+              )}>
+                <ArrowDown size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">Reduzir para {abaixo} painéis</p>
+                  <p className="text-xs text-muted-foreground">Configuração elétrica válida mais próxima abaixo</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={paineis_fixos}
+                  onClick={() => onNumPaineisChange?.(abaixo)}
+                  className="shrink-0"
+                >
+                  Aplicar
+                </Button>
+              </div>
+            )}
+            {/* Increase panels */}
+            {acima > 0 && (
+              <div className={cn(
+                "flex items-center gap-3 rounded-lg border p-3",
+                paineis_fixos ? "opacity-60" : "border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800",
+              )}>
+                <ArrowUp size={16} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">Aumentar para {acima} painéis</p>
+                  <p className="text-xs text-muted-foreground">Configuração elétrica válida mais próxima acima</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={paineis_fixos}
+                  onClick={() => onNumPaineisChange?.(acima)}
+                  className="shrink-0"
+                >
+                  Aplicar
+                </Button>
+              </div>
+            )}
+            {/* Change inverter */}
+            <div className="flex items-center gap-3 rounded-lg border p-3">
+              <Zap size={16} className="text-primary shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Selecionar outro inversor</p>
+                <p className="text-xs text-muted-foreground">Volte ao passo anterior e escolha um inversor com janela MPPT compatível</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Fixed mode note */}
+        {paineis_fixos && (abaixo > 0 || acima > 0) && (
+          <div className="flex items-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            <Lock size={12} className="shrink-0" />
+            Modo Painéis Fixos activo — desactive-o para aplicar as sugestões acima.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Main export
 ───────────────────────────────────────────────────────────────────────────── */
 function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInstalada, onNumPaineisChange, mpptConfig: manualMpptConfig, onMpptConfigChange }: Props) {
+
+  // "Painéis Fixos" mode: panel count is LOCKED — auto-sizing never changes it.
+  // Default ON. Can be turned off to allow manual adjustments when no solution exists.
+  const [paineisFixos, setPaineisFixos] = useState(true);
 
   const panelElec = useMemo(() => panel ? {
     voc: Number(panel.voc),
@@ -825,33 +945,72 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
     );
   }
 
-  const hasErrors = (activeSizing?.alertas.some(a => a.tipo === "erro") ?? false) || (compatPanelInv?.temErros ?? false) || (sanidadePainel?.temErros ?? false);
-  const hasWarnings = (activeSizing?.alertas.some(a => a.tipo === "aviso") ?? false) || (compatPanelInv?.temAvisos ?? false) || (compatBatInv?.temAvisos ?? false);
+  const semSolucao = autoSizing?.semSolucao ?? false;
+  const hasErrors   = semSolucao
+    || (activeSizing?.alertas.some(a => a.tipo === "erro") ?? false)
+    || (compatPanelInv?.temErros ?? false)
+    || (sanidadePainel?.temErros ?? false);
+  const hasWarnings = !semSolucao && (
+    (activeSizing?.alertas.some(a => a.tipo === "aviso") ?? false)
+    || (compatPanelInv?.temAvisos ?? false)
+    || (compatBatInv?.temAvisos ?? false)
+  );
 
   const displayConfig = activeSizing?.config;
   const isMixed = displayConfig?.isMixed ?? false;
 
   return (
     <div className="space-y-6">
-      {/* Global status */}
-      <div className={cn(
-        "flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium",
-        hasErrors
-          ? "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400"
-          : hasWarnings
-            ? "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400"
-            : "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400"
-      )}>
-        {hasErrors ? <XCircle size={18} /> : hasWarnings ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
-        {hasErrors
-          ? "Sistema com erros de dimensionamento — corrija antes de avançar para proposta."
-          : hasWarnings
-            ? "Sistema dimensionado com atenções — reveja os alertas abaixo."
-            : isMixed
-              ? `Sistema validado — ${displayConfig?.numStrings ?? 0} strings · ${displayConfig?.totalPaineis ?? 0} painéis · ${((displayConfig?.potenciaDCTotal ?? 0) / 1000).toFixed(2)} kWp (configuração mista).`
-              : `Sistema validado — ${displayConfig?.numStrings ?? 0} strings × ${displayConfig?.paineisPerString ?? 0} painéis (${((displayConfig?.potenciaDCTotal ?? 0) / 1000).toFixed(2)} kWp).`
-        }
+
+      {/* ── Painéis Fixos mode toggle ── */}
+      <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border bg-card">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {paineisFixos
+            ? <Lock size={14} className="text-primary shrink-0" />
+            : <LockOpen size={14} className="text-muted-foreground shrink-0" />
+          }
+          <div className="min-w-0">
+            <span className="text-sm font-medium">Modo Painéis Fixos</span>
+            <span className="text-xs text-muted-foreground ml-2">
+              {paineisFixos
+                ? `${numPaineis} painéis bloqueados — a engenharia adapta-se`
+                : "Número de painéis pode ser ajustado pela engenharia"
+              }
+            </span>
+          </div>
+        </div>
+        <Button
+          variant={paineisFixos ? "default" : "outline"}
+          size="sm"
+          className="text-xs gap-1.5 shrink-0"
+          onClick={() => setPaineisFixos(v => !v)}
+        >
+          {paineisFixos ? <Lock size={12} /> : <LockOpen size={12} />}
+          {paineisFixos ? "Fixo" : "Livre"}
+        </Button>
       </div>
+
+      {/* ── Global status banner ── */}
+      {!semSolucao && (
+        <div className={cn(
+          "flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium",
+          hasErrors
+            ? "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400"
+            : hasWarnings
+              ? "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400"
+              : "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400"
+        )}>
+          {hasErrors ? <XCircle size={18} /> : hasWarnings ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+          {hasErrors
+            ? "Sistema com erros de dimensionamento — corrija antes de avançar para proposta."
+            : hasWarnings
+              ? "Sistema dimensionado com atenções — reveja os alertas abaixo."
+              : isMixed
+                ? `Sistema validado — ${displayConfig?.numStrings ?? 0} strings · ${displayConfig?.totalPaineis ?? 0} painéis · ${((displayConfig?.potenciaDCTotal ?? 0) / 1000).toFixed(2)} kWp (configuração mista).`
+                : `Sistema validado — ${displayConfig?.numStrings ?? 0} strings × ${displayConfig?.paineisPerString ?? 0} painéis (${((displayConfig?.potenciaDCTotal ?? 0) / 1000).toFixed(2)} kWp).`
+          }
+        </div>
+      )}
 
       {/* Equipment summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -883,55 +1042,76 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
         )}
       </div>
 
-      {/* Technical validation table — comprehensive view of all checks */}
-      {activeSizing && (
-        <TechSummaryTable
-          sizing={activeSizing}
-          invElec={{
-            potenciaAc:    Number(inverter.potenciaAc),
-            potenciaDcMax: invElec.potenciaDcMax,
-            mpptMin:       invElec.mpptMin,
-            mpptMax:       invElec.mpptMax,
-            corrMaxMppt:   invElec.corrMaxMppt,
-            numMppt:       invElec.numMppt,
-            stringsPorMppt: invElec.stringsPorMppt,
-          }}
-          panelIsc={panelElec.isc}
-          battery={battery
-            ? { capacidade: Number(battery.capacidade), tensao: Number(battery.tensao) }
-            : null}
+      {/* ── No solution panel ── */}
+      {semSolucao && autoSizing?.sugestoes && (
+        <SemSolucaoCard
+          numPaineis={numPaineis}
+          sugestoes={autoSizing.sugestoes}
+          vdcMaxUsado={autoSizing.vdcMaxUsado}
+          mpptMin={invElec.mpptMin}
+          mpptMax={invElec.mpptMax}
+          paineis_fixos={paineisFixos}
+          onNumPaineisChange={onNumPaineisChange}
         />
       )}
 
-      {/* String sizing card — editable MPPT/string configuration */}
-      {autoSizing && (
-        <StringSizingCard
-          autoResult={autoSizing}
-          numMppt={inverter.numMppt}
-          maxStringsPorMppt={inverter.stringsPorMppt}
-          maxPaineisPorString={maxPaneis}
-          panelElec={panelElec}
-          invElec={invElec}
-          numPaineisAuto={numPaineis}
-          onConfigChange={(mpptConfig) => {
-            onMpptConfigChange(mpptConfig);
-            const total = mpptConfig.flat().reduce((a, b) => a + b, 0);
-            if (total > 0) onNumPaineisChange?.(total);
-          }}
-        />
+      {/* ── Technical content — only when a valid config exists ── */}
+      {!semSolucao && (
+        <>
+          {/* Technical validation table */}
+          {activeSizing && (
+            <TechSummaryTable
+              sizing={activeSizing}
+              invElec={{
+                potenciaAc:    Number(inverter.potenciaAc),
+                potenciaDcMax: invElec.potenciaDcMax,
+                mpptMin:       invElec.mpptMin,
+                mpptMax:       invElec.mpptMax,
+                corrMaxMppt:   invElec.corrMaxMppt,
+                numMppt:       invElec.numMppt,
+                stringsPorMppt: invElec.stringsPorMppt,
+              }}
+              panelIsc={panelElec.isc}
+              battery={battery
+                ? { capacidade: Number(battery.capacidade), tensao: Number(battery.tensao) }
+                : null}
+            />
+          )}
+
+          {/* String sizing card — editable MPPT/string configuration */}
+          {autoSizing && (
+            <StringSizingCard
+              autoResult={autoSizing}
+              numMppt={inverter.numMppt}
+              maxStringsPorMppt={inverter.stringsPorMppt}
+              maxPaineisPorString={maxPaneis}
+              panelElec={panelElec}
+              invElec={invElec}
+              numPaineisAuto={numPaineis}
+              onConfigChange={(mpptConfig) => {
+                onMpptConfigChange(mpptConfig);
+                // Only propagate panel count changes if NOT in fixed mode
+                if (!paineisFixos) {
+                  const total = mpptConfig.flat().reduce((a, b) => a + b, 0);
+                  if (total > 0) onNumPaineisChange?.(total);
+                }
+              }}
+            />
+          )}
+
+          {/* Single line diagram */}
+          {activeSizing && (
+            <SingleLineDiagram
+              panel={panel}
+              inverter={inverter}
+              battery={battery}
+              mpptConfig={activeSizing.config.mpptConfig}
+            />
+          )}
+        </>
       )}
 
-      {/* Single line diagram */}
-      {activeSizing && (
-        <SingleLineDiagram
-          panel={panel}
-          inverter={inverter}
-          battery={battery}
-          mpptConfig={activeSizing.config.mpptConfig}
-        />
-      )}
-
-      {/* Compatibility tables */}
+      {/* Compatibility tables — always visible */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
