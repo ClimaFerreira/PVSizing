@@ -1116,7 +1116,6 @@ export default function Wizard() {
                       <div className="flex gap-3 pt-5 flex-wrap">
                         {[
                           { label: "Potência", val: `${activeCenario?.potenciaInstalada ?? "—"} kWp` },
-                          { label: "Painéis", val: `${activeCenario?.numPaineis ?? "—"} un.` },
                           { label: "Payback", val: `${activeCenario?.paybackAnos ?? "—"} anos` },
                           { label: "Investimento", val: activeCenario ? `${activeCenario.investimentoEstimado.toLocaleString("pt-PT")} €` : "—" },
                           { label: "Poupança/ano", val: activeCenario ? `${activeCenario.poupancaAnual.toLocaleString("pt-PT")} €` : "—" },
