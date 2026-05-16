@@ -13,4 +13,7 @@ export interface CreateBatteryBody {
   capacidade: number;
   tensao: number;
   tecnologia: CreateBatteryBodyTecnologia;
+  potenciaCarga?: number;
+  potenciaDescarga?: number;
+  profundidadeDescarga?: number;
 }

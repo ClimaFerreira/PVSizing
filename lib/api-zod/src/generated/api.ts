@@ -349,6 +349,15 @@ export const ListBatteriesResponseItem = zod.object({
   capacidade: zod.number(),
   tensao: zod.number(),
   tecnologia: zod.enum(["LiFePO4", "Li-ion", "AGM", "Gel"]),
+  potenciaCarga: zod
+    .number()
+    .describe("Maximum charge power in kW (0 if unknown)"),
+  potenciaDescarga: zod
+    .number()
+    .describe("Maximum discharge power in kW (0 if unknown)"),
+  profundidadeDescarga: zod
+    .number()
+    .describe("Depth of discharge percentage (e.g. 80 means 80% DoD)"),
   createdAt: zod.coerce.date(),
 });
 export const ListBatteriesResponse = zod.array(ListBatteriesResponseItem);
@@ -362,6 +371,9 @@ export const CreateBatteryBody = zod.object({
   capacidade: zod.number(),
   tensao: zod.number(),
   tecnologia: zod.enum(["LiFePO4", "Li-ion", "AGM", "Gel"]),
+  potenciaCarga: zod.number().optional(),
+  potenciaDescarga: zod.number().optional(),
+  profundidadeDescarga: zod.number().optional(),
 });
 
 /**
@@ -378,6 +390,15 @@ export const GetBatteryResponse = zod.object({
   capacidade: zod.number(),
   tensao: zod.number(),
   tecnologia: zod.enum(["LiFePO4", "Li-ion", "AGM", "Gel"]),
+  potenciaCarga: zod
+    .number()
+    .describe("Maximum charge power in kW (0 if unknown)"),
+  potenciaDescarga: zod
+    .number()
+    .describe("Maximum discharge power in kW (0 if unknown)"),
+  profundidadeDescarga: zod
+    .number()
+    .describe("Depth of discharge percentage (e.g. 80 means 80% DoD)"),
   createdAt: zod.coerce.date(),
 });
 
@@ -394,6 +415,9 @@ export const UpdateBatteryBody = zod.object({
   capacidade: zod.number().optional(),
   tensao: zod.number().optional(),
   tecnologia: zod.enum(["LiFePO4", "Li-ion", "AGM", "Gel"]).optional(),
+  potenciaCarga: zod.number().optional(),
+  potenciaDescarga: zod.number().optional(),
+  profundidadeDescarga: zod.number().optional(),
 });
 
 export const UpdateBatteryResponse = zod.object({
@@ -403,6 +427,15 @@ export const UpdateBatteryResponse = zod.object({
   capacidade: zod.number(),
   tensao: zod.number(),
   tecnologia: zod.enum(["LiFePO4", "Li-ion", "AGM", "Gel"]),
+  potenciaCarga: zod
+    .number()
+    .describe("Maximum charge power in kW (0 if unknown)"),
+  potenciaDescarga: zod
+    .number()
+    .describe("Maximum discharge power in kW (0 if unknown)"),
+  profundidadeDescarga: zod
+    .number()
+    .describe("Depth of discharge percentage (e.g. 80 means 80% DoD)"),
   createdAt: zod.coerce.date(),
 });
 

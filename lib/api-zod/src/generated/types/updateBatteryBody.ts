@@ -13,4 +13,7 @@ export interface UpdateBatteryBody {
   capacidade?: number;
   tensao?: number;
   tecnologia?: UpdateBatteryBodyTecnologia;
+  potenciaCarga?: number;
+  potenciaDescarga?: number;
+  profundidadeDescarga?: number;
 }

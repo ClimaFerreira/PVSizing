@@ -1221,6 +1221,15 @@ components:
         tecnologia:
           type: string
           enum: [LiFePO4, Li-ion, AGM, Gel]
+        potenciaCarga:
+          type: number
+          description: Maximum charge power in kW (0 if unknown)
+        potenciaDescarga:
+          type: number
+          description: Maximum discharge power in kW (0 if unknown)
+        profundidadeDescarga:
+          type: number
+          description: Depth of discharge percentage (e.g. 80 means 80% DoD)
         createdAt:
           type: string
           format: date-time
@@ -1231,6 +1240,9 @@ components:
         - capacidade
         - tensao
         - tecnologia
+        - potenciaCarga
+        - potenciaDescarga
+        - profundidadeDescarga
         - createdAt
 
     CreateBatteryBody:
@@ -1247,6 +1259,12 @@ components:
         tecnologia:
           type: string
           enum: [LiFePO4, Li-ion, AGM, Gel]
+        potenciaCarga:
+          type: number
+        potenciaDescarga:
+          type: number
+        profundidadeDescarga:
+          type: number
       required:
         - nome
         - fabricante
@@ -1268,6 +1286,12 @@ components:
         tecnologia:
           type: string
           enum: [LiFePO4, Li-ion, AGM, Gel]
+        potenciaCarga:
+          type: number
+        potenciaDescarga:
+          type: number
+        profundidadeDescarga:
+          type: number
 
     # --- PV System ---
     PvSystem:

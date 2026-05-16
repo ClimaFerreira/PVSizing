@@ -227,6 +227,12 @@ export interface Battery {
   capacidade: number;
   tensao: number;
   tecnologia: BatteryTecnologia;
+  /** Maximum charge power in kW (0 if unknown) */
+  potenciaCarga: number;
+  /** Maximum discharge power in kW (0 if unknown) */
+  potenciaDescarga: number;
+  /** Depth of discharge percentage (e.g. 80 means 80% DoD) */
+  profundidadeDescarga: number;
   createdAt: string;
 }
 
@@ -246,6 +252,9 @@ export interface CreateBatteryBody {
   capacidade: number;
   tensao: number;
   tecnologia: CreateBatteryBodyTecnologia;
+  potenciaCarga?: number;
+  potenciaDescarga?: number;
+  profundidadeDescarga?: number;
 }
 
 export type UpdateBatteryBodyTecnologia =
@@ -264,6 +273,9 @@ export interface UpdateBatteryBody {
   capacidade?: number;
   tensao?: number;
   tecnologia?: UpdateBatteryBodyTecnologia;
+  potenciaCarga?: number;
+  potenciaDescarga?: number;
+  profundidadeDescarga?: number;
 }
 
 export interface PvSystem {

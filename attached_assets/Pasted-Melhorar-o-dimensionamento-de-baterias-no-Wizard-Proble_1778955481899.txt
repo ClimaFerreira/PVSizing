@@ -1,0 +1,81 @@
+Melhorar o dimensionamento de baterias no Wizard.
+
+Problema atual:
+Só é possível selecionar uma bateria.
+Isto não chega para instalações reais, onde podem ser necessárias várias baterias em paralelo para atingir a capacidade útil pretendida.
+
+Objetivo:
+Permitir selecionar múltiplas baterias e fazer um estudo real de viabilidade energética.
+
+Requisitos:
+
+1. Multi-bateria
+- Permitir adicionar/remover baterias.
+- Cada bateria deve ter modelo e quantidade.
+- Calcular:
+  - capacidade total nominal;
+  - capacidade útil com DoD;
+  - potência máxima de carga;
+  - potência máxima de descarga;
+  - tensão;
+  - compatibilidade com inversor/BMS.
+
+2. Estudo de carregamento da bateria
+O sistema deve analisar se existe energia excedente suficiente para carregar a bateria.
+
+Calcular:
+- produção diária média;
+- consumo diurno;
+- excedente disponível;
+- energia necessária para carregar baterias;
+- número estimado de ciclos;
+- percentagem média de carregamento diário;
+- dias em que a bateria não deverá carregar totalmente.
+
+3. Justificação da capacidade proposta
+Mostrar se a bateria está:
+- subdimensionada;
+- equilibrada;
+- sobredimensionada.
+
+Exemplo:
+“Capacidade útil: 38.4 kWh”
+“Excedente diário médio disponível: 24 kWh”
+“A bateria poderá não carregar totalmente na maioria dos dias.”
+“Capacidade recomendada: 20–25 kWh”
+
+4. Simulação simples de autoconsumo com bateria
+Comparar:
+- sem bateria;
+- com bateria selecionada.
+
+Mostrar:
+- aumento de autoconsumo;
+- redução de energia comprada;
+- excedente reduzido;
+- poupança adicional anual;
+- payback adicional da bateria.
+
+5. Sugestões automáticas
+O sistema deve sugerir:
+- 1 bateria;
+- 2 baterias;
+- 3 baterias;
+- capacidade recomendada;
+- capacidade máxima justificável.
+
+6. Orçamento e proposta
+No orçamento final, listar todas as baterias:
+Exemplo:
+Felicity 16 kWh × 3 = 48 kWh nominal
+
+E incluir no estudo:
+- capacidade nominal;
+- capacidade útil;
+- autonomia estimada;
+- benefício económico da bateria;
+- alerta se estiver sobredimensionada.
+
+Importante:
+Não basta somar kWh.
+O sistema deve explicar se há produção/excedente suficiente para carregar a bateria e se o investimento faz sentido.

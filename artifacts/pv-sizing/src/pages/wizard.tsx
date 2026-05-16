@@ -60,6 +60,8 @@ const WizardStep7Financeiro   = lazy(() => import("@/components/wizard-step7-fin
 const WizardOrcamento         = lazy(() => import("@/components/wizard-orcamento"));
 import { type OrcamentoState, defaultOrcamentoState } from "@/lib/orcamento";
 import { type InverterUnit, criarUnidade } from "@/lib/multi-inverter";
+const WizardBatteryStudy = lazy(() => import("@/components/wizard-battery-study"));
+import { type BatteryUnit } from "@/components/wizard-battery-study";
 const WizardStep1Upgrade       = lazy(() => import("@/components/wizard-step1-upgrade"));
 const WizardStep6UpgradeAnalise = lazy(() => import("@/components/wizard-step6-upgrade-analise"));
 const WizardCenarios            = lazy(() => import("@/components/wizard-cenarios"));
@@ -194,6 +196,7 @@ export default function Wizard() {
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
   const [manualMpptConfig, setManualMpptConfig] = useState<import("@/lib/string-sizing").MpptConfig | null>(null);
   const [inverterUnits, setInverterUnits] = useState<InverterUnit[]>([]);
+  const [batteryUnits, setBatteryUnits] = useState<BatteryUnit[]>([]);
   const [tipoProjeto, setTipoProjeto] = useState<TipoProjeto>("nova");
   const [instalacaoExistente, setInstalacaoExistente] = useState<InstalacaoExistente>(defaultInstalacaoExistente);
   const [investimentoManual, setInvestimentoManual] = useState<number | null>(null);
@@ -252,7 +255,8 @@ export default function Wizard() {
     const eq = equipForm.getValues();
     const panel    = panels?.find(p => p.id === eq.panelId);
     const inverter = inverters?.find(i => i.id === eq.inverterId);
-    const battery  = eq.batteryId ? batteries?.find(b => b.id === eq.batteryId) : null;
+    const primaryBatId = batteryUnits[0]?.batteryId;
+    const battery  = primaryBatId ? batteries?.find(b => b.id === primaryBatId) : null;
     const numPaineis = numPaineisStep5 ?? effectiveSizing?.numPaineis ?? sizing?.numPaineis ?? 0;
     const investimento = investimentoManual ?? activeCenario?.investimentoEstimado ?? 0;
     setOrcamentoState(defaultOrcamentoState({
@@ -311,6 +315,7 @@ export default function Wizard() {
       equipFormValues: equipForm.getValues(),
       numPaineisStep5,
       inverterUnits: inverterUnits as unknown as Record<string, unknown>[],
+      batteryUnits: batteryUnits as unknown as Record<string, unknown>[],
       tipoProjeto,
       investimentoManual,
       panelRefId,
@@ -578,6 +583,9 @@ export default function Wizard() {
     if (draft.inverterUnits && draft.inverterUnits.length > 0) {
       setInverterUnits(draft.inverterUnits as unknown as InverterUnit[]);
     }
+    if (draft.batteryUnits && draft.batteryUnits.length > 0) {
+      setBatteryUnits(draft.batteryUnits as unknown as BatteryUnit[]);
+    }
     if (draft.tipoProjeto) setTipoProjeto(draft.tipoProjeto as TipoProjeto);
     if (draft.investimentoManual != null) setInvestimentoManual(draft.investimentoManual);
     if (draft.panelRefId != null) setPanelRefId(draft.panelRefId);
@@ -665,7 +673,7 @@ export default function Wizard() {
         numPaineis:            eff.numPaineis,
         panelId:               eq.panelId || null,
         inverterId:            eq.inverterId || null,
-        batteryId:             eq.batteryId ?? null,
+        batteryId:             batteryUnits[0]?.batteryId ?? null,
         producaoAnualEstimada: eff.energiaAnualEstimada,
         alertas:               [],
       }},
@@ -1958,22 +1966,19 @@ export default function Wizard() {
                     </div>
                   )}
 
-                  {consumoData.incluirBateria && (
-                    <FormField control={equipForm.control} name="batteryId" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Bateria (opcional)</FormLabel>
-                        <Select onValueChange={v => field.onChange(Number(v))} value={field.value?.toString()}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Selecionar bateria..." /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {batteries?.map(b => (
-                              <SelectItem key={b.id} value={String(b.id)}>
-                                {b.fabricante} {b.nome} — {b.capacidade} kWh
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )} />
+                  {consumoData.incluirBateria && batteries && (
+                    <div className="pt-1">
+                      <Suspense fallback={<div className="h-24 flex items-center justify-center text-muted-foreground text-sm">A carregar estudo de baterias…</div>}>
+                        <WizardBatteryStudy
+                          batteries={batteries}
+                          batteryUnits={batteryUnits}
+                          onUnitsChange={setBatteryUnits}
+                          activeCenario={activeCenario ?? null}
+                          precoKwh={consumoData.precoKwh ?? 0.18}
+                          perfilDiurnoPct={perfilDiurnoPct}
+                        />
+                      </Suspense>
+                    </div>
                   )}
                 </form>
               </Form>
@@ -2012,7 +2017,8 @@ export default function Wizard() {
         // In multi-inverter mode use the first unit's inverterId; fall back to form field
         const effectiveInverterId = inverterUnits.length > 0 ? inverterUnits[0].inverterId : vals.inverterId;
         const inverter = inverters?.find(i => i.id === effectiveInverterId) ?? null;
-        const battery = vals.batteryId ? batteries?.find(b => b.id === vals.batteryId) ?? null : null;
+        const primaryBatIdStep6 = batteryUnits[0]?.batteryId;
+        const battery = primaryBatIdStep6 ? batteries?.find(b => b.id === primaryBatIdStep6) ?? null : null;
         const numPaineis = numPaineisStep5 ?? 0;
         const potenciaRealKwp = panel ? (numPaineis * Number(panel.potencia)) / 1000 : (eff?.potenciaInstalada ?? 0);
         const isMultiInverter = inverterUnits.length > 1;
@@ -2192,7 +2198,17 @@ export default function Wizard() {
             const eq  = equipForm.getValues();
             const panel    = panels?.find(p => p.id === eq.panelId);
             const inverter = inverters?.find(i => i.id === eq.inverterId);
-            const battery  = eq.batteryId ? batteries?.find(b => b.id === eq.batteryId) : null;
+            const primaryBatId8 = batteryUnits[0]?.batteryId;
+            const battery  = primaryBatId8 ? batteries?.find(b => b.id === primaryBatId8) : null;
+            const totalBatCap = batteryUnits.reduce((s, u) => {
+              const b = batteries?.find(x => x.id === u.batteryId);
+              return s + (b ? Number(b.capacidade) * u.qty : 0);
+            }, 0);
+            const batVal = batteryUnits.length === 0
+              ? "Sem bateria"
+              : batteryUnits.length === 1 && battery
+                ? `${battery.fabricante} ${battery.nome} × ${batteryUnits[0].qty} (${(Number(battery.capacidade) * batteryUnits[0].qty).toFixed(1)} kWh)`
+                : `${batteryUnits.length} modelos — ${totalBatCap.toFixed(1)} kWh nom.`;
             return (
               <Card>
                 <CardHeader>
@@ -2207,7 +2223,7 @@ export default function Wizard() {
                       { label: "Produção anual est.", val: `${eff.energiaAnualEstimada.toLocaleString("pt-PT")} kWh` },
                       { label: "Painel",              val: panel ? `${panel.fabricante} ${panel.nome}` : "—" },
                       { label: "Inversor",            val: inverter ? `${inverter.fabricante} ${inverter.nome}` : "—" },
-                      { label: "Bateria",             val: battery ? `${battery.fabricante} ${battery.nome}` : "Sem bateria" },
+                      { label: "Bateria",             val: batVal },
                     ].map(item => (
                       <div key={item.label} className="bg-muted/40 rounded-lg p-3">
                         <p className="text-xs text-muted-foreground">{item.label}</p>

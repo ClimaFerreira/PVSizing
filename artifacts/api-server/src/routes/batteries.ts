@@ -34,9 +34,9 @@ router.post("/batteries", async (req, res): Promise<void> => {
       fabricante: d.fabricante,
       capacidade: String(d.capacidade),
       tensaoNominal: String(d.tensao ?? 48),
-      potenciaCarga: String(0),
-      potenciaDescarga: String(0),
-      profundidadeDescarga: String(80),
+      potenciaCarga: String(d.potenciaCarga ?? 0),
+      potenciaDescarga: String(d.potenciaDescarga ?? 0),
+      profundidadeDescarga: String(d.profundidadeDescarga ?? 80),
       compatibilidade: null,
     })
     .returning();
@@ -83,6 +83,9 @@ router.patch("/batteries/:id", async (req, res): Promise<void> => {
   if (d.fabricante !== undefined) updateValues.fabricante = d.fabricante;
   if (d.capacidade !== undefined) updateValues.capacidade = String(d.capacidade);
   if (d.tensao !== undefined) updateValues.tensaoNominal = String(d.tensao);
+  if (d.potenciaCarga !== undefined) updateValues.potenciaCarga = String(d.potenciaCarga);
+  if (d.potenciaDescarga !== undefined) updateValues.potenciaDescarga = String(d.potenciaDescarga);
+  if (d.profundidadeDescarga !== undefined) updateValues.profundidadeDescarga = String(d.profundidadeDescarga);
 
   const [battery] = await db
     .update(batteriesTable)
@@ -126,6 +129,9 @@ function toBatteryResponse(row: typeof batteriesTable.$inferSelect) {
     capacidade: Number(row.capacidade),
     tensao: Number(row.tensaoNominal),
     tecnologia: "LiFePO4" as const,
+    potenciaCarga: Number(row.potenciaCarga),
+    potenciaDescarga: Number(row.potenciaDescarga),
+    profundidadeDescarga: Number(row.profundidadeDescarga),
     createdAt: row.createdAt,
   };
 }

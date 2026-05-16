@@ -14,6 +14,7 @@ export interface WizardDraftData {
   equipFormValues: { panelId?: number; inverterId?: number; batteryId?: number };
   numPaineisStep5?: number | null;
   inverterUnits?: Record<string, unknown>[];
+  batteryUnits?: Record<string, unknown>[];
   tipoProjeto?: string;
   investimentoManual?: number | null;
   panelRefId?: number | null;

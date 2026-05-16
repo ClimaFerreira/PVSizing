@@ -14,5 +14,11 @@ export interface Battery {
   capacidade: number;
   tensao: number;
   tecnologia: BatteryTecnologia;
+  /** Maximum charge power in kW (0 if unknown) */
+  potenciaCarga: number;
+  /** Maximum discharge power in kW (0 if unknown) */
+  potenciaDescarga: number;
+  /** Depth of discharge percentage (e.g. 80 means 80% DoD) */
+  profundidadeDescarga: number;
   createdAt: Date;
 }
