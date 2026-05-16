@@ -9,6 +9,8 @@
 export * from "./anoCashFlow";
 export * from "./autoSizeBody";
 export * from "./autoSizeResult";
+export * from "./autoSizeResultConfianca";
+export * from "./autoSizeResultConfiancaNivel";
 export * from "./autoSizeResultRecomendado";
 export * from "./battery";
 export * from "./batterySizeBody";
@@ -18,6 +20,7 @@ export * from "./cenarioDimensionamento";
 export * from "./cenarioDimensionamentoAlertasItem";
 export * from "./cenarioDimensionamentoAlertasItemTipo";
 export * from "./cenarioDimensionamentoBateriaRecomendada";
+export * from "./cenarioDimensionamentoFonteProducao";
 export * from "./cenarioDimensionamentoInversorRecomendado";
 export * from "./cenarioDimensionamentoTipo";
 export * from "./cenarioPainel";

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { SOLAR_FRACS, consumoFracs, DIAS_MES } from "@/lib/energy-simulation";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,28 +42,8 @@ interface Props {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const DIAS_MES = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 const ETA = 0.92; // round-trip efficiency
 const CUSTO_KWH_BAT = 600; // €/kWh installed
-
-// Normalized solar bell-curve: 6h–20h, peak at 13h, σ = 3h (Portugal)
-const SOLAR_FRACS: readonly number[] = (() => {
-  const raw = Array.from({ length: 24 }, (_, h) => {
-    if (h < 6 || h >= 20) return 0;
-    return Math.exp(-((h - 13) ** 2) / (2 * 3 * 3));
-  });
-  const s = raw.reduce((a, b) => a + b, 0);
-  return raw.map(v => v / s);
-})();
-
-// Hourly consumption fractions: daytime 7h–22h / night 22h–7h
-function consumoFracs(diurnoPct: number): readonly number[] {
-  const d = diurnoPct / 100;
-  const n = 1 - d;
-  return Array.from({ length: 24 }, (_, h) =>
-    h >= 7 && h < 22 ? d / 15 : n / 9,
-  );
-}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

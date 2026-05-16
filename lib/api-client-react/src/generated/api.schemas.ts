@@ -623,6 +623,10 @@ export interface AutoSizeBody {
   crescimentoFuturo?: number;
   /** Electricity price per kWh in EUR for financial calculations (default 0.18) */
   precoKwh?: number;
+  /** Monthly consumption in kWh (12 values from invoice history, optional) */
+  consumoMensalInput?: number[];
+  /** Daytime consumption percentage 0–100 (default 60) */
+  perfilDiurnoPct?: number;
 }
 
 export interface CenarioPainel {
@@ -684,6 +688,17 @@ export type CenarioDimensionamentoAlertasItem = {
   mensagem: string;
 };
 
+/**
+ * Source of monthly production data used for this scenario
+ */
+export type CenarioDimensionamentoFonteProducao =
+  (typeof CenarioDimensionamentoFonteProducao)[keyof typeof CenarioDimensionamentoFonteProducao];
+
+export const CenarioDimensionamentoFonteProducao = {
+  pvgis: "pvgis",
+  estimativa_hsp: "estimativa_hsp",
+} as const;
+
 export interface CenarioDimensionamento {
   /** Scenario type */
   tipo: CenarioDimensionamentoTipo;
@@ -730,6 +745,8 @@ export interface CenarioDimensionamento {
   bateriaRecomendada: CenarioDimensionamentoBateriaRecomendada;
   /** Technical alerts for this scenario */
   alertas: CenarioDimensionamentoAlertasItem[];
+  /** Source of monthly production data used for this scenario */
+  fonteProducao?: CenarioDimensionamentoFonteProducao;
 }
 
 /**
@@ -743,6 +760,27 @@ export const AutoSizeResultRecomendado = {
   equilibrado: "equilibrado",
   agressivo: "agressivo",
 } as const;
+
+export type AutoSizeResultConfiancaNivel =
+  (typeof AutoSizeResultConfiancaNivel)[keyof typeof AutoSizeResultConfiancaNivel];
+
+export const AutoSizeResultConfiancaNivel = {
+  alto: "alto",
+  medio: "medio",
+  baixo: "baixo",
+} as const;
+
+/**
+ * Confidence score for this sizing study
+ */
+export type AutoSizeResultConfianca = {
+  /** Confidence score 0–100 */
+  pontuacao: number;
+  nivel: AutoSizeResultConfiancaNivel;
+  /** True if PVGIS real data was used for production estimates */
+  pvgis: boolean;
+  avisos: string[];
+};
 
 export interface AutoSizeResult {
   /** Daily energy consumption in kWh/day */
@@ -780,6 +818,8 @@ export interface AutoSizeResult {
   recomendado: AutoSizeResultRecomendado;
   /** Human-readable explanation of the sizing */
   explicacao: string;
+  /** Confidence score for this sizing study */
+  confianca: AutoSizeResultConfianca;
 }
 
 export interface BatterySizeBody {

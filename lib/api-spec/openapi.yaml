@@ -1921,6 +1921,14 @@ components:
         precoKwh:
           type: number
           description: Electricity price per kWh in EUR for financial calculations (default 0.18)
+        consumoMensalInput:
+          type: array
+          items:
+            type: number
+          description: Monthly consumption in kWh (12 values from invoice history, optional)
+        perfilDiurnoPct:
+          type: number
+          description: Daytime consumption percentage 0–100 (default 60)
       required:
         - consumoAnual
         - latitude
@@ -2054,6 +2062,10 @@ components:
               mensagem:
                 type: string
             required: [tipo, mensagem]
+        fonteProducao:
+          type: string
+          enum: [pvgis, estimativa_hsp]
+          description: Source of monthly production data used for this scenario
       required:
         - tipo
         - label
@@ -2133,6 +2145,24 @@ components:
         explicacao:
           type: string
           description: Human-readable explanation of the sizing
+        confianca:
+          type: object
+          description: Confidence score for this sizing study
+          properties:
+            pontuacao:
+              type: number
+              description: Confidence score 0–100
+            nivel:
+              type: string
+              enum: [alto, medio, baixo]
+            pvgis:
+              type: boolean
+              description: True if PVGIS real data was used for production estimates
+            avisos:
+              type: array
+              items:
+                type: string
+          required: [pontuacao, nivel, pvgis, avisos]
       required:
         - potenciaRecomendada
         - numPaineis
@@ -2143,6 +2173,7 @@ components:
         - cenariosDimensionamento
         - recomendado
         - explicacao
+        - confianca
 
     BatterySizeBody:
       type: object

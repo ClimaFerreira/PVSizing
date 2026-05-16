@@ -902,6 +902,16 @@ export const AutoSizeSystemBody = zod.object({
     .describe(
       "Electricity price per kWh in EUR for financial calculations (default 0.18)",
     ),
+  consumoMensalInput: zod
+    .array(zod.number())
+    .optional()
+    .describe(
+      "Monthly consumption in kWh (12 values from invoice history, optional)",
+    ),
+  perfilDiurnoPct: zod
+    .number()
+    .optional()
+    .describe("Daytime consumption percentage 0–100 (default 60)"),
 });
 
 export const AutoSizeSystemResponse = zod.object({
@@ -1040,6 +1050,10 @@ export const AutoSizeSystemResponse = zod.object({
             }),
           )
           .describe("Technical alerts for this scenario"),
+        fonteProducao: zod
+          .enum(["pvgis", "estimativa_hsp"])
+          .optional()
+          .describe("Source of monthly production data used for this scenario"),
       }),
     )
     .describe("Three sizing scenarios (conservador, equilibrado, agressivo)"),
@@ -1049,6 +1063,16 @@ export const AutoSizeSystemResponse = zod.object({
       "Recommended scenario type based on best payback\/autoconsumo balance",
     ),
   explicacao: zod.string().describe("Human-readable explanation of the sizing"),
+  confianca: zod
+    .object({
+      pontuacao: zod.number().describe("Confidence score 0–100"),
+      nivel: zod.enum(["alto", "medio", "baixo"]),
+      pvgis: zod
+        .boolean()
+        .describe("True if PVGIS real data was used for production estimates"),
+      avisos: zod.array(zod.string()),
+    })
+    .describe("Confidence score for this sizing study"),
 });
 
 /**

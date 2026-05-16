@@ -1,0 +1,141 @@
+Reformular completamente o motor de cálculo do SolarDim.
+
+Problema:
+Os cálculos atuais estão demasiado lineares/simplificados:
+- consumo anual ÷ 365;
+- HSP média;
+- autoconsumo fixo;
+- excedente estimado de forma direta;
+- bateria calculada por autonomia simples.
+
+Isto não é suficiente para um dimensionamento fotovoltaico fiável.
+
+Objetivo:
+Criar um motor de simulação energética mais realista, baseado em ferramentas/dados fiáveis e perfis temporais.
+
+Requisitos principais:
+
+1. Usar PVGIS como fonte principal de produção
+- obter produção mensal e, se possível, horária;
+- considerar localização;
+- inclinação;
+- azimute;
+- perdas;
+- potência instalada;
+- tecnologia FV;
+- produção mensal/anual;
+- variabilidade sazonal.
+
+2. Deixar de usar cálculos lineares simples
+Evitar:
+produção = kWp × HSP × 365 × rendimento
+
+Usar esta fórmula apenas como fallback quando PVGIS não estiver disponível.
+
+3. Criar perfil de consumo realista
+A partir de:
+- faturas;
+- gráfico mensal da fatura;
+- consumo por vazio/cheio/ponta;
+- tipo de cliente;
+- consumo diurno/noturno;
+- equipamentos futuros;
+- perfil residencial/comercial/industrial.
+
+Gerar uma curva mensal e, idealmente, horária estimada.
+
+4. Simulação temporal
+Criar simulação mensal e, se possível, horária:
+Para cada período calcular:
+- produção FV;
+- consumo;
+- autoconsumo instantâneo;
+- excedente;
+- energia importada;
+- energia exportada;
+- energia armazenada em bateria;
+- perdas;
+- SOC da bateria.
+
+5. Bateria realista
+A bateria deve considerar:
+- capacidade nominal;
+- capacidade útil;
+- DoD;
+- eficiência round-trip;
+- potência máxima de carga;
+- potência máxima de descarga;
+- SOC mínimo;
+- reserva backup;
+- ciclos anuais;
+- energia realmente carregada;
+- energia realmente descarregada;
+- se há excedente suficiente para justificar a bateria.
+
+Não assumir que autoconsumo 100% significa excedente zero.
+
+6. Inversores e clipping
+Considerar:
+- potência DC;
+- potência AC;
+- DC/AC ratio;
+- clipping;
+- múltiplos inversores;
+- limite de potência AC;
+- eficiência do inversor;
+- compatibilidade com bateria.
+
+7. Cenários
+Os cenários Económico / Equilibrado / Premium devem ser calculados com base na simulação:
+- cobertura real;
+- autoconsumo real;
+- excedente real;
+- poupança realista;
+- payback;
+- investimento.
+
+8. Grau de confiança
+Mostrar um índice de confiança do estudo:
+- Alto: 12 meses de faturas + PVGIS horário;
+- Médio: gráfico mensal + PVGIS mensal;
+- Baixo: apenas consumo anual manual.
+
+Mostrar avisos:
+“Estimativa baseada em dados incompletos”
+“Resultado depende do perfil horário real de consumo”
+
+9. Separar claramente:
+- cálculo energético;
+- cálculo técnico;
+- cálculo financeiro.
+
+10. Arquitetura sugerida
+Criar um módulo central:
+src/lib/energy-simulation.ts
+
+Com funções:
+- buildConsumptionProfile()
+- fetchPVGISProduction()
+- simulatePVSystem()
+- simulateBattery()
+- calculateSelfConsumption()
+- calculateFinancialReturn()
+- calculateConfidenceScore()
+
+11. Transparência
+Em cada estudo mostrar:
+- dados usados;
+- fonte dos dados;
+- limitações;
+- pressupostos;
+- confiança;
+- margem de erro estimada.
+
+12. Fallback
+Se PVGIS falhar:
+- usar HSP médio local;
+- avisar o utilizador;
+- reduzir confiança do estudo.
+
+Resultado esperado:
+O SolarDim deve deixar de funcionar como uma calculadora linear e passar a funcionar como um simulador energético, capaz de produzir estimativas mais realistas para autoconsumo, bateria, excedentes e retorno financeiro.

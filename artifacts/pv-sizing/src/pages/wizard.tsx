@@ -45,6 +45,7 @@ import {
 } from "@/lib/wizard-draft";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
+import { simulateAnual } from "@/lib/energy-simulation";
 
 import WizardStep1, { ConsumoData, DEFAULT_CONSUMO_DATA } from "@/components/wizard-step1";
 import WizardStep1Cliente, {
@@ -124,6 +125,13 @@ interface AutoSizeCenario {
   alertas?: Array<{ tipo: "info" | "aviso" | "erro"; mensagem: string }>;
 }
 
+interface AutoSizeConfianca {
+  pontuacao: number;
+  nivel: "alto" | "medio" | "baixo";
+  pvgis: boolean;
+  avisos: string[];
+}
+
 interface AutoSizeResult {
   consumoDiario: number;
   consumoAnualAjustado: number;
@@ -148,6 +156,7 @@ interface AutoSizeResult {
   cenariosDimensionamento: AutoSizeCenario[];
   recomendado: CenarioTipo;
   explicacao: string;
+  confianca?: AutoSizeConfianca;
 }
 
 interface ManualOverride {
@@ -392,15 +401,16 @@ export default function Wizard() {
 
       // Scale monthly production proportionally
       const scale = c.potenciaInstalada > 0 ? potenciaInstalada / c.potenciaInstalada : 1;
-      const producaoMensal     = c.producaoMensal.map(v => Math.round(v * scale));
-      const autoconsumoMensal  = producaoMensal.map((prod, m) => Math.min(prod, c.consumoMensal[m]));
-      const excessoMensal      = producaoMensal.map((prod, m) => Math.max(0, prod - c.consumoMensal[m]));
+      const producaoMensal = c.producaoMensal.map(v => Math.round(v * scale));
+      const consumoMensal  = c.consumoMensal;
+
+      // Hourly simulation for accurate autoconsumo (replaces simple min(prod, consumo))
+      const simResult = simulateAnual(producaoMensal, consumoMensal, perfilDiurnoPct);
+      const { autoconsumoMensal, excessoMensal, autoconsumoAnual, excessoAnual, autoconsumoPerc } = simResult;
+
       const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
-      const coberturaReal = Math.round(energiaAnualEstimada / sizing.consumoAnualAjustado * 100);
-      const autoconsumoAnual = autoconsumoMensal.reduce((a, b) => a + b, 0);
-      const excessoAnual     = excessoMensal.reduce((a, b) => a + b, 0);
-      const autoconsumoPerc  = energiaAnualEstimada > 0
-        ? Math.round(autoconsumoAnual / energiaAnualEstimada * 100) : 0;
+      const consumoAnualReal     = consumoMensal.reduce((a, b) => a + b, 0);
+      const coberturaReal = Math.round(energiaAnualEstimada / consumoAnualReal * 100);
       const investBat = c.capacidadeBateriaRecomendada ? Math.round(c.capacidadeBateriaRecomendada * custoBateria) : 0;
       const investimentoEstimado = Math.round(potenciaInstalada * custoKwp) + investBat;
       const poupancaAnual = Math.round(autoconsumoAnual * precoKwh * 100) / 100;
@@ -424,7 +434,7 @@ export default function Wizard() {
       };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sizing, wpRef, consumoData.coberturaMeta, consumoData.precoKwh]);
+  }, [sizing, wpRef, consumoData.coberturaMeta, consumoData.precoKwh, perfilDiurnoPct]);
 
   // Currently selected sizing scenario (uses adjusted values)
   const activeCenario: AutoSizeCenario | null = useMemo(() => {
@@ -641,23 +651,32 @@ export default function Wizard() {
   const runAutoSize = async (consumo: ConsumoData, loc: LocalizacaoForm) => {
     setIsSizing(true);
     try {
+      // Build optional monthly consumption from invoice history (12 non-null values)
+      const hist = consumo.historicoMensal;
+      const consumoMensalInput =
+        Array.isArray(hist) && hist.length === 12 && hist.every(v => v != null)
+          ? (hist as number[])
+          : undefined;
+
       const resp = await fetch(`${BASE}/api/tools/auto-size`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          consumoAnual:      consumo.consumoAnual,
-          latitude:          loc.latitude,
-          longitude:         loc.longitude,
-          inclinacao:        loc.inclinacao,
-          azimute:           loc.azimute,
-          coberturaMeta:     consumo.coberturaMeta,
-          crescimentoFuturo: consumo.crescimentoFuturo,
-          incluirBateria:    consumo.incluirBateria,
-          horasAutonomia:    consumo.horasAutonomia,
-          percVazio:         consumo.percVazio,
-          percCheio:         consumo.percCheio,
-          percPonta:         consumo.percPonta,
-          precoKwh:          consumo.precoKwh ?? 0.18,
+          consumoAnual:       consumo.consumoAnual,
+          latitude:           loc.latitude,
+          longitude:          loc.longitude,
+          inclinacao:         loc.inclinacao,
+          azimute:            loc.azimute,
+          coberturaMeta:      consumo.coberturaMeta,
+          crescimentoFuturo:  consumo.crescimentoFuturo,
+          incluirBateria:     consumo.incluirBateria,
+          horasAutonomia:     consumo.horasAutonomia,
+          percVazio:          consumo.percVazio,
+          percCheio:          consumo.percCheio,
+          percPonta:          consumo.percPonta,
+          precoKwh:           consumo.precoKwh ?? 0.18,
+          perfilDiurnoPct:    perfilDiurnoPct,
+          consumoMensalInput: consumoMensalInput,
         }),
       });
       if (!resp.ok) throw new Error();
@@ -1058,6 +1077,37 @@ export default function Wizard() {
                     </div>
                   </CardContent>
                 </Card>
+              )}
+
+              {/* ── Confidence & data source badge ──────────────────────────── */}
+              {sizing.confianca && (
+                <div className="flex flex-wrap items-center gap-2 px-1">
+                  <span className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
+                    sizing.confianca.pvgis
+                      ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400"
+                      : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                  )}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                    {sizing.confianca.pvgis ? "Produção: PVGIS real (JRC)" : "Produção: Estimativa HSP"}
+                  </span>
+                  <span className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
+                    sizing.confianca.nivel === "alto"
+                      ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400"
+                      : sizing.confianca.nivel === "medio"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                      : "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
+                  )}>
+                    Confiança: {sizing.confianca.pontuacao}%
+                    {" · "}{sizing.confianca.nivel === "alto" ? "alta" : sizing.confianca.nivel === "medio" ? "média" : "baixa"}
+                  </span>
+                  {sizing.confianca.avisos.length > 0 && (
+                    <span className="text-xs text-muted-foreground italic">
+                      {sizing.confianca.avisos[0]}
+                    </span>
+                  )}
+                </div>
               )}
 
               {/* ── Coverage slider ─────────────────────────────────────────── */}

@@ -25,4 +25,8 @@ export interface AutoSizeBody {
   crescimentoFuturo?: number;
   /** Electricity price per kWh in EUR for financial calculations (default 0.18) */
   precoKwh?: number;
+  /** Monthly consumption in kWh (12 values from invoice history, optional) */
+  consumoMensalInput?: number[];
+  /** Daytime consumption percentage 0–100 (default 60) */
+  perfilDiurnoPct?: number;
 }

@@ -5,6 +5,7 @@
  * PV Sizing Tool API
  * OpenAPI spec version: 0.1.0
  */
+import type { AutoSizeResultConfianca } from "./autoSizeResultConfianca";
 import type { AutoSizeResultRecomendado } from "./autoSizeResultRecomendado";
 import type { CenarioDimensionamento } from "./cenarioDimensionamento";
 import type { CenarioPainel } from "./cenarioPainel";
@@ -45,4 +46,6 @@ export interface AutoSizeResult {
   recomendado: AutoSizeResultRecomendado;
   /** Human-readable explanation of the sizing */
   explicacao: string;
+  /** Confidence score for this sizing study */
+  confianca: AutoSizeResultConfianca;
 }

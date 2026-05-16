@@ -7,6 +7,7 @@
  */
 import type { CenarioDimensionamentoAlertasItem } from "./cenarioDimensionamentoAlertasItem";
 import type { CenarioDimensionamentoBateriaRecomendada } from "./cenarioDimensionamentoBateriaRecomendada";
+import type { CenarioDimensionamentoFonteProducao } from "./cenarioDimensionamentoFonteProducao";
 import type { CenarioDimensionamentoInversorRecomendado } from "./cenarioDimensionamentoInversorRecomendado";
 import type { CenarioDimensionamentoTipo } from "./cenarioDimensionamentoTipo";
 
@@ -56,4 +57,6 @@ export interface CenarioDimensionamento {
   bateriaRecomendada: CenarioDimensionamentoBateriaRecomendada;
   /** Technical alerts for this scenario */
   alertas: CenarioDimensionamentoAlertasItem[];
+  /** Source of monthly production data used for this scenario */
+  fonteProducao?: CenarioDimensionamentoFonteProducao;
 }
