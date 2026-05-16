@@ -103,16 +103,6 @@ function AlertBadge({ tipo }: { tipo: "info" | "aviso" | "erro" }) {
   return <Info size={11} className="text-blue-500 shrink-0 mt-0.5" />;
 }
 
-function PaybackColor({ anos }: { anos: number }) {
-  const cls =
-    anos <= 9
-      ? "text-green-600 dark:text-green-400"
-      : anos <= 13
-        ? "text-amber-600 dark:text-amber-400"
-        : "text-red-600 dark:text-red-400";
-  return <span className={cn("font-bold tabular-nums", cls)}>{anos} anos</span>;
-}
-
 function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, onSelect, panelNome }: Props) {
   if (!cenarios || cenarios.length === 0) return null;
 
@@ -122,7 +112,7 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
       <div>
         <p className="text-sm font-semibold">Comparação de Cenários</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Seleccione o cenário que melhor se adapta ao seu perfil de consumo e investimento
+          Seleccione o cenário energético que melhor se adapta ao seu perfil de consumo
         </p>
       </div>
 
@@ -201,25 +191,9 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
                     <MetricTooltip label="Autoconsumo" tip="Percentagem da energia solar produzida que é consumida directamente no local (vs. injectada na rede)" />
                     <span className="font-semibold tabular-nums">{c.autoconsumoPerc}%</span>
                   </div>
-                </div>
-
-                <Separator />
-
-                {/* ── Financial ── */}
-                <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between items-center">
-                    <MetricTooltip label="Investimento est." tip="Estimativa de investimento baseada em €900–1200/kWp instalado. Sujeito a orçamento definitivo." />
-                    <span className="font-bold tabular-nums">{fmt(c.investimentoEstimado)} €</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <MetricTooltip label="Poupança / ano" tip="Economia estimada na factura eléctrica no 1.º ano, com base no preço de energia definido" />
-                    <span className="font-semibold tabular-nums text-green-600 dark:text-green-400">
-                      +{fmt(c.poupancaAnual)} €
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <MetricTooltip label="Payback simples" tip="Anos necessários para recuperar o investimento com as poupanças geradas (sem actualização monetária)" />
-                    <PaybackColor anos={c.paybackAnos} />
+                    <MetricTooltip label="Excedente rede" tip="Energia solar produzida em excesso face ao consumo, injectada na rede (kWh/ano)" />
+                    <span className="font-semibold tabular-nums text-amber-600 dark:text-amber-400">{fmt(c.excessoAnual)} kWh</span>
                   </div>
                 </div>
 
@@ -276,15 +250,15 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
       <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-[11px] text-muted-foreground px-0.5">
         <span className="flex items-center gap-1">
           <TrendingDown size={11} className="text-blue-500" />
-          <strong>Económico</strong> — menor investimento, retorno mais rápido
+          <strong>Económico</strong> — menor potência, maior autoconsumo relativo
         </span>
         <span className="flex items-center gap-1">
           <Target size={11} className="text-amber-500" />
-          <strong>Equilibrado</strong> — compromisso ideal custo / cobertura
+          <strong>Equilibrado</strong> — compromisso ideal cobertura / autoconsumo
         </span>
         <span className="flex items-center gap-1">
           <TrendingUp size={11} className="text-emerald-500" />
-          <strong>Premium</strong> — máxima produção e autonomia solar
+          <strong>Premium</strong> — máxima cobertura solar e produção anual
         </span>
       </div>
     </div>

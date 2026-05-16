@@ -1,0 +1,97 @@
+Corrigir valores económicos, sugestões de inversores e layout do passo 5.
+
+1. Investimento / custo da instalação
+
+Problema:
+O sistema está a atribuir automaticamente valores muito elevados à instalação, causando payback irrealista.
+
+Comportamento pretendido:
+O valor da instalação deve ser inserido pelo utilizador, não assumido automaticamente como valor final.
+
+Alterar:
+- Nos cenários, mostrar apenas “estimativa preliminar” ou ocultar investimento/payback até existir valor definido.
+- Criar campo editável:
+  “Valor estimado da instalação (€)”
+- Permitir inserir:
+  - valor total final;
+  - preço por kWp;
+  - preço das baterias;
+  - custos adicionais;
+  - IVA.
+
+O payback deve usar sempre o valor introduzido pelo utilizador.
+Se ainda não houver valor, mostrar:
+“Payback disponível após inserir investimento.”
+
+2. Lista de inversores
+
+Problema:
+As sugestões automáticas aparecem em cards grandes e ocupam demasiado espaço.
+Também não aparecem todos os inversores viáveis.
+
+Comportamento pretendido:
+Trocar os cards por uma lista/tabela compacta.
+
+Colunas sugeridas:
+- Selecionar
+- Configuração
+- Potência AC total
+- Nº inversores
+- Tipo
+- DC/AC ratio
+- Compatível bateria
+- Estado
+- Observações
+
+Mostrar mais resultados:
+- Ideal
+- Aceitável
+- Requer validação
+- Não recomendado, mas tecnicamente possível
+
+Adicionar filtros:
+- 1 inversor / múltiplos inversores
+- monofásico / trifásico
+- híbrido / string / AC-coupled
+- DC/AC mínimo e máximo
+
+3. Não esconder soluções possíveis
+
+Problema:
+O sistema está a filtrar demasiado e não mostra todos os inversores que poderiam ser usados.
+
+Corrigir:
+- gerar combinações com todos os inversores do catálogo;
+- mostrar soluções mesmo que não sejam ideais;
+- ordenar por melhor adequação;
+- explicar o motivo do estado.
+
+Exemplo:
+Para 22.32 kWp deve mostrar:
+- 1×20 kW
+- 2×10 kW
+- 3×7.6 kW
+- 2×8 kW
+- 3×6 kW
+- 1×18 kW
+- 1×16 kW
+- combinações multi-inversor possíveis.
+
+4. Payback
+
+Problema:
+O payback aparece demasiado alto porque o investimento estimado está exagerado.
+
+Corrigir:
+- não usar valores automáticos rígidos;
+- permitir introdução manual do valor real;
+- recalcular poupança/payback com o valor introduzido;
+- separar:
+  - investimento FV;
+  - investimento bateria;
+  - instalação;
+  - IVA;
+  - outros custos.
+
+Mostrar claramente:
+“Payback calculado com base no valor introduzido pelo utilizador.”

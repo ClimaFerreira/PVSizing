@@ -571,6 +571,37 @@ export default function Wizard() {
     );
   }, [manual, activeCenario, sizing]);
 
+  // Chart data — reflects manual overrides in real time via hourly simulation
+  const chartCenario = useMemo(() => {
+    if (!activeCenario) return null;
+    if (!isManualModified || !manual || !sizing) return activeCenario;
+    const potenciaInstalada = +(manual.numPaineis * manual.potenciaWp / 1000).toFixed(2);
+    const hspScale   = sizing.hsp > 0 ? manual.hsp / sizing.hsp : 1;
+    const rendScale  = sizing.fatorRendimento > 0 ? manual.rendimento / sizing.fatorRendimento : 1;
+    const scale      = activeCenario.potenciaInstalada > 0 ? potenciaInstalada / activeCenario.potenciaInstalada : 1;
+    const producaoMensal = activeCenario.producaoMensal.map(v => Math.round(v * scale * hspScale * rendScale));
+    const consumoMensal  = activeCenario.consumoMensal;
+    const simResult      = simulateAnual(producaoMensal, consumoMensal, perfilDiurnoPct);
+    const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
+    const consumoAnualReal     = consumoMensal.reduce((a, b) => a + b, 0);
+    const coberturaReal = consumoAnualReal > 0 ? Math.round(energiaAnualEstimada / consumoAnualReal * 100) : 0;
+    return {
+      ...activeCenario,
+      potenciaInstalada,
+      numPaineis: manual.numPaineis,
+      producaoMensal,
+      consumoMensal,
+      autoconsumoMensal:  simResult.autoconsumoMensal,
+      excessoMensal:      simResult.excessoMensal,
+      autoconsumoAnual:   simResult.autoconsumoAnual,
+      excessoAnual:       simResult.excessoAnual,
+      autoconsumoPerc:    simResult.autoconsumoPerc,
+      energiaAnualEstimada,
+      coberturaReal,
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCenario, isManualModified, manual, sizing, perfilDiurnoPct]);
+
   // ── Potência DC efectiva para sugestões (usa painel seleccionado no passo 5) ──
   const panelIdStep5 = equipForm.watch("panelId");
   const potenciaKwpEstudo   = (effectiveSizing ?? sizing)?.potenciaInstalada ?? 0;
@@ -1175,10 +1206,10 @@ export default function Wizard() {
                       {/* Mini KPI strip */}
                       <div className="flex gap-3 pt-5 flex-wrap">
                         {[
-                          { label: "Potência", val: `${activeCenario?.potenciaInstalada ?? "—"} kWp` },
-                          { label: "Payback", val: `${activeCenario?.paybackAnos ?? "—"} anos` },
-                          { label: "Investimento", val: activeCenario ? `${activeCenario.investimentoEstimado.toLocaleString("pt-PT")} €` : "—" },
-                          { label: "Poupança/ano", val: activeCenario ? `${activeCenario.poupancaAnual.toLocaleString("pt-PT")} €` : "—" },
+                          { label: "Potência FV",   val: `${activeCenario?.potenciaInstalada ?? "—"} kWp` },
+                          { label: "Produção/ano",  val: activeCenario ? `${activeCenario.energiaAnualEstimada.toLocaleString("pt-PT")} kWh` : "—" },
+                          { label: "Autoconsumo",   val: activeCenario ? `${activeCenario.autoconsumoPerc}%` : "—" },
+                          { label: "Excedente",     val: activeCenario ? `${activeCenario.excessoAnual.toLocaleString("pt-PT")} kWh` : "—" },
                         ].map(({ label, val }) => (
                           <div key={label} className="flex items-center gap-1.5">
                             <span className="text-xs text-muted-foreground">{label}:</span>
@@ -1207,85 +1238,6 @@ export default function Wizard() {
                     panelNome={panelRef ? `${panelRef.fabricante} ${panelRef.nome} (${panelRef.potencia} Wp)` : undefined}
                   />
                 </Suspense>
-              )}
-
-              {/* ── Monthly chart + financial summary (active scenario) ──────── */}
-              {activeCenario && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <BarChart3 size={18} className="text-primary" />
-                      Perfil Mensal — {activeCenario.label}
-                      {isManualModified && (
-                        <Badge variant="outline" className="text-primary border-primary/40 text-xs ml-1">Ajustado</Badge>
-                      )}
-                    </CardTitle>
-                    <CardDescription>Produção estimada (autoconsumo + excedente) vs consumo mensal</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <ResponsiveContainer width="100%" height={190}>
-                      <ComposedChart
-                        data={activeCenario.producaoMensal.map((_, i) => ({
-                          mes: MONTH_LABELS[i],
-                          autoconsumo: activeCenario.autoconsumoMensal[i],
-                          excesso: activeCenario.excessoMensal[i],
-                          consumo: activeCenario.consumoMensal[i],
-                        }))}
-                        margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
-                      >
-                        <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <Tooltip
-                          contentStyle={{ fontSize: 11, padding: "6px 10px" }}
-                          formatter={(value: number, name: string) => {
-                            const labels: Record<string, string> = {
-                              autoconsumo: "Autoconsumo", excesso: "Excedente (rede)", consumo: "Consumo",
-                            };
-                            return [`${Math.round(value).toLocaleString("pt-PT")} kWh`, labels[name] ?? name];
-                          }}
-                        />
-                        <Bar dataKey="autoconsumo" stackId="prod" fill="#22c55e" name="autoconsumo" radius={[0, 0, 2, 2]} />
-                        <Bar dataKey="excesso" stackId="prod" fill="#f59e0b" name="excesso" radius={[2, 2, 0, 0]} />
-                        <Line type="monotone" dataKey="consumo" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="4 2" dot={false} name="consumo" />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                    <div className="flex items-center gap-4 text-[10px] text-muted-foreground justify-center flex-wrap">
-                      <span className="flex items-center gap-1"><span className="w-3 h-2.5 rounded-sm bg-green-500 inline-block" /> Autoconsumo</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-2.5 rounded-sm bg-amber-400 inline-block" /> Excedente (rede)</span>
-                      <span className="flex items-center gap-1"><span className="w-4 border-t-2 border-dashed border-muted-foreground inline-block" /> Consumo</span>
-                    </div>
-
-                    <Separator />
-
-                    {/* Financial KPIs */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {[
-                        { label: "Investimento est.", value: `${activeCenario.investimentoEstimado.toLocaleString("pt-PT")} €`, sub: "painéis + instalação", hi: false, Icon: Euro },
-                        { label: "Poupança/ano",       value: `${activeCenario.poupancaAnual.toLocaleString("pt-PT")} €`,       sub: `${activeCenario.autoconsumoAnual.toLocaleString("pt-PT")} kWh autoconsumo`, hi: false, Icon: TrendingUp },
-                        { label: "Payback simples",    value: `${activeCenario.paybackAnos} anos`,                               sub: "sem subsídios ou injeção", hi: true, Icon: Target },
-                        { label: "Autoconsumo",        value: `${activeCenario.autoconsumoPerc}%`,                               sub: `excedente: ${activeCenario.excessoAnual.toLocaleString("pt-PT")} kWh/ano`, hi: false, Icon: BarChart3 },
-                      ].map(({ label, value, sub, hi, Icon: Ic }) => (
-                        <div key={label} className={cn("rounded-xl p-3 text-center border", hi ? "bg-primary/10 border-primary/30" : "bg-muted/30 border-border")}>
-                          <Ic size={15} className={cn("mx-auto mb-1.5", hi ? "text-primary" : "text-muted-foreground")} />
-                          <p className="text-[10px] text-muted-foreground leading-tight">{label}</p>
-                          <p className={cn("font-bold text-sm mt-0.5", hi ? "text-primary" : "text-foreground")}>{value}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Summer excess warning */}
-                    {activeCenario.excessoMensal.slice(4, 9).some(e => e > (activeCenario.consumoMensal[6] ?? 0) * 0.4) && (
-                      <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
-                        <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
-                        <p className="text-xs text-amber-700 dark:text-amber-400">
-                          <strong>Excedente de verão elevado</strong> — Nos meses de Maio–Setembro a produção excede o consumo.{" "}
-                          {selectedCenarioTipo !== "conservador" && "Considere o cenário Conservador para melhor autoconsumo ou adicione bateria."}
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
               )}
 
               <Card className="border-primary/40 bg-primary/5">
@@ -1412,97 +1364,6 @@ export default function Wizard() {
                     <p className="text-xs text-muted-foreground mt-1">
                       A distribuição tarifária influencia o dimensionamento da bateria (consumo em Vazio = horas noturnas a cobrir)
                     </p>
-                  </div>
-
-                  <Separator />
-
-                  {/* Panel scenarios — uses real catalogue panels */}
-                  <div>
-                    <p className="text-sm font-semibold flex items-center gap-2 mb-3">
-                      <Sun size={16} className="text-primary" /> Cenários de Painéis Solares
-                    </p>
-                    {cenariosPaineisCatalogo && cenariosPaineisCatalogo.length > 0 ? (
-                      <>
-                        <div className="rounded-lg border overflow-hidden">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-muted/50 border-b">
-                                <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Painel do Catálogo</th>
-                                <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Nº Painéis</th>
-                                <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Pot. Instalada</th>
-                                <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Produção/ano</th>
-                                <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Cobertura real</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {cenariosPaineisCatalogo.map((c, i) => (
-                                <tr key={`${c.panelNome}-${c.potenciaWp}`} className={cn(
-                                  "border-b last:border-0",
-                                  i % 2 === 0 ? "bg-background" : "bg-muted/20"
-                                )}>
-                                  <td className="px-3 py-2">
-                                    <span className="font-medium">{c.panelNome}</span>
-                                    <span className="ml-1.5 text-muted-foreground text-xs">({c.potenciaWp} Wp)</span>
-                                  </td>
-                                  <td className="px-3 py-2 text-center font-bold">{c.quantidade}</td>
-                                  <td className="px-3 py-2 text-right">{c.potenciaInstalada.toFixed(2)} kWp</td>
-                                  <td className="px-3 py-2 text-right">{c.energiaAnual.toLocaleString("pt-PT")} kWh</td>
-                                  <td className="px-3 py-2 text-right">
-                                    <span className={cn(
-                                      "font-semibold",
-                                      c.coberturaReal >= sizing.coberturaAlvo ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
-                                    )}>
-                                      {c.coberturaReal}%
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1.5 pl-1">
-                          Painéis do catálogo. Cobertura a verde ≥ {sizing.coberturaAlvo}% (alvo). Nº de painéis arredondado para cima.
-                        </p>
-                      </>
-                    ) : (
-                      <div className="rounded-lg border overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-muted/50 border-b">
-                              <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Potência Painel</th>
-                              <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Nº Painéis</th>
-                              <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Pot. Instalada</th>
-                              <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Produção/ano</th>
-                              <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Cobertura real</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sizing.cenariosPaineis.map((c, i) => (
-                              <tr key={c.potenciaWp} className={cn(
-                                "border-b last:border-0",
-                                c.potenciaWp === 400 ? "bg-primary/5 font-semibold" : i % 2 === 0 ? "bg-background" : "bg-muted/20"
-                              )}>
-                                <td className="px-3 py-2">
-                                  {c.potenciaWp} Wp
-                                  {c.potenciaWp === 400 && <Badge variant="outline" className="ml-2 text-xs">Ref.</Badge>}
-                                </td>
-                                <td className="px-3 py-2 text-center font-bold">{c.quantidade}</td>
-                                <td className="px-3 py-2 text-right">{c.potenciaInstalada.toFixed(2)} kWp</td>
-                                <td className="px-3 py-2 text-right">{(c as { energiaAnual?: number }).energiaAnual?.toLocaleString("pt-PT") ?? "—"} kWh</td>
-                                <td className="px-3 py-2 text-right">
-                                  <span className={cn(
-                                    "font-semibold",
-                                    ((c as { coberturaReal?: number }).coberturaReal ?? 0) >= sizing.coberturaAlvo ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
-                                  )}>
-                                    {(c as { coberturaReal?: number }).coberturaReal ?? "—"}%
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
                   </div>
 
                   {/* Battery */}
@@ -1758,6 +1619,88 @@ export default function Wizard() {
                       })()}
                     </CardContent>
                   )}
+                </Card>
+              )}
+
+              {/* ── Gráfico: Produção estimada vs Consumo mensal ──────────────── */}
+              {chartCenario && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <BarChart3 size={18} className="text-primary" />
+                      Produção Estimada vs Consumo Mensal
+                      {isManualModified && (
+                        <Badge variant="outline" className="text-primary border-primary/40 text-xs ml-1">Ajustado</Badge>
+                      )}
+                    </CardTitle>
+                    <CardDescription>
+                      {isManualModified
+                        ? `Ajuste manual: ${chartCenario.potenciaInstalada} kWp · ${chartCenario.numPaineis} painéis`
+                        : `Cenário ${chartCenario.label} — autoconsumo + excedente vs. consumo`}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <ComposedChart
+                        data={chartCenario.producaoMensal.map((_, i) => ({
+                          mes: MONTH_LABELS[i],
+                          autoconsumo: chartCenario.autoconsumoMensal[i],
+                          excesso: chartCenario.excessoMensal[i],
+                          consumo: chartCenario.consumoMensal[i],
+                        }))}
+                        margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
+                      >
+                        <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip
+                          contentStyle={{ fontSize: 11, padding: "6px 10px" }}
+                          formatter={(value: number, name: string) => {
+                            const labels: Record<string, string> = {
+                              autoconsumo: "Autoconsumo", excesso: "Excedente (rede)", consumo: "Consumo",
+                            };
+                            return [`${Math.round(value).toLocaleString("pt-PT")} kWh`, labels[name] ?? name];
+                          }}
+                        />
+                        <Bar dataKey="autoconsumo" stackId="prod" fill="#22c55e" name="autoconsumo" radius={[0, 0, 2, 2]} />
+                        <Bar dataKey="excesso" stackId="prod" fill="#f59e0b" name="excesso" radius={[2, 2, 0, 0]} />
+                        <Line type="monotone" dataKey="consumo" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="4 2" dot={false} name="consumo" />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+
+                    <div className="flex items-center gap-4 text-[10px] text-muted-foreground justify-center flex-wrap">
+                      <span className="flex items-center gap-1"><span className="w-3 h-2.5 rounded-sm bg-green-500 inline-block" /> Autoconsumo</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-2.5 rounded-sm bg-amber-400 inline-block" /> Excedente (rede)</span>
+                      <span className="flex items-center gap-1"><span className="w-4 border-t-2 border-dashed border-muted-foreground inline-block" /> Consumo</span>
+                    </div>
+
+                    {/* Energy KPIs */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        { label: "Produção anual",  value: `${chartCenario.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`, sub: `${chartCenario.potenciaInstalada} kWp instalados`,                   hi: false, Icon: Sun },
+                        { label: "Autoconsumo",     value: `${chartCenario.autoconsumoPerc}%`,                                  sub: `${chartCenario.autoconsumoAnual.toLocaleString("pt-PT")} kWh/ano`,   hi: true,  Icon: Zap },
+                        { label: "Excedente rede",  value: `${chartCenario.excessoAnual.toLocaleString("pt-PT")} kWh`,          sub: "injectado na rede",                                                    hi: false, Icon: TrendingUp },
+                        { label: "Cobertura solar", value: `${chartCenario.coberturaReal}%`,                                    sub: `meta: ${consumoData.coberturaMeta}%`,                                  hi: false, Icon: BarChart3 },
+                      ].map(({ label, value, sub, hi, Icon: Ic }) => (
+                        <div key={label} className={cn("rounded-xl p-3 text-center border", hi ? "bg-primary/10 border-primary/30" : "bg-muted/30 border-border")}>
+                          <Ic size={15} className={cn("mx-auto mb-1.5", hi ? "text-primary" : "text-muted-foreground")} />
+                          <p className="text-[10px] text-muted-foreground leading-tight">{label}</p>
+                          <p className={cn("font-bold text-sm mt-0.5", hi ? "text-primary" : "text-foreground")}>{value}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Summer excess warning */}
+                    {chartCenario.excessoMensal.slice(4, 9).some(e => e > (chartCenario.consumoMensal[6] ?? 0) * 0.4) && (
+                      <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                        <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                          <strong>Excedente de verão elevado</strong> — Nos meses de Maio–Setembro a produção excede o consumo.{" "}
+                          {selectedCenarioTipo !== "conservador" && "Considere o cenário Conservador para melhor autoconsumo ou adicione bateria."}
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
                 </Card>
               )}
 
