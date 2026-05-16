@@ -51,6 +51,7 @@ interface Props {
   selectedTipo: string | null;
   coberturaMeta: number;
   onSelect: (tipo: CenarioTipo) => void;
+  panelNome?: string;
 }
 
 const CARD_META: Record<
@@ -112,7 +113,7 @@ function PaybackColor({ anos }: { anos: number }) {
   return <span className={cn("font-bold tabular-nums", cls)}>{anos} anos</span>;
 }
 
-function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, onSelect }: Props) {
+function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, onSelect, panelNome }: Props) {
   if (!cenarios || cenarios.length === 0) return null;
 
   return (
@@ -180,7 +181,7 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
                     <span className="font-bold text-sm tabular-nums">{c.potenciaInstalada} kWp</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <MetricTooltip label="Painéis 400 Wp" tip="Número de módulos solares de 400 Wp necessários para atingir esta potência" />
+                    <MetricTooltip label={panelNome ? `Painéis (${panelNome.split(" ").pop()})` : "Painéis"} tip={panelNome ? `Número de módulos ${panelNome} necessários para atingir esta potência` : "Número de painéis necessários para atingir esta potência"} />
                     <span className="font-semibold tabular-nums">{c.numPaineis} un.</span>
                   </div>
                   <div className="flex justify-between items-center">

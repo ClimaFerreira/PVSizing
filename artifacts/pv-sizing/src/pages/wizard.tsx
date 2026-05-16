@@ -188,6 +188,7 @@ export default function Wizard() {
   const [showManualAdjust, setShowManualAdjust] = useState(false);
   const [manual, setManual]       = useState<ManualOverride | null>(null);
   const [selectedCenarioTipo, setSelectedCenarioTipo] = useState<CenarioTipo>("equilibrado");
+  const [panelRefId, setPanelRefId] = useState<number | null>(null);
   const [showRecovery, setShowRecovery] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<WizardDraftData | null>(null);
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
@@ -228,10 +229,13 @@ export default function Wizard() {
       }
       const tipo: CenarioTipo = (sizing.recomendado ?? "equilibrado") as CenarioTipo;
       setSelectedCenarioTipo(tipo);
+      // cenariosDimensionamentoAdj isn't stable here yet (depends on wpRef which may change),
+      // so fall back to the server values for the initial manual seed.
       const c = sizing.cenariosDimensionamento?.find(x => x.tipo === tipo) ?? null;
+      const currentWp = panelRef ? Number(panelRef.potencia) : 400;
       setManual({
         numPaineis: c?.numPaineis ?? sizing.numPaineis,
-        potenciaWp: 400,
+        potenciaWp: currentWp,
         hsp: sizing.hsp,
         rendimento: sizing.fatorRendimento,
         capacidadeBateria: c?.capacidadeBateriaRecomendada ?? sizing.capacidadeBateriaRecomendada ?? 0,
@@ -309,6 +313,7 @@ export default function Wizard() {
       inverterUnits: inverterUnits as unknown as Record<string, unknown>[],
       tipoProjeto,
       investimentoManual,
+      panelRefId,
     };
 
     // localStorage — fast (800ms)
@@ -332,20 +337,94 @@ export default function Wizard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust, numPaineisStep5, inverterUnits, tipoProjeto, investimentoManual]);
 
-  // Currently selected sizing scenario
-  const activeCenario: AutoSizeCenario | null = useMemo(() => {
-    if (!sizing?.cenariosDimensionamento) return null;
-    return sizing.cenariosDimensionamento.find(c => c.tipo === selectedCenarioTipo) ?? null;
-  }, [sizing, selectedCenarioTipo]);
+  // ── Reference panel for step-4 scenarios ─────────────────────────────────
+  // Prefer explicitly chosen panelRefId, then step-5 form selection, then first in catalogue.
+  const panelRef = useMemo(() => {
+    if (panelRefId) return panels?.find(p => p.id === panelRefId) ?? null;
+    const fromForm = equipForm.getValues("panelId");
+    if (fromForm) return panels?.find(p => p.id === fromForm) ?? null;
+    return panels?.[0] ?? null;
+  }, [panelRefId, panels]);  // equipForm intentionally omitted — reads on demand
 
-  // Switch scenario and reset manual to match; pre-populate recommended equipment
+  const wpRef: number = panelRef ? Number(panelRef.potencia) : 400;
+
+  // Coverage multipliers per scenario type (mirrors server buildCenario logic)
+  const CENARIO_COB_MULT: Record<string, number> = {
+    conservador: 0.68,
+    equilibrado: 1.00,
+    agressivo:   1.35,
+  };
+
+  // Recompute cenarios with the real panel Wp.
+  // Monthly production scales proportionally to potenciaInstalada (linear).
+  const cenariosDimensionamentoAdj = useMemo<AutoSizeCenario[]>(() => {
+    if (!sizing?.cenariosDimensionamento) return [];
+    if (wpRef === 400) return sizing.cenariosDimensionamento;
+
+    const precoKwh = consumoData.precoKwh ?? 0.18;
+    const custoKwp = 1050;
+    const custoBateria = 600;
+
+    return sizing.cenariosDimensionamento.map(c => {
+      const mult = CENARIO_COB_MULT[c.tipo] ?? 1.0;
+      // Recompute minimum power for this scenario using the same formula as the server
+      const potenciaMinima =
+        (sizing.consumoAnualAjustado / 365 * (consumoData.coberturaMeta * mult / 100))
+        / (sizing.hsp * sizing.fatorRendimento);
+
+      const numPaineis = Math.ceil(potenciaMinima * 1000 / wpRef);
+      const potenciaInstalada = Math.round(numPaineis * wpRef) / 1000;
+
+      // Scale monthly production proportionally
+      const scale = c.potenciaInstalada > 0 ? potenciaInstalada / c.potenciaInstalada : 1;
+      const producaoMensal     = c.producaoMensal.map(v => Math.round(v * scale));
+      const autoconsumoMensal  = producaoMensal.map((prod, m) => Math.min(prod, c.consumoMensal[m]));
+      const excessoMensal      = producaoMensal.map((prod, m) => Math.max(0, prod - c.consumoMensal[m]));
+      const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
+      const coberturaReal = Math.round(energiaAnualEstimada / sizing.consumoAnualAjustado * 100);
+      const autoconsumoAnual = autoconsumoMensal.reduce((a, b) => a + b, 0);
+      const excessoAnual     = excessoMensal.reduce((a, b) => a + b, 0);
+      const autoconsumoPerc  = energiaAnualEstimada > 0
+        ? Math.round(autoconsumoAnual / energiaAnualEstimada * 100) : 0;
+      const investBat = c.capacidadeBateriaRecomendada ? Math.round(c.capacidadeBateriaRecomendada * custoBateria) : 0;
+      const investimentoEstimado = Math.round(potenciaInstalada * custoKwp) + investBat;
+      const poupancaAnual = Math.round(autoconsumoAnual * precoKwh * 100) / 100;
+      const paybackAnos   = poupancaAnual > 0 ? Math.round(investimentoEstimado / poupancaAnual * 10) / 10 : 99;
+
+      return {
+        ...c,
+        numPaineis,
+        potenciaInstalada,
+        producaoMensal,
+        autoconsumoMensal,
+        excessoMensal,
+        energiaAnualEstimada,
+        coberturaReal,
+        autoconsumoAnual,
+        excessoAnual,
+        autoconsumoPerc,
+        investimentoEstimado,
+        poupancaAnual,
+        paybackAnos,
+      };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sizing, wpRef, consumoData.coberturaMeta, consumoData.precoKwh]);
+
+  // Currently selected sizing scenario (uses adjusted values)
+  const activeCenario: AutoSizeCenario | null = useMemo(() => {
+    if (!cenariosDimensionamentoAdj.length) return null;
+    return cenariosDimensionamentoAdj.find(c => c.tipo === selectedCenarioTipo) ?? null;
+  }, [cenariosDimensionamentoAdj, selectedCenarioTipo]);
+
+  // Switch scenario and reset manual to match
   const selectCenario = useCallback((tipo: CenarioTipo) => {
     setSelectedCenarioTipo(tipo);
     if (sizing) {
-      const c = sizing.cenariosDimensionamento?.find(x => x.tipo === tipo) ?? null;
+      const c = cenariosDimensionamentoAdj.find(x => x.tipo === tipo) ?? null;
       setManual({
         numPaineis: c?.numPaineis ?? sizing.numPaineis,
-        potenciaWp: 400,
+        potenciaWp: wpRef,
         hsp: sizing.hsp,
         rendimento: sizing.fatorRendimento,
         capacidadeBateria: c?.capacidadeBateriaRecomendada ?? sizing.capacidadeBateriaRecomendada ?? 0,
@@ -353,7 +432,8 @@ export default function Wizard() {
       });
       setShowManualAdjust(false);
     }
-  }, [sizing, consumoData.coberturaMeta, equipForm]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sizing, cenariosDimensionamentoAdj, wpRef, consumoData.coberturaMeta]);
 
   // ── Panel scenarios computed from the real catalogue ─────────────────────
   interface CenarioCatalogoPainel {
@@ -459,7 +539,7 @@ export default function Wizard() {
     const base = activeCenario ?? sizing;
     return (
       manual.numPaineis !== base.numPaineis ||
-      manual.potenciaWp !== 400 ||
+      manual.potenciaWp !== wpRef ||
       Math.abs(manual.hsp - sizing.hsp) > 0.01 ||
       Math.abs(manual.rendimento - sizing.fatorRendimento) > 0.005 ||
       (manual.capacidadeBateria > 0 && manual.capacidadeBateria !== (base.capacidadeBateriaRecomendada ?? 0))
@@ -500,6 +580,7 @@ export default function Wizard() {
     }
     if (draft.tipoProjeto) setTipoProjeto(draft.tipoProjeto as TipoProjeto);
     if (draft.investimentoManual != null) setInvestimentoManual(draft.investimentoManual);
+    if (draft.panelRefId != null) setPanelRefId(draft.panelRefId);
     setStep(draft.step);
     setShowRecovery(false);
     setPendingDraft(null);
@@ -915,9 +996,55 @@ export default function Wizard() {
             </Card>
           ) : sizing ? (
             <>
+              {/* ── Panel reference picker ──────────────────────────────────── */}
+              {panels && panels.length > 0 && (
+                <Card className="border-muted">
+                  <CardContent className="pt-4 pb-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <p className="text-sm font-medium shrink-0">Painel de referência:</p>
+                      <Select
+                        value={panelRef ? String(panelRef.id) : ""}
+                        onValueChange={v => {
+                          const id = Number(v);
+                          setPanelRefId(id);
+                          // Pre-fill step 5 equipment form
+                          equipForm.setValue("panelId", id, { shouldValidate: false });
+                          // Re-sync manual Wp to new panel when manual hasn't been touched
+                          if (sizing && !showManualAdjust) {
+                            const tipo = selectedCenarioTipo;
+                            const mult = CENARIO_COB_MULT[tipo] ?? 1.0;
+                            const pm = (sizing.consumoAnualAjustado / 365 * (consumoData.coberturaMeta * mult / 100)) / (sizing.hsp * sizing.fatorRendimento);
+                            const panel = panels.find(p => p.id === id);
+                            const wp = panel ? Number(panel.potencia) : 400;
+                            const np = Math.ceil(pm * 1000 / wp);
+                            setManual(m => m ? { ...m, numPaineis: np, potenciaWp: wp } : m);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-64 text-sm h-8">
+                          <SelectValue placeholder="Selecionar painel…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {panels.map(p => (
+                            <SelectItem key={p.id} value={String(p.id)}>
+                              {p.fabricante} {p.nome} — {p.potencia} Wp
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {panelRef && (
+                        <span className="text-xs text-muted-foreground">
+                          {panelRef.potencia} Wp · os cenários abaixo usam este painel
+                        </span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* ── Coverage slider ─────────────────────────────────────────── */}
-              {sizing.cenariosDimensionamento && sizing.cenariosDimensionamento.length > 0 && (() => {
-                const cenarios = sizing.cenariosDimensionamento;
+              {cenariosDimensionamentoAdj.length > 0 && (() => {
+                const cenarios = cenariosDimensionamentoAdj;
                 const minCob = Math.min(...cenarios.map(c => c.coberturaReal));
                 const maxCob = Math.max(...cenarios.map(c => c.coberturaReal));
                 const rangeMin = Math.max(10, minCob - 5);
@@ -998,18 +1125,19 @@ export default function Wizard() {
               })()}
 
               {/* ── Scenario comparison (Económico / Equilibrado / Premium) ── */}
-              {sizing.cenariosDimensionamento && sizing.cenariosDimensionamento.length > 0 && (
+              {cenariosDimensionamentoAdj.length > 0 && (
                 <Suspense fallback={
                   <div className="flex justify-center py-8">
                     <Loader2 size={28} className="animate-spin text-muted-foreground" />
                   </div>
                 }>
                   <WizardCenarios
-                    cenarios={sizing.cenariosDimensionamento}
+                    cenarios={cenariosDimensionamentoAdj}
                     recomendado={sizing.recomendado}
                     selectedTipo={selectedCenarioTipo}
                     coberturaMeta={consumoData.coberturaMeta}
                     onSelect={selectCenario}
+                    panelNome={panelRef ? `${panelRef.fabricante} ${panelRef.nome} (${panelRef.potencia} Wp)` : undefined}
                   />
                 </Suspense>
               )}
@@ -1122,7 +1250,7 @@ export default function Wizard() {
                           hi: true, Icon: Zap,
                         },
                         {
-                          label: isManualModified ? `Nº Painéis (${manual!.potenciaWp} Wp)` : "Nº Painéis (400 Wp)",
+                          label: isManualModified ? `Nº Painéis (${manual!.potenciaWp} Wp)` : `Nº Painéis (${wpRef} Wp)`,
                           value: `${eff.numPaineis} un.`,
                           sub: isManualModified ? `cenário base: ${(activeCenario ?? sizing).numPaineis} un.` : `${eff.potenciaInstalada} kWp reais`,
                           hi: true, Icon: Sun,
@@ -1163,7 +1291,7 @@ export default function Wizard() {
                         { label: "2. Energia solar diária alvo",             formula: `${sizing.consumoDiario} kWh/dia × ${consumoData.coberturaMeta}% cobertura`,                                     result: `${sizing.energiaAlvoDiaria} kWh/dia`,        hi: false },
                         { label: "3. Potência bruta (sem perdas)",           formula: `${sizing.energiaAlvoDiaria} kWh/dia ÷ ${sizing.hsp} h/dia (HSP)`,                                              result: `${sizing.potenciaBruta} kWp`,                hi: false },
                         { label: `4. Potência mínima teórica (perdas ${(sizing.margemPerdas*100).toFixed(0)}%)`, formula: `${sizing.potenciaBruta} kWp ÷ ${sizing.fatorRendimento.toFixed(2)} (rendimento)`, result: `${sizing.potenciaMinima} kWp`, hi: false },
-                        { label: `5. Arredondamento → painéis reais`,        formula: `⌈${sizing.potenciaMinima} kWp ÷ 0,40 kWp/painel⌉ = ${sizing.numPaineis} × 400 Wp`,                              result: `${sizing.potenciaInstalada} kWp instalados`, hi: true  },
+                        { label: `5. Arredondamento → painéis reais`,        formula: `⌈${sizing.potenciaMinima} kWp ÷ ${(wpRef/1000).toFixed(3)} kWp/painel⌉ = ${(activeCenario ?? sizing).numPaineis} × ${wpRef} Wp`,                              result: `${(activeCenario ?? sizing).potenciaInstalada} kWp instalados`, hi: true  },
                         { label: "6. Cobertura real após arredondamento",    formula: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh ÷ ${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh`, result: `${sizing.coberturaReal}%`,           hi: true  },
                       ].map(({ label, formula, result, hi }) => (
                         <div key={label} className={cn(
@@ -1384,7 +1512,7 @@ export default function Wizard() {
                             <Input type="number" min={100} max={700} step={5} value={manual.potenciaWp}
                               onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, potenciaWp: v } : m); }}
                               onBlur={e => { const v = Math.max(100, Math.min(700, Math.round(+e.target.value || 400))); setManual(m => m ? { ...m, potenciaWp: v } : m); }} />
-                            <p className="text-[10px] text-muted-foreground mt-1">Auto: 400 Wp</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Auto: {wpRef} Wp</p>
                           </div>
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Potência Instalada</label>
@@ -1549,7 +1677,7 @@ export default function Wizard() {
                               <div className="flex justify-end pt-1">
                                 <Button variant="ghost" size="sm" className="text-xs gap-1.5 text-muted-foreground"
                                   onClick={() => setManual({
-                                    numPaineis: (activeCenario ?? sizing).numPaineis, potenciaWp: 400, hsp: sizing.hsp,
+                                    numPaineis: (activeCenario ?? sizing).numPaineis, potenciaWp: wpRef, hsp: sizing.hsp,
                                     rendimento: sizing.fatorRendimento,
                                     capacidadeBateria: (activeCenario ?? sizing).capacidadeBateriaRecomendada ?? 0,
                                     coberturaMeta: consumoData.coberturaMeta,
@@ -1632,7 +1760,7 @@ export default function Wizard() {
                 <div className="flex items-center gap-2">
                   <Sun size={16} className="text-primary" />
                   <span className="text-sm font-medium">
-                    {eff.numPaineis} painéis{isManualModified && manual ? ` de ${manual.potenciaWp} Wp` : " de 400 Wp"}
+                    {eff.numPaineis} painéis{isManualModified && manual ? ` de ${manual.potenciaWp} Wp` : ` de ${wpRef} Wp`}
                   </span>
                 </div>
                 {eff.capacidadeBateriaRecomendada && (

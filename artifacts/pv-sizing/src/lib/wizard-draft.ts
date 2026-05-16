@@ -16,6 +16,7 @@ export interface WizardDraftData {
   inverterUnits?: Record<string, unknown>[];
   tipoProjeto?: string;
   investimentoManual?: number | null;
+  panelRefId?: number | null;
 }
 
 // ── Session ID ────────────────────────────────────────────────────────────────
