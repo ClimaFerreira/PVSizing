@@ -200,8 +200,9 @@ export default function Wizard() {
   const [lastSaved, setLastSaved]   = useState<Date | null>(null);
   const [dbSynced, setDbSynced]     = useState(false);
   const sessionId = useRef<string>(getOrCreateSessionId());
-  const saveTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dbSyncTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dbSyncTimerRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextManualReset    = useRef(false);
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -217,9 +218,14 @@ export default function Wizard() {
   const locForm     = useForm<LocalizacaoForm>({ resolver: zodResolver(localizacaoSchema), defaultValues: { latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 } });
   const equipForm   = useForm<EquipamentosForm>({ resolver: zodResolver(equipamentosSchema), defaultValues: {} });
 
-  // When new sizing arrives, pick recommended scenario and initialise manual from it
+  // When new sizing arrives, pick recommended scenario and initialise manual from it.
+  // Skip when restoring from draft (skipNextManualReset prevents overwriting user adjustments).
   useEffect(() => {
     if (sizing) {
+      if (skipNextManualReset.current) {
+        skipNextManualReset.current = false;
+        return;
+      }
       const tipo: CenarioTipo = (sizing.recomendado ?? "equilibrado") as CenarioTipo;
       setSelectedCenarioTipo(tipo);
       const c = sizing.cenariosDimensionamento?.find(x => x.tipo === tipo) ?? null;
@@ -299,6 +305,10 @@ export default function Wizard() {
       manual: manual as unknown as Record<string, unknown> | null,
       showManualAdjust,
       equipFormValues: equipForm.getValues(),
+      numPaineisStep5,
+      inverterUnits: inverterUnits as unknown as Record<string, unknown>[],
+      tipoProjeto,
+      investimentoManual,
     };
 
     // localStorage — fast (800ms)
@@ -320,7 +330,7 @@ export default function Wizard() {
       if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust]);
+  }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust, numPaineisStep5, inverterUnits, tipoProjeto, investimentoManual]);
 
   // Currently selected sizing scenario
   const activeCenario: AutoSizeCenario | null = useMemo(() => {
@@ -344,6 +354,42 @@ export default function Wizard() {
       setShowManualAdjust(false);
     }
   }, [sizing, consumoData.coberturaMeta, equipForm]);
+
+  // ── Panel scenarios computed from the real catalogue ─────────────────────
+  interface CenarioCatalogoPainel {
+    potenciaWp: number;
+    panelNome: string;
+    quantidade: number;
+    potenciaInstalada: number;
+    energiaAnual: number;
+    coberturaReal: number;
+  }
+
+  const cenariosPaineisCatalogo = useMemo<CenarioCatalogoPainel[] | null>(() => {
+    if (!sizing || !panels || panels.length === 0) return null;
+    return panels
+      .map((panel) => {
+        const wp = Number(panel.potencia);
+        if (!wp || wp <= 0) return null;
+        const quantidade = Math.ceil((sizing.potenciaMinima * 1000) / wp);
+        const potInst = Math.round(quantidade * wp) / 1000;
+        const energiaAnual = Math.round(potInst * sizing.hsp * 365 * sizing.fatorRendimento);
+        const coberturaReal =
+          sizing.consumoAnualAjustado > 0
+            ? Math.min(100, Math.round((energiaAnual / sizing.consumoAnualAjustado) * 100))
+            : 0;
+        return {
+          potenciaWp: wp,
+          panelNome: `${panel.fabricante} ${panel.nome}`,
+          quantidade,
+          potenciaInstalada: potInst,
+          energiaAnual,
+          coberturaReal,
+        };
+      })
+      .filter((c): c is CenarioCatalogoPainel => c !== null)
+      .sort((a, b) => a.potenciaWp - b.potenciaWp);
+  }, [sizing, panels]);
 
   // Effective sizing: active scenario base + manual overrides
   const effectiveSizing = useMemo(() => {
@@ -437,13 +483,23 @@ export default function Wizard() {
       setLocData(draft.locData as unknown as LocalizacaoForm);
       locForm.reset(draft.locData as unknown as LocalizacaoForm);
     }
-    if (draft.sizing) setSizing(draft.sizing as unknown as AutoSizeResult);
+    if (draft.sizing) {
+      // Prevent useEffect([sizing]) from overwriting the restored manual state
+      skipNextManualReset.current = true;
+      setSizing(draft.sizing as unknown as AutoSizeResult);
+    }
     setSelectedCenarioTipo(draft.selectedCenarioTipo as CenarioTipo);
     if (draft.manual) setManual(draft.manual as unknown as ManualOverride);
     setShowManualAdjust(draft.showManualAdjust);
     if (draft.equipFormValues && Object.keys(draft.equipFormValues).length > 0) {
       equipForm.reset(draft.equipFormValues);
     }
+    if (draft.numPaineisStep5 != null) setNumPaineisStep5(draft.numPaineisStep5);
+    if (draft.inverterUnits && draft.inverterUnits.length > 0) {
+      setInverterUnits(draft.inverterUnits as unknown as InverterUnit[]);
+    }
+    if (draft.tipoProjeto) setTipoProjeto(draft.tipoProjeto as TipoProjeto);
+    if (draft.investimentoManual != null) setInvestimentoManual(draft.investimentoManual);
     setStep(draft.step);
     setShowRecovery(false);
     setPendingDraft(null);
@@ -1165,51 +1221,93 @@ export default function Wizard() {
 
                   <Separator />
 
-                  {/* Panel scenarios */}
+                  {/* Panel scenarios — uses real catalogue panels */}
                   <div>
                     <p className="text-sm font-semibold flex items-center gap-2 mb-3">
                       <Sun size={16} className="text-primary" /> Cenários de Painéis Solares
                     </p>
-                    <div className="rounded-lg border overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-muted/50 border-b">
-                            <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Potência Painel</th>
-                            <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Nº Painéis</th>
-                            <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Pot. Instalada</th>
-                            <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Produção/ano</th>
-                            <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Cobertura real</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sizing.cenariosPaineis.map((c, i) => (
-                            <tr key={c.potenciaWp} className={cn(
-                              "border-b last:border-0",
-                              c.potenciaWp === 400 ? "bg-primary/5 font-semibold" : i % 2 === 0 ? "bg-background" : "bg-muted/20"
-                            )}>
-                              <td className="px-3 py-2">
-                                {c.potenciaWp} Wp
-                                {c.potenciaWp === 400 && <Badge variant="outline" className="ml-2 text-xs">Ref.</Badge>}
-                              </td>
-                              <td className="px-3 py-2 text-center font-bold">{c.quantidade}</td>
-                              <td className="px-3 py-2 text-right">{c.potenciaInstalada.toFixed(2)} kWp</td>
-                              <td className="px-3 py-2 text-right">{c.energiaAnual.toLocaleString("pt-PT")} kWh</td>
-                              <td className="px-3 py-2 text-right">
-                                <span className={cn(
-                                  "font-semibold",
-                                  c.coberturaReal >= sizing.coberturaAlvo ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
+                    {cenariosPaineisCatalogo && cenariosPaineisCatalogo.length > 0 ? (
+                      <>
+                        <div className="rounded-lg border overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-muted/50 border-b">
+                                <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Painel do Catálogo</th>
+                                <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Nº Painéis</th>
+                                <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Pot. Instalada</th>
+                                <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Produção/ano</th>
+                                <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Cobertura real</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {cenariosPaineisCatalogo.map((c, i) => (
+                                <tr key={`${c.panelNome}-${c.potenciaWp}`} className={cn(
+                                  "border-b last:border-0",
+                                  i % 2 === 0 ? "bg-background" : "bg-muted/20"
                                 )}>
-                                  {c.coberturaReal}%
-                                </span>
-                              </td>
+                                  <td className="px-3 py-2">
+                                    <span className="font-medium">{c.panelNome}</span>
+                                    <span className="ml-1.5 text-muted-foreground text-xs">({c.potenciaWp} Wp)</span>
+                                  </td>
+                                  <td className="px-3 py-2 text-center font-bold">{c.quantidade}</td>
+                                  <td className="px-3 py-2 text-right">{c.potenciaInstalada.toFixed(2)} kWp</td>
+                                  <td className="px-3 py-2 text-right">{c.energiaAnual.toLocaleString("pt-PT")} kWh</td>
+                                  <td className="px-3 py-2 text-right">
+                                    <span className={cn(
+                                      "font-semibold",
+                                      c.coberturaReal >= sizing.coberturaAlvo ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
+                                    )}>
+                                      {c.coberturaReal}%
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1.5 pl-1">
+                          Painéis do catálogo. Cobertura a verde ≥ {sizing.coberturaAlvo}% (alvo). Nº de painéis arredondado para cima.
+                        </p>
+                      </>
+                    ) : (
+                      <div className="rounded-lg border overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-muted/50 border-b">
+                              <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Potência Painel</th>
+                              <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Nº Painéis</th>
+                              <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Pot. Instalada</th>
+                              <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Produção/ano</th>
+                              <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Cobertura real</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1.5 pl-1">
-                      Cobertura a verde ≥ {sizing.coberturaAlvo}% (alvo). Os valores incluem arredondamento para cima do nº de painéis.
-                    </p>
+                          </thead>
+                          <tbody>
+                            {sizing.cenariosPaineis.map((c, i) => (
+                              <tr key={c.potenciaWp} className={cn(
+                                "border-b last:border-0",
+                                c.potenciaWp === 400 ? "bg-primary/5 font-semibold" : i % 2 === 0 ? "bg-background" : "bg-muted/20"
+                              )}>
+                                <td className="px-3 py-2">
+                                  {c.potenciaWp} Wp
+                                  {c.potenciaWp === 400 && <Badge variant="outline" className="ml-2 text-xs">Ref.</Badge>}
+                                </td>
+                                <td className="px-3 py-2 text-center font-bold">{c.quantidade}</td>
+                                <td className="px-3 py-2 text-right">{c.potenciaInstalada.toFixed(2)} kWp</td>
+                                <td className="px-3 py-2 text-right">{(c as { energiaAnual?: number }).energiaAnual?.toLocaleString("pt-PT") ?? "—"} kWh</td>
+                                <td className="px-3 py-2 text-right">
+                                  <span className={cn(
+                                    "font-semibold",
+                                    ((c as { coberturaReal?: number }).coberturaReal ?? 0) >= sizing.coberturaAlvo ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"
+                                  )}>
+                                    {(c as { coberturaReal?: number }).coberturaReal ?? "—"}%
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
 
                   {/* Battery */}
@@ -1413,10 +1511,14 @@ export default function Wizard() {
                                 <p className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Compatibilidade Inversores</p>
                                 <div className="space-y-1.5">
                                   {inverters
-                                    .filter(i => i.potenciaAc >= mPotInstalada * 0.75 && i.potenciaAc <= mPotInstalada * 1.35)
+                                    .filter(i => {
+                                      const acKw = Number(i.potenciaAc) > 500 ? Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
+                                      return acKw >= mPotInstalada * 0.75 && acKw <= mPotInstalada * 1.35;
+                                    })
                                     .slice(0, 4)
                                     .map(i => {
-                                      const ratio = i.potenciaAc / mPotInstalada;
+                                      const acKw = Number(i.potenciaAc) > 500 ? Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
+                                      const ratio = acKw / mPotInstalada;
                                       const ok = ratio >= 0.85 && ratio <= 1.25;
                                       return (
                                         <div key={i.id} className={cn(
@@ -1426,7 +1528,7 @@ export default function Wizard() {
                                         )}>
                                           <span className="font-medium">{i.fabricante} {i.nome}</span>
                                           <div className="flex items-center gap-2">
-                                            <span className="text-muted-foreground">{i.potenciaAc} kW AC</span>
+                                            <span className="text-muted-foreground">{Number(i.potenciaAc) > 500 ? (Number(i.potenciaAc) / 1000).toFixed(1) : i.potenciaAc} kW AC</span>
                                             <Badge variant="outline" className={cn("text-[10px] px-1.5", ok
                                               ? "text-green-700 dark:text-green-400 border-green-300 dark:border-green-700"
                                               : "text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700")}>
@@ -1623,10 +1725,11 @@ export default function Wizard() {
                           <FormControl><SelectTrigger><SelectValue placeholder="Selecionar inversor..." /></SelectTrigger></FormControl>
                           <SelectContent>
                             {inverters?.map(i => {
-                              const ok = sizing && i.potenciaAc >= sizing.potenciaRecomendada * 0.9;
+                              const acKw = Number(i.potenciaAc) > 500 ? Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
+                              const ok = sizing && acKw >= sizing.potenciaRecomendada * 0.9;
                               return (
                                 <SelectItem key={i.id} value={String(i.id)}>
-                                  {i.fabricante} {i.nome} — {i.potenciaAc} kW AC{ok ? " ✓" : ""}
+                                  {i.fabricante} {i.nome} — {acKw > 0 ? (Number.isInteger(acKw) ? acKw : acKw.toFixed(1)) : i.potenciaAc} kW AC{ok ? " ✓" : ""}
                                 </SelectItem>
                               );
                             })}
@@ -1665,10 +1768,11 @@ export default function Wizard() {
                             </SelectTrigger>
                             <SelectContent>
                               {inverters?.map(i => {
-                                const ok = sizing && i.potenciaAc >= sizing.potenciaRecomendada * 0.9;
+                                const acKw = Number(i.potenciaAc) > 500 ? Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
+                                const ok = sizing && acKw >= sizing.potenciaRecomendada * 0.9;
                                 return (
                                   <SelectItem key={i.id} value={String(i.id)}>
-                                    {i.fabricante} {i.nome} — {i.potenciaAc} kW AC{ok ? " ✓" : ""}
+                                    {i.fabricante} {i.nome} — {acKw > 0 ? (Number.isInteger(acKw) ? acKw : acKw.toFixed(1)) : i.potenciaAc} kW AC{ok ? " ✓" : ""}
                                   </SelectItem>
                                 );
                               })}

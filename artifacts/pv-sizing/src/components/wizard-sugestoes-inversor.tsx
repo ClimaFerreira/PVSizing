@@ -68,6 +68,11 @@ interface Props {
   onSelectMultiInverter:(units: InverterUnit[]) => void;
 }
 
+// ── Unit normalisation (handles records stored in W instead of kW) ────────────
+function normalizarKW(val: number): number {
+  return val > 500 ? val / 1000 : val;
+}
+
 // ── Hybrid detection ──────────────────────────────────────────────────────────
 const HYBRID_RE = /HYB|HYBRID|GEN24|X-HYB|RHI|LP[12]|-EH|-ET|SH-\d|MULTI|STOREDGE|-H\d|\.HV\d/i;
 const isHybridInverter = (nome: string) => HYBRID_RE.test(nome);
@@ -75,8 +80,8 @@ const isHybridInverter = (nome: string) => HYBRID_RE.test(nome);
 // ── Tag classification ─────────────────────────────────────────────────────────
 function classifyTag(ratio: number, violacoes: ComboViolacao[]): ComboTag {
   if (violacoes.length > 0)              return "requer-validacao";
-  if (ratio < 0.75 || ratio > 1.35)     return "nao-recomendado";
-  if (ratio >= 0.90 && ratio <= 1.20)   return "ideal";
+  if (ratio < 0.70 || ratio > 1.50)     return "nao-recomendado";
+  if (ratio >= 0.90 && ratio <= 1.30)   return "ideal";
   return "ok";
 }
 
@@ -131,7 +136,7 @@ function gerarCombinacoes(
   const seen = new Set<string>();
 
   for (const inv of inverters) {
-    const potAc = Number(inv.potenciaAc);
+    const potAc = normalizarKW(Number(inv.potenciaAc));
     if (!potAc || potAc <= 0) continue;
 
     const fase: "mono" | "tri" = potAc <= 6.0 ? "mono" : "tri";
@@ -140,7 +145,7 @@ function gerarCombinacoes(
     for (const units of unitCounts) {
       const totalAc = +(potAc * units).toFixed(2);
       const ratio   = Math.round((potenciaKwp / totalAc) * 100) / 100;
-      if (ratio < 0.65 || ratio > 1.50) continue;
+      if (ratio < 0.55 || ratio > 1.75) continue;
 
       const key = units === 1 ? `s-${inv.id}` : `m${units}-${inv.id}`;
       if (seen.has(key)) continue;

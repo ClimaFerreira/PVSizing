@@ -1,0 +1,90 @@
+Corrigir 3 problemas no Wizard de Dimensionamento.
+
+1. Sugestões automáticas de inversores não encontram soluções
+
+Problema:
+Mesmo existindo inversores carregados no catálogo, o passo 5 mostra:
+"Nenhuma combinação encontrada".
+
+Exemplo:
+Potência FV ajustada: 22.32 kWp
+Catálogo tem inversores Deye de 14, 15, 16, 18 e 20 kW.
+O sistema deveria sugerir pelo menos:
+- 1 × 20 kW
+- 2 × 10 kW
+- 1 × 14 kW + 1 × 7.6 kW
+- 1 × 15 kW + 1 × 7.6 kW
+- outras combinações multi-inversor próximas.
+
+Corrigir:
+- usar sempre a potência FV ajustada manualmente, se existir;
+- não filtrar demasiado por híbrido/trifásico/bateria;
+- se não houver solução perfeita, mostrar soluções alternativas;
+- permitir soluções “Requer validação”;
+- considerar combinações de 1, 2 ou mais inversores;
+- mostrar o motivo quando uma solução não é ideal.
+
+2. Cenários de painéis solares devem usar apenas painéis do catálogo
+
+Problema:
+A tabela “Cenários de Painéis Solares” mostra potências genéricas:
+300 Wp, 350 Wp, 400 Wp, 450 Wp, 500 Wp.
+
+Isto não deve acontecer.
+
+Comportamento pretendido:
+A tabela deve usar apenas painéis solares inseridos no catálogo do sistema.
+
+Exemplo:
+Se o catálogo tiver:
+- Jinko 620 Wp
+- Longi 580 Wp
+- Trina 605 Wp
+
+então a tabela deve mostrar apenas esses painéis.
+
+Para cada painel do catálogo calcular:
+- potência do painel;
+- nº de painéis necessário;
+- potência instalada;
+- produção anual;
+- cobertura real.
+
+3. Guardar ajuste manual da solução
+
+Problema:
+Quando altero manualmente:
+- nº de painéis;
+- potência por painel;
+- HSP;
+- rendimento;
+- cobertura;
+- bateria;
+
+e mudo de separador/passo, o ajuste perde-se ou volta ao automático.
+
+Comportamento pretendido:
+O ajuste manual deve ser persistido no draft/autosave.
+
+Guardar:
+- manualSizing ativo/inativo;
+- nº painéis ajustado;
+- potência painel ajustada;
+- potência instalada ajustada;
+- HSP ajustado;
+- rendimento ajustado;
+- cobertura ajustada;
+- bateria ajustada;
+- produção anual ajustada;
+- cobertura real ajustada.
+
+Ao voltar ao wizard, deve restaurar exatamente o estudo ajustado.
+O sistema deve usar esses valores ajustados nos passos seguintes:
+- seleção de equipamentos;
+- sugestões de inversores;
+- análise técnica;
+- orçamento;
+- proposta PDF.
+
+Importante:
+Não recalcular nem sobrescrever o ajuste manual quando o utilizador muda de passo.

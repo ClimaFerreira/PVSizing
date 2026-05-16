@@ -12,6 +12,10 @@ export interface WizardDraftData {
   manual: Record<string, unknown> | null;
   showManualAdjust: boolean;
   equipFormValues: { panelId?: number; inverterId?: number; batteryId?: number };
+  numPaineisStep5?: number | null;
+  inverterUnits?: Record<string, unknown>[];
+  tipoProjeto?: string;
+  investimentoManual?: number | null;
 }
 
 // ── Session ID ────────────────────────────────────────────────────────────────
