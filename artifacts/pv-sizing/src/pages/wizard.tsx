@@ -1550,6 +1550,7 @@ export default function Wizard() {
             }>
               <WizardSugestoesInversor
                 potenciaKwp={(effectiveSizing ?? sizing)!.potenciaInstalada}
+                energiaAnualEstimada={(effectiveSizing ?? sizing)!.energiaAnualEstimada}
                 inverters={inverters}
                 selectedInverterId={inverterUnits.length === 0 ? equipForm.watch("inverterId") : undefined}
                 inverterUnits={inverterUnits}
