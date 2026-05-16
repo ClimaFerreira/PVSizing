@@ -181,10 +181,6 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
                     <span className="font-bold text-sm tabular-nums">{c.potenciaInstalada} kWp</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <MetricTooltip label={panelNome ? `Painéis (${panelNome.split(" ").pop()})` : "Painéis"} tip={panelNome ? `Número de módulos ${panelNome} necessários para atingir esta potência` : "Número de painéis necessários para atingir esta potência"} />
-                    <span className="font-semibold tabular-nums">{c.numPaineis} un.</span>
-                  </div>
-                  <div className="flex justify-between items-center">
                     <MetricTooltip label="Produção anual" tip="Estimativa de energia eléctrica produzida anualmente, baseada em dados PVGIS para a localização definida" />
                     <span className="font-semibold tabular-nums">{fmt(c.energiaAnualEstimada)} kWh</span>
                   </div>
