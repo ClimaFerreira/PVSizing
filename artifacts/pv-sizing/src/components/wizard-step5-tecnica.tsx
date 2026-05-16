@@ -871,6 +871,11 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
   // Default ON. Can be turned off to allow manual adjustments when no solution exists.
   const [paineisFixos, setPaineisFixos] = useState(true);
 
+  // Local edited mpptConfig — updated immediately when the user changes strings.
+  // Takes priority over the parent prop (manualMpptConfig) so the diagram updates
+  // in real-time without waiting for the wizard's state round-trip.
+  const [localEditedConfig, setLocalEditedConfig] = useState<MpptConfig | null>(null);
+
   const panelElec = useMemo(() => panel ? {
     voc: Number(panel.voc),
     vmp: Number(panel.vmp),
@@ -891,18 +896,24 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
     vdcMax: inverter.vdcMax != null ? Number(inverter.vdcMax) : null,
   } : null, [inverter]);
 
-  useEffect(() => { onMpptConfigChange(null); }, [panel?.id, inverter?.id, numPaineis]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Reset local + parent config whenever panel, inverter, or panel count changes
+  useEffect(() => {
+    setLocalEditedConfig(null);
+    onMpptConfigChange(null);
+  }, [panel?.id, inverter?.id, numPaineis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const autoSizing = useMemo<StringSizingResult | null>(() => {
     if (!panelElec || !invElec || numPaineis <= 0) return null;
     return calcStringSizing(panelElec, invElec, numPaineis);
   }, [panelElec, invElec, numPaineis]);
 
+  // Effective config priority: localEditedConfig (immediate) > manualMpptConfig (parent persistence) > auto
   const activeSizing = useMemo<StringSizingResult | null>(() => {
     if (!panelElec || !invElec || !autoSizing) return autoSizing;
-    if (!manualMpptConfig) return autoSizing;
-    return calcStringSizingManual(panelElec, invElec, manualMpptConfig, numPaineis);
-  }, [panelElec, invElec, autoSizing, manualMpptConfig, numPaineis]);
+    const effectiveConfig = localEditedConfig ?? manualMpptConfig;
+    if (!effectiveConfig) return autoSizing;
+    return calcStringSizingManual(panelElec, invElec, effectiveConfig, numPaineis);
+  }, [panelElec, invElec, autoSizing, localEditedConfig, manualMpptConfig, numPaineis]);
 
   const maxPaneis = useMemo(() =>
     panelElec && invElec ? maxPaineisPerString(panelElec, invElec) : 30,
@@ -1089,6 +1100,9 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
               invElec={invElec}
               numPaineisAuto={numPaineis}
               onConfigChange={(mpptConfig) => {
+                // Update local state immediately → diagram reacts in same render
+                setLocalEditedConfig(mpptConfig);
+                // Also persist to parent wizard state (for save/proposal)
                 onMpptConfigChange(mpptConfig);
                 // Only propagate panel count changes if NOT in fixed mode
                 if (!paineisFixos) {
