@@ -250,17 +250,17 @@ export default function WizardBatteryStudy({ batteries, batteryUnits, onUnitsCha
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <Button variant="outline" size="icon" className="h-7 w-7"
+                      <Button type="button" variant="outline" size="icon" className="h-7 w-7"
                         onClick={() => updateQty(idx, unit.qty - 1)}>–</Button>
                       <span className="w-8 text-center text-sm font-bold">{unit.qty}</span>
-                      <Button variant="outline" size="icon" className="h-7 w-7"
+                      <Button type="button" variant="outline" size="icon" className="h-7 w-7"
                         onClick={() => updateQty(idx, unit.qty + 1)}>+</Button>
                     </div>
                     <div className="text-right shrink-0 min-w-[80px]">
                       <p className="text-sm font-bold">{(bat.capacidade * unit.qty).toFixed(1)} kWh</p>
                       <p className="text-[10px] text-muted-foreground">× {unit.qty} un.</p>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
                       onClick={() => removeLine(idx)}>
                       <Trash2 size={14} />
                     </Button>
@@ -284,7 +284,7 @@ export default function WizardBatteryStudy({ batteries, batteryUnits, onUnitsCha
                 ))}
               </SelectContent>
             </Select>
-            <Button size="sm" onClick={addLine} disabled={!addBatId} className="gap-1.5 shrink-0">
+            <Button type="button" size="sm" onClick={addLine} disabled={!addBatId} className="gap-1.5 shrink-0">
               <Plus size={14} /> Adicionar
             </Button>
           </div>
@@ -323,6 +323,7 @@ export default function WizardBatteryStudy({ batteries, batteryUnits, onUnitsCha
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {suggestions.map((s, i) => (
                 <button
+                  type="button"
                   key={i}
                   onClick={() => applySuggestion(s)}
                   className={cn(

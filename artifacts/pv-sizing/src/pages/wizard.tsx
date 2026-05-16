@@ -193,6 +193,7 @@ export default function Wizard() {
   const [panelRefId, setPanelRefId] = useState<number | null>(null);
   const [showRecovery, setShowRecovery] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<WizardDraftData | null>(null);
+  const draftDialogShownRef = useRef(false);
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
   const [manualMpptConfig, setManualMpptConfig] = useState<import("@/lib/string-sizing").MpptConfig | null>(null);
   const [inverterUnits, setInverterUnits] = useState<InverterUnit[]>([]);
@@ -276,19 +277,28 @@ export default function Wizard() {
 
   // ── Draft: check on mount (localStorage → DB fallback) ────────────────────
   useEffect(() => {
+    // Guard: only show the dialog once per session lifecycle
+    if (draftDialogShownRef.current) return;
+
     const local = loadDraft();
     if (local && (local.step > 1 || local.sizing !== null)) {
+      draftDialogShownRef.current = true;
       setPendingDraft(local);
       setShowRecovery(true);
       return;
     }
-    // No local draft — try remote
+
+    // No local draft — try remote (async, may resolve late — must be cancellable)
+    let cancelled = false;
     loadDraftFromDb(sessionId.current).then(remote => {
+      if (cancelled || draftDialogShownRef.current) return;
       if (remote && (remote.step > 1 || remote.sizing !== null)) {
+        draftDialogShownRef.current = true;
         setPendingDraft(remote);
         setShowRecovery(true);
       }
     });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
