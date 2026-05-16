@@ -1,10 +1,98 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
+import rateLimit from "express-rate-limit";
+import { z } from "zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { db, invertersTable, batteriesTable } from "@workspace/db";
 
 const router: IRouter = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+// ── File upload (memory, 10 MB, MIME filter) ──────────────────────────────────
+const ALLOWED_MIMES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+];
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter(_req, file, cb) {
+    if (ALLOWED_MIMES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(
+        Object.assign(
+          new Error("Formato não suportado. Use PDF ou imagem (JPEG, PNG, WebP)."),
+          { status: 415 },
+        ),
+      );
+    }
+  },
+});
+
+// ── Rate limiters ─────────────────────────────────────────────────────────────
+const aiLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler(req, res) {
+    req.log?.warn({ ip: req.ip }, "AI rate limit exceeded");
+    res
+      .status(429)
+      .json({ error: "Demasiadas chamadas à IA. Aguarde 1 minuto e tente novamente." });
+  },
+});
+
+const calcLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler(_req, res) {
+    res
+      .status(429)
+      .json({ error: "Demasiadas chamadas. Tente novamente em breve." });
+  },
+});
+
+// ── Zod schemas ───────────────────────────────────────────────────────────────
+const AutoSizeBodySchema = z.object({
+  consumoAnual: z.coerce.number().positive("consumoAnual deve ser positivo"),
+  latitude: z.coerce.number().min(-90).max(90),
+  longitude: z.coerce.number().min(-180).max(180),
+  inclinacao: z.coerce.number().min(0).max(90).default(30),
+  azimute: z.coerce.number().min(-180).max(180).default(0),
+  coberturaMeta: z.coerce.number().min(10).max(200).default(80),
+  incluirBateria: z
+    .union([z.boolean(), z.string().transform((v) => v === "true")])
+    .default(false),
+  horasAutonomia: z.coerce.number().min(1).max(24).default(4),
+  crescimentoFuturo: z.coerce.number().min(0).max(100).default(0),
+  percVazio: z.coerce.number().min(0).max(100).default(40),
+  percCheio: z.coerce.number().min(0).max(100).default(35),
+  percPonta: z.coerce.number().min(0).max(100).default(25),
+  precoKwh: z.coerce.number().min(0).max(10).default(0.18),
+});
+
+const BatterySizeBodySchema = z.object({
+  consumoDiario: z.coerce.number().positive("consumoDiario deve ser positivo"),
+  percConsumoNoturno: z.coerce.number().min(0).max(100),
+  horasAutonomia: z.coerce.number().min(1).max(24).default(4),
+  dod: z.coerce.number().min(10).max(100).default(80),
+});
+
+// ── Monthly irradiance factors for Portugal ───────────────────────────────────
+const PT_MONTHLY_FACTORS = [
+  0.577, 0.721, 0.954, 1.065, 1.243, 1.420, 1.498, 1.376, 1.132, 0.866, 0.621, 0.510,
+];
+const DAYS_PER_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const MONTH_LABELS = [
+  "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+];
 
 type ImageMime = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 const VALID_IMAGE_MIMES: ImageMime[] = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -15,68 +103,82 @@ function toSafeImageMime(mime: string): ImageMime {
 
 function buildFileBlock(isPdf: boolean, mime: string, base64: string) {
   if (isPdf) {
-    return { type: "document" as const, source: { type: "base64" as const, media_type: "application/pdf" as const, data: base64 } };
+    return {
+      type: "document" as const,
+      source: { type: "base64" as const, media_type: "application/pdf" as const, data: base64 },
+    };
   }
-  return { type: "image" as const, source: { type: "base64" as const, media_type: toSafeImageMime(mime), data: base64 } };
+  return {
+    type: "image" as const,
+    source: {
+      type: "base64" as const,
+      media_type: toSafeImageMime(mime),
+      data: base64,
+    },
+  };
 }
-
-// ── Monthly irradiance factors for Portugal (normalized so Σ(days×factor) = 365)
-// Based on typical horizontal irradiation seasonal profile for mainland Portugal
-const PT_MONTHLY_FACTORS = [0.577, 0.721, 0.954, 1.065, 1.243, 1.420, 1.498, 1.376, 1.132, 0.866, 0.621, 0.510];
-const DAYS_PER_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 interface CenarioParams {
   tipo: "conservador" | "equilibrado" | "agressivo";
-  coberturaMeta: number;         // % coverage target for THIS scenario
+  coberturaMeta: number;
   consumoAnualAjustado: number;
   hsp: number;
   fatorRendimento: number;
   precoKwh: number;
-  custoKwp: number;              // €/kWp installed
+  custoKwp: number;
   incluirBateria: boolean;
-  capacidadeBateriaBase: number | null; // from base sizing
-  custoBateria: number;          // €/kWh battery
+  capacidadeBateriaBase: number | null;
+  custoBateria: number;
 }
 
 function buildCenario(p: CenarioParams) {
   const consumoDiario = p.consumoAnualAjustado / 365;
 
-  // Size for this scenario's coverage target
   const energiaAlvoDiaria = consumoDiario * (p.coberturaMeta / 100);
   const potenciaBruta = energiaAlvoDiaria / p.hsp;
   const potenciaMinima = potenciaBruta / p.fatorRendimento;
   const numPaineis = Math.ceil((potenciaMinima * 1000) / 400);
   const potenciaInstalada = Math.round(numPaineis * 400) / 1000;
 
-  // Monthly production (using PT seasonal factors)
   const producaoMensal = PT_MONTHLY_FACTORS.map((factor, m) =>
-    Math.round(potenciaInstalada * p.hsp * factor * DAYS_PER_MONTH[m] * p.fatorRendimento)
+    Math.round(
+      potenciaInstalada * p.hsp * factor * DAYS_PER_MONTH[m] * p.fatorRendimento,
+    ),
   );
 
-  // Monthly consumption (flat distribution — evenly split across months)
-  const consumoMensal = DAYS_PER_MONTH.map(days =>
-    Math.round((p.consumoAnualAjustado / 365) * days)
+  const consumoMensal = DAYS_PER_MONTH.map((days) =>
+    Math.round((p.consumoAnualAjustado / 365) * days),
   );
 
-  // Self-consumption and excess per month
-  const autoconsumoMensal = producaoMensal.map((prod, m) => Math.min(prod, consumoMensal[m]));
-  const excessoMensal      = producaoMensal.map((prod, m) => Math.max(0, prod - consumoMensal[m]));
+  const autoconsumoMensal = producaoMensal.map((prod, m) =>
+    Math.min(prod, consumoMensal[m]),
+  );
+  const excessoMensal = producaoMensal.map((prod, m) =>
+    Math.max(0, prod - consumoMensal[m]),
+  );
 
   const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
-  const coberturaReal = Math.round((energiaAnualEstimada / p.consumoAnualAjustado) * 100);
+  const coberturaReal = Math.round(
+    (energiaAnualEstimada / p.consumoAnualAjustado) * 100,
+  );
   const autoconsumoAnual = autoconsumoMensal.reduce((a, b) => a + b, 0);
-  const excessoAnual     = excessoMensal.reduce((a, b) => a + b, 0);
-  const autoconsumoPerc  = energiaAnualEstimada > 0 ? Math.round((autoconsumoAnual / energiaAnualEstimada) * 100) : 0;
+  const excessoAnual = excessoMensal.reduce((a, b) => a + b, 0);
+  const autoconsumoPerc =
+    energiaAnualEstimada > 0
+      ? Math.round((autoconsumoAnual / energiaAnualEstimada) * 100)
+      : 0;
 
-  // Financial model
   const investPV = Math.round(potenciaInstalada * p.custoKwp);
-  const investBat = p.incluirBateria && p.capacidadeBateriaBase
-    ? Math.round(p.capacidadeBateriaBase * p.custoBateria)
-    : 0;
+  const investBat =
+    p.incluirBateria && p.capacidadeBateriaBase
+      ? Math.round(p.capacidadeBateriaBase * p.custoBateria)
+      : 0;
   const investimentoEstimado = investPV + investBat;
   const poupancaAnual = Math.round(autoconsumoAnual * p.precoKwh * 100) / 100;
-  const paybackAnos = poupancaAnual > 0 ? Math.round((investimentoEstimado / poupancaAnual) * 10) / 10 : 99;
+  const paybackAnos =
+    poupancaAnual > 0
+      ? Math.round((investimentoEstimado / poupancaAnual) * 10) / 10
+      : 99;
 
   const META: Record<string, { label: string; descricao: string }> = {
     conservador: {
@@ -115,10 +217,8 @@ function buildCenario(p: CenarioParams) {
   };
 }
 
-// ─── Equipment matching helpers ───────────────────────────────────────────────
-
 type DbInverter = typeof invertersTable.$inferSelect;
-type DbBattery  = typeof batteriesTable.$inferSelect;
+type DbBattery = typeof batteriesTable.$inferSelect;
 type RawCenario = ReturnType<typeof buildCenario>;
 
 function matchInversor(potenciaKwp: number, allInverters: DbInverter[]) {
@@ -149,12 +249,17 @@ function matchInversor(potenciaKwp: number, allInverters: DbInverter[]) {
 
 function matchBateria(capacidadeKwh: number | null, allBatteries: DbBattery[]) {
   if (!capacidadeKwh || capacidadeKwh <= 0 || allBatteries.length === 0) return null;
-  const valid = allBatteries.filter(b => Number(b.capacidade) > 0);
+  const valid = allBatteries.filter((b) => Number(b.capacidade) > 0);
   if (valid.length === 0) return null;
-  const bigger = valid.filter(b => Number(b.capacidade) >= capacidadeKwh);
-  const best = bigger.length > 0
-    ? bigger.reduce((min, b) => Number(b.capacidade) < Number(min.capacidade) ? b : min)
-    : valid.reduce((max, b) => Number(b.capacidade) > Number(max.capacidade) ? b : max);
+  const bigger = valid.filter((b) => Number(b.capacidade) >= capacidadeKwh);
+  const best =
+    bigger.length > 0
+      ? bigger.reduce((min, b) =>
+          Number(b.capacidade) < Number(min.capacidade) ? b : min,
+        )
+      : valid.reduce((max, b) =>
+          Number(b.capacidade) > Number(max.capacidade) ? b : max,
+        );
   return {
     id: best.id,
     nome: best.nome,
@@ -163,59 +268,85 @@ function matchBateria(capacidadeKwh: number | null, allBatteries: DbBattery[]) {
   };
 }
 
-function generateAlertas(c: RawCenario): Array<{ tipo: "info" | "aviso" | "erro"; mensagem: string }> {
+function generateAlertas(
+  c: RawCenario,
+): Array<{ tipo: "info" | "aviso" | "erro"; mensagem: string }> {
   const out: Array<{ tipo: "info" | "aviso" | "erro"; mensagem: string }> = [];
   if (c.coberturaReal < 60) {
-    out.push({ tipo: "aviso", mensagem: `Cobertura de ${c.coberturaReal}% — sistema subdimensionado para o consumo indicado.` });
+    out.push({
+      tipo: "aviso",
+      mensagem: `Cobertura de ${c.coberturaReal}% — sistema subdimensionado para o consumo indicado.`,
+    });
   } else if (c.coberturaReal > 115) {
-    out.push({ tipo: "info", mensagem: `Cobertura de ${c.coberturaReal}% — excedente elevado no verão; considere autoconsumo colectivo.` });
+    out.push({
+      tipo: "info",
+      mensagem: `Cobertura de ${c.coberturaReal}% — excedente elevado no verão; considere autoconsumo colectivo.`,
+    });
   }
   if (c.paybackAnos > 13) {
-    out.push({ tipo: "aviso", mensagem: `Retorno em ${c.paybackAnos} anos — verifique subsídios disponíveis (SRP, InvestPortugal).` });
+    out.push({
+      tipo: "aviso",
+      mensagem: `Retorno em ${c.paybackAnos} anos — verifique subsídios disponíveis (SRP, InvestPortugal).`,
+    });
   }
   if (c.potenciaInstalada > 10) {
-    out.push({ tipo: "info", mensagem: `Sistema de ${c.potenciaInstalada} kWp pode requerer licenciamento DGEG.` });
+    out.push({
+      tipo: "info",
+      mensagem: `Sistema de ${c.potenciaInstalada} kWp pode requerer licenciamento DGEG.`,
+    });
   }
   if (c.autoconsumoPerc < 50) {
-    out.push({ tipo: "aviso", mensagem: `Autoconsumo de ${c.autoconsumoPerc}% — grande parte da produção é injectada na rede.` });
+    out.push({
+      tipo: "aviso",
+      mensagem: `Autoconsumo de ${c.autoconsumoPerc}% — grande parte da produção é injectada na rede.`,
+    });
   }
   if (c.capacidadeBateriaRecomendada && c.capacidadeBateriaRecomendada > 0) {
-    out.push({ tipo: "info", mensagem: `Bateria de ${c.capacidadeBateriaRecomendada} kWh recomendada para maximizar autoconsumo nocturno.` });
+    out.push({
+      tipo: "info",
+      mensagem: `Bateria de ${c.capacidadeBateriaRecomendada} kWh recomendada para maximizar autoconsumo nocturno.`,
+    });
   }
   return out;
 }
 
-// POST /tools/parse-invoice
-router.post("/tools/parse-invoice", upload.single("file"), async (req, res): Promise<void> => {
-  if (!req.file) {
-    res.status(400).json({ error: "Ficheiro é obrigatório" });
-    return;
-  }
+// ── POST /tools/parse-invoice ─────────────────────────────────────────────────
+router.post(
+  "/tools/parse-invoice",
+  aiLimiter,
+  upload.single("file"),
+  async (req, res): Promise<void> => {
+    if (!req.file) {
+      res.status(400).json({ error: "Ficheiro é obrigatório" });
+      return;
+    }
 
-  const { mimetype, buffer } = req.file;
-  const isPdf = mimetype === "application/pdf";
-  const isImage = mimetype.startsWith("image/");
+    const { mimetype, buffer, size } = req.file;
+    const isPdf = mimetype === "application/pdf";
+    const isImage = mimetype.startsWith("image/");
 
-  if (!isPdf && !isImage) {
-    res.status(400).json({ error: "Formato não suportado. Use PDF ou imagem." });
-    return;
-  }
+    if (!isPdf && !isImage) {
+      res.status(415).json({ error: "Formato não suportado. Use PDF ou imagem." });
+      return;
+    }
 
-  try {
-    const base64 = buffer.toString("base64");
-    const contentBlock = buildFileBlock(isPdf, mimetype, base64);
+    req.log.info({ mimetype, size }, "parse-invoice: processing file");
 
-    const message = await anthropic.messages.create({
-      model: "claude-opus-4-5",
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: [
-            contentBlock,
-            {
-              type: "text",
-              text: `És um especialista em faturas de eletricidade portuguesas. A tua tarefa principal é extrair dados de consumo, com foco especial no GRÁFICO DE BARRAS DO HISTÓRICO DE CONSUMO.
+    try {
+      const base64 = buffer.toString("base64");
+      const contentBlock = buildFileBlock(isPdf, mimetype, base64);
+
+      const message = await anthropic.messages.create({
+        model: "claude-opus-4-5",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: [
+              contentBlock,
+              {
+                type: "text",
+                text: `És um especialista em faturas de eletricidade portuguesas. A tua tarefa principal é extrair dados de consumo, com foco especial no GRÁFICO DE BARRAS DO HISTÓRICO DE CONSUMO.
 
 ════════════════════════════════════════
 PASSO 1 — LOCALIZA O GRÁFICO DE BARRAS
@@ -266,55 +397,60 @@ Devolve APENAS este JSON (sem texto adicional, sem markdown):
   "confianca": número 0.0 a 1.0 (0.9+ se valores explícitos; 0.6-0.8 se estimados visualmente; reduz se dados contraditórios),
   "notas": descreve brevemente o gráfico encontrado (ex: "Gráfico de consumo mensal com 13 barras, fev 2025 a fev 2026, pico em dez-jan ~3000 kWh") ou null se sem gráfico
 }`,
-            },
-          ],
-        },
-      ],
-    });
+              },
+            ],
+          },
+        ],
+      });
 
-    const text = message.content[0].type === "text" ? message.content[0].text : "{}";
-    const clean = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const data = JSON.parse(clean);
-    res.json(data);
-  } catch (err) {
-    req.log?.error({ err }, "parse-invoice AI error");
-    res.status(502).json({ error: "Erro ao processar fatura com IA" });
+      const text =
+        message.content[0].type === "text" ? message.content[0].text : "{}";
+      const clean = text
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
+      const data = JSON.parse(clean);
+      res.json(data);
+    } catch (err) {
+      req.log?.error({ err }, "parse-invoice AI error");
+      res.status(502).json({ error: "Erro ao processar fatura com IA" });
+    }
+  },
+);
+
+// ── POST /tools/auto-size ─────────────────────────────────────────────────────
+router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => {
+  const parsed = AutoSizeBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map((i) => i.message).join("; ");
+    res.status(400).json({ error: `Dados inválidos: ${msg}` });
+    return;
   }
-});
 
-// POST /tools/auto-size
-router.post("/tools/auto-size", async (req, res): Promise<void> => {
-  const raw = req.body as Record<string, unknown>;
-  const consumoAnualBase = Number(raw.consumoAnual);
-  const latitude = Number(raw.latitude);
-  const longitude = Number(raw.longitude);
-  const inclinacao = raw.inclinacao !== undefined ? Number(raw.inclinacao) : 30;
-  const azimute = raw.azimute !== undefined ? Number(raw.azimute) : 0;
-  const coberturaMeta = raw.coberturaMeta !== undefined ? Number(raw.coberturaMeta) : 80;
-  const incluirBateria = raw.incluirBateria === true || raw.incluirBateria === "true";
-  const horasAutonomia = raw.horasAutonomia !== undefined ? Number(raw.horasAutonomia) : 4;
-  const crescimentoFuturo = raw.crescimentoFuturo !== undefined ? Number(raw.crescimentoFuturo) : 0;
-  const percVazioInput  = raw.percVazio  !== undefined ? Number(raw.percVazio)  : 40;
-  const percCheioInput  = raw.percCheio  !== undefined ? Number(raw.percCheio)  : 35;
-  const percPontaInput  = raw.percPonta  !== undefined ? Number(raw.percPonta)  : 25;
-  const precoKwh        = raw.precoKwh   !== undefined ? Number(raw.precoKwh)   : 0.18;
+  const {
+    consumoAnual: consumoAnualBase,
+    latitude,
+    longitude,
+    inclinacao,
+    azimute,
+    coberturaMeta,
+    incluirBateria,
+    horasAutonomia,
+    crescimentoFuturo,
+    percVazio: percVazioInput,
+    percCheio: percCheioInput,
+    percPonta: percPontaInput,
+    precoKwh,
+  } = parsed.data;
 
-  // Normalize tariff percentages
   const totalTarifa = percVazioInput + percCheioInput + percPontaInput || 100;
   const percVazio = Math.round((percVazioInput / totalTarifa) * 100);
   const percCheio = Math.round((percCheioInput / totalTarifa) * 100);
   const percPonta = 100 - percVazio - percCheio;
 
-  if (!consumoAnualBase || !latitude || !longitude) {
-    res.status(400).json({ error: "consumoAnual, latitude e longitude são obrigatórios" });
-    return;
-  }
-
-  // ── Common parameters ─────────────────────────────────────────────────────
   const consumoAnualAjustado = consumoAnualBase * (1 + crescimentoFuturo / 100);
   const consumoDiario = consumoAnualAjustado / 365;
 
-  // HSP estimation for Portugal (latitude/tilt/azimuth adjusted)
   const latRad = (Math.abs(latitude) * Math.PI) / 180;
   const baseHsp = 5.2 - latRad * 1.8;
   const tiltFactor = 1 - Math.abs(inclinacao - 35) * 0.005;
@@ -324,63 +460,98 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
   const margemPerdas = 0.22;
   const fatorRendimento = 1 - margemPerdas;
 
-  // ── Battery sizing (tariff-aware) ─────────────────────────────────────────
   let capacidadeBateriaRecomendada: number | null = null;
   if (incluirBateria) {
     const energiaVazioDiaria = consumoDiario * (percVazio / 100);
     const horasVazioWindow = 10;
-    const energiaBateriaNeeded = energiaVazioDiaria * (horasAutonomia / horasVazioWindow);
+    const energiaBateriaNeeded =
+      energiaVazioDiaria * (horasAutonomia / horasVazioWindow);
     capacidadeBateriaRecomendada = Math.ceil((energiaBateriaNeeded / 0.8) * 2) / 2;
   }
 
-  // ── Costs (typical PT installed market rates) ─────────────────────────────
-  const custoKwp = 1050;   // €/kWp
-  const custoBateria = 600; // €/kWh
+  const custoKwp = 1050;
+  const custoBateria = 600;
 
-  // ── Build 3 scenarios ─────────────────────────────────────────────────────
-  // Coverage multipliers per scenario
   const coberturaConservador = coberturaMeta * 0.68;
-  const coberturaEquilibrado = coberturaMeta * 1.00;
-  const coberturaAgressivo   = coberturaMeta * 1.35;
+  const coberturaEquilibrado = coberturaMeta * 1.0;
+  const coberturaAgressivo = coberturaMeta * 1.35;
 
-  const cenParams = { consumoAnualAjustado, hsp, fatorRendimento, precoKwh, custoKwp, incluirBateria, capacidadeBateriaBase: capacidadeBateriaRecomendada, custoBateria };
+  const cenParams = {
+    consumoAnualAjustado,
+    hsp,
+    fatorRendimento,
+    precoKwh,
+    custoKwp,
+    incluirBateria,
+    capacidadeBateriaBase: capacidadeBateriaRecomendada,
+    custoBateria,
+  };
 
-  const cenConservador = buildCenario({ tipo: "conservador", coberturaMeta: coberturaConservador, ...cenParams });
-  const cenEquilibrado = buildCenario({ tipo: "equilibrado", coberturaMeta: coberturaEquilibrado, ...cenParams });
-  const cenAgressivo   = buildCenario({ tipo: "agressivo",   coberturaMeta: coberturaAgressivo,   ...cenParams });
+  const cenConservador = buildCenario({
+    tipo: "conservador",
+    coberturaMeta: coberturaConservador,
+    ...cenParams,
+  });
+  const cenEquilibrado = buildCenario({
+    tipo: "equilibrado",
+    coberturaMeta: coberturaEquilibrado,
+    ...cenParams,
+  });
+  const cenAgressivo = buildCenario({
+    tipo: "agressivo",
+    coberturaMeta: coberturaAgressivo,
+    ...cenParams,
+  });
 
-  // ── Determine recommended scenario ────────────────────────────────────────
-  // Recommend the one with best payback that achieves at least 60% of the target coverage
   const candidates = [cenConservador, cenEquilibrado, cenAgressivo];
   const minCoberturaThreshold = coberturaMeta * 0.6;
-  const eligible = candidates.filter(c => c.coberturaReal >= minCoberturaThreshold);
-  const recomendado = (eligible.length > 0
-    ? eligible.reduce((best, c) => c.paybackAnos < best.paybackAnos ? c : best)
-    : cenEquilibrado
+  const eligible = candidates.filter(
+    (c) => c.coberturaReal >= minCoberturaThreshold,
+  );
+  const recomendado = (
+    eligible.length > 0
+      ? eligible.reduce((best, c) =>
+          c.paybackAnos < best.paybackAnos ? c : best,
+        )
+      : cenEquilibrado
   ).tipo;
 
-  // ── "Equilibrado" as backward-compat top-level values ─────────────────────
   const potenciaInstalada = cenEquilibrado.potenciaInstalada;
   const numPaineis = cenEquilibrado.numPaineis;
-  const potenciaMinima = Math.round(((consumoAnualAjustado / 365) * (coberturaMeta / 100) / hsp / fatorRendimento) * 100) / 100;
+  const potenciaMinima =
+    Math.round(
+      (((consumoAnualAjustado / 365) * (coberturaMeta / 100)) /
+        hsp /
+        fatorRendimento) *
+        100,
+    ) / 100;
   const energiaAnualEstimada = cenEquilibrado.energiaAnualEstimada;
   const coberturaReal = cenEquilibrado.coberturaReal;
   const potenciaRecomendada = potenciaInstalada;
   const coberturaPrevista = coberturaReal;
 
-  // ── Panel wattage scenarios (existing feature) ─────────────────────────────
   const WATTAGES = [300, 350, 400, 450, 500] as const;
   const cenariosPaineis = WATTAGES.map((wp) => {
     const quantidade = Math.ceil((potenciaMinima * 1000) / wp);
     const potInst = Math.round(quantidade * wp) / 1000;
     const energiaAnual = Math.round(potInst * hsp * 365 * fatorRendimento);
-    const coberturaScenario = Math.min(100, Math.round((energiaAnual / consumoAnualAjustado) * 1000) / 10);
-    return { potenciaWp: wp, quantidade, potenciaInstalada: potInst, energiaAnual, coberturaReal: coberturaScenario };
+    const coberturaScenario = Math.min(
+      100,
+      Math.round((energiaAnual / consumoAnualAjustado) * 1000) / 10,
+    );
+    return {
+      potenciaWp: wp,
+      quantidade,
+      potenciaInstalada: potInst,
+      energiaAnual,
+      coberturaReal: coberturaScenario,
+    };
   });
 
-  const crescimentoTexto = crescimentoFuturo > 0
-    ? ` (inclui ${crescimentoFuturo}% de crescimento futuro → ${consumoAnualAjustado.toFixed(0)} kWh/ano)`
-    : "";
+  const crescimentoTexto =
+    crescimentoFuturo > 0
+      ? ` (inclui ${crescimentoFuturo}% de crescimento futuro → ${consumoAnualAjustado.toFixed(0)} kWh/ano)`
+      : "";
   const tarifaTexto = capacidadeBateriaRecomendada
     ? ` Bateria dimensionada com base em ${percVazio}% de consumo em vazio (período noturno): ${capacidadeBateriaRecomendada} kWh para ${horasAutonomia}h de autonomia.`
     : "";
@@ -391,28 +562,34 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     `produção anual ${energiaAnualEstimada.toLocaleString("pt-PT")} kWh → cobertura real ${coberturaReal}%.` +
     tarifaTexto;
 
-  // ── Equipment matching ─────────────────────────────────────────────────────
   const [allInverters, allBatteries] = await Promise.all([
     db.select().from(invertersTable),
-    incluirBateria ? db.select().from(batteriesTable) : Promise.resolve<(typeof batteriesTable.$inferSelect)[]>([]),
+    incluirBateria
+      ? db.select().from(batteriesTable)
+      : Promise.resolve<(typeof batteriesTable.$inferSelect)[]>([]),
   ]);
 
   const enrichCenario = (c: RawCenario) => ({
     ...c,
     inversorRecomendado: matchInversor(c.potenciaInstalada, allInverters),
-    bateriaRecomendada:  matchBateria(c.capacidadeBateriaRecomendada, allBatteries),
-    alertas:             generateAlertas(c),
+    bateriaRecomendada: matchBateria(
+      c.capacidadeBateriaRecomendada,
+      allBatteries,
+    ),
+    alertas: generateAlertas(c),
   });
-
-  const enrichedConservador = enrichCenario(cenConservador);
-  const enrichedEquilibrado = enrichCenario(cenEquilibrado);
-  const enrichedAgressivo   = enrichCenario(cenAgressivo);
 
   res.json({
     consumoDiario: Math.round(consumoDiario * 10) / 10,
     consumoAnualAjustado: Math.round(consumoAnualAjustado),
-    energiaAlvoDiaria: Math.round((consumoDiario * (coberturaMeta / 100)) * 100) / 100,
-    potenciaBruta: Math.round((consumoDiario * (coberturaMeta / 100) / hsp) * 100) / 100,
+    energiaAlvoDiaria:
+      Math.round(
+        ((consumoDiario * (coberturaMeta / 100)) * 100) / 100,
+      ),
+    potenciaBruta:
+      Math.round(
+        ((consumoDiario * (coberturaMeta / 100)) / hsp) * 100,
+      ) / 100,
     margemPerdas,
     fatorRendimento,
     potenciaMinima,
@@ -429,94 +606,111 @@ router.post("/tools/auto-size", async (req, res): Promise<void> => {
     percCheio,
     percPonta,
     cenariosPaineis,
-    cenariosDimensionamento: [enrichedConservador, enrichedEquilibrado, enrichedAgressivo],
+    cenariosDimensionamento: [
+      enrichCenario(cenConservador),
+      enrichCenario(cenEquilibrado),
+      enrichCenario(cenAgressivo),
+    ],
     recomendado,
     explicacao,
     _monthLabels: MONTH_LABELS,
   });
 });
 
-// POST /tools/battery-size
-router.post("/tools/battery-size", async (req, res): Promise<void> => {
-  const {
-    consumoDiario,
-    percConsumoNoturno,
-    horasAutonomia = 4,
-    dod = 80,
-  } = req.body as {
-    consumoDiario: number;
-    percConsumoNoturno: number;
-    horasAutonomia?: number;
-    tensaoSistema?: number;
-    dod?: number;
-  };
+// ── POST /tools/battery-size ──────────────────────────────────────────────────
+router.post(
+  "/tools/battery-size",
+  calcLimiter,
+  async (req, res): Promise<void> => {
+    const parsed = BatterySizeBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map((i) => i.message).join("; ");
+      res.status(400).json({ error: `Dados inválidos: ${msg}` });
+      return;
+    }
 
-  if (consumoDiario === undefined || percConsumoNoturno === undefined) {
-    res.status(400).json({ error: "consumoDiario e percConsumoNoturno são obrigatórios" });
-    return;
-  }
+    const { consumoDiario, percConsumoNoturno, horasAutonomia, dod } =
+      parsed.data;
 
-  const energiaNocturna =
-    consumoDiario * (percConsumoNoturno / 100) * (horasAutonomia / ((24 * percConsumoNoturno) / 100 || 1));
-  const capacidadeRecomendada = energiaNocturna / (dod / 100);
-  const capacidadeUtilizavel = capacidadeRecomendada * (dod / 100);
-  const numBaterias = Math.ceil(capacidadeRecomendada / 10);
+    const energiaNocturna =
+      consumoDiario *
+      (percConsumoNoturno / 100) *
+      (horasAutonomia / (((24 * percConsumoNoturno) / 100) || 1));
+    const capacidadeRecomendada = energiaNocturna / (dod / 100);
+    const capacidadeUtilizavel = capacidadeRecomendada * (dod / 100);
+    const numBaterias = Math.ceil(capacidadeRecomendada / 10);
 
-  const explicacao = `Para um consumo diário de ${consumoDiario.toFixed(1)} kWh com ${percConsumoNoturno}% noturno e autonomia de ${horasAutonomia}h, a energia necessária à noite é ${energiaNocturna.toFixed(1)} kWh. Com profundidade de descarga (DoD) de ${dod}%, recomenda-se uma bateria de ${capacidadeRecomendada.toFixed(1)} kWh (capacidade utilizável: ${capacidadeUtilizavel.toFixed(1)} kWh). Equivale a ${numBaterias} módulo(s) de 10 kWh.`;
+    const explicacao = `Para um consumo diário de ${consumoDiario.toFixed(1)} kWh com ${percConsumoNoturno}% noturno e autonomia de ${horasAutonomia}h, a energia necessária à noite é ${energiaNocturna.toFixed(1)} kWh. Com profundidade de descarga (DoD) de ${dod}%, recomenda-se uma bateria de ${capacidadeRecomendada.toFixed(1)} kWh (capacidade utilizável: ${capacidadeUtilizavel.toFixed(1)} kWh). Equivale a ${numBaterias} módulo(s) de 10 kWh.`;
 
-  res.json({
-    capacidadeRecomendada: Math.round(capacidadeRecomendada * 10) / 10,
-    capacidadeUtilizavel: Math.round(capacidadeUtilizavel * 10) / 10,
-    energiaNocturna: Math.round(energiaNocturna * 10) / 10,
-    numBaterias,
-    explicacao,
-  });
-});
+    res.json({
+      capacidadeRecomendada: Math.round(capacidadeRecomendada * 10) / 10,
+      capacidadeUtilizavel: Math.round(capacidadeUtilizavel * 10) / 10,
+      energiaNocturna: Math.round(energiaNocturna * 10) / 10,
+      numBaterias,
+      explicacao,
+    });
+  },
+);
 
-// POST /tools/import-datasheet
-router.post("/tools/import-datasheet", upload.single("file"), async (req, res): Promise<void> => {
-  if (!req.file) {
-    res.status(400).json({ error: "Ficheiro é obrigatório" });
-    return;
-  }
+// ── POST /tools/import-datasheet ──────────────────────────────────────────────
+router.post(
+  "/tools/import-datasheet",
+  aiLimiter,
+  upload.single("file"),
+  async (req, res): Promise<void> => {
+    if (!req.file) {
+      res.status(400).json({ error: "Ficheiro é obrigatório" });
+      return;
+    }
 
-  const tipoEquipamento = req.body.tipoEquipamento as string;
-  if (!["painel", "inversor", "bateria"].includes(tipoEquipamento)) {
-    res.status(400).json({ error: "tipoEquipamento deve ser painel, inversor ou bateria" });
-    return;
-  }
+    const tipoEquipamento = req.body.tipoEquipamento as string;
+    if (!["painel", "inversor", "bateria"].includes(tipoEquipamento)) {
+      res.status(400).json({
+        error: "tipoEquipamento deve ser painel, inversor ou bateria",
+      });
+      return;
+    }
 
-  const { mimetype, buffer } = req.file;
-  const isPdf = mimetype === "application/pdf";
-  const isImage = mimetype.startsWith("image/");
-  if (!isPdf && !isImage) {
-    res.status(400).json({ error: "Formato não suportado. Use PDF ou imagem." });
-    return;
-  }
+    const { mimetype, buffer, size } = req.file;
+    const isPdf = mimetype === "application/pdf";
+    const isImage = mimetype.startsWith("image/");
+    if (!isPdf && !isImage) {
+      res
+        .status(415)
+        .json({ error: "Formato não suportado. Use PDF ou imagem." });
+      return;
+    }
 
-  const nomeTipo = tipoEquipamento === "painel" ? "painel solar" : tipoEquipamento === "inversor" ? "inversor fotovoltaico" : "bateria de armazenamento";
+    req.log.info({ mimetype, size, tipoEquipamento }, "import-datasheet: processing file");
 
-  const schemaByType: Record<string, string> = {
-    painel: `{"nome":"string","fabricante":"string","potencia":number,"voc":number,"vmp":number,"isc":number,"imp":number,"coeficienteTemperatura":number}`,
-    inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":number,"stringsPorMppt":number}`,
-    bateria: `{"nome":"string","fabricante":"string","capacidade":number,"tensao":number,"tecnologia":"LiFePO4|Li-ion|AGM|Gel"}`,
-  };
+    const nomeTipo =
+      tipoEquipamento === "painel"
+        ? "painel solar"
+        : tipoEquipamento === "inversor"
+          ? "inversor fotovoltaico"
+          : "bateria de armazenamento";
 
-  try {
-    const base64 = buffer.toString("base64");
-    const contentBlock = buildFileBlock(isPdf, mimetype, base64);
+    const schemaByType: Record<string, string> = {
+      painel: `{"nome":"string","fabricante":"string","potencia":number,"voc":number,"vmp":number,"isc":number,"imp":number,"coeficienteTemperatura":number}`,
+      inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":number,"stringsPorMppt":number}`,
+      bateria: `{"nome":"string","fabricante":"string","capacidade":number,"tensao":number,"tecnologia":"LiFePO4|Li-ion|AGM|Gel"}`,
+    };
 
-    const message = await anthropic.messages.create({
-      model: "claude-opus-4-5",
-      max_tokens: 4096,
-      messages: [
-        {
-          role: "user",
-          content: [
-            contentBlock,
-            {
-              type: "text",
-              text: `Analisa esta ficha técnica de ${nomeTipo}.
+    try {
+      const base64 = buffer.toString("base64");
+      const contentBlock = buildFileBlock(isPdf, mimetype, base64);
+
+      const message = await anthropic.messages.create({
+        model: "claude-opus-4-5",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [
+              contentBlock,
+              {
+                type: "text",
+                text: `Analisa esta ficha técnica de ${nomeTipo}.
 
 REGRA FUNDAMENTAL: fichas técnicas frequentemente apresentam VÁRIOS MODELOS em paralelo numa tabela comparativa (uma coluna por modelo). Identifica TODOS os modelos presentes no documento e extrai os dados de cada um individualmente.
 
@@ -540,31 +734,41 @@ Instruções importantes:
 - fabricante deve ser o mesmo para todos os modelos da mesma ficha.
 
 Responde APENAS com o JSON pedido, sem texto adicional, sem markdown.`,
-            },
-          ],
-        },
-      ],
-    });
+              },
+            ],
+          },
+        ],
+      });
 
-    const text = message.content[0].type === "text" ? message.content[0].text : "{}";
-    const clean = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const parsed = JSON.parse(clean) as { modelos?: Record<string, unknown>[]; confianca?: number; notas?: string | null };
+      const text =
+        message.content[0].type === "text" ? message.content[0].text : "{}";
+      const clean = text
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
+      const parsed = JSON.parse(clean) as {
+        modelos?: Record<string, unknown>[];
+        confianca?: number;
+        notas?: string | null;
+      };
 
-    const modelos: Record<string, unknown>[] = Array.isArray(parsed.modelos) && parsed.modelos.length > 0
-      ? parsed.modelos
-      : [parsed as Record<string, unknown>];
+      const modelos: Record<string, unknown>[] =
+        Array.isArray(parsed.modelos) && parsed.modelos.length > 0
+          ? parsed.modelos
+          : [parsed as Record<string, unknown>];
 
-    res.json({
-      tipoEquipamento,
-      modelos,
-      dados: modelos[0],
-      confianca: parsed.confianca ?? 0.8,
-      notas: parsed.notas ?? null,
-    });
-  } catch (err) {
-    req.log?.error({ err }, "import-datasheet AI error");
-    res.status(502).json({ error: "Erro ao processar ficha técnica com IA" });
-  }
-});
+      res.json({
+        tipoEquipamento,
+        modelos,
+        dados: modelos[0],
+        confianca: parsed.confianca ?? 0.8,
+        notas: parsed.notas ?? null,
+      });
+    } catch (err) {
+      req.log?.error({ err }, "import-datasheet AI error");
+      res.status(502).json({ error: "Erro ao processar ficha técnica com IA" });
+    }
+  },
+);
 
 export default router;

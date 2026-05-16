@@ -7,6 +7,7 @@ import {
   GetSystemPvgisResponse,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
+import { pvgisGet, pvgisSet } from "../lib/pvgis-cache";
 
 const router: IRouter = Router();
 
@@ -14,6 +15,28 @@ const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
+
+type PvgisApiResponse = {
+  inputs?: { mounting_system?: { fixed?: { slope?: { value: number }; azimuth?: { value: number } } } };
+  outputs?: {
+    totals?: { fixed?: { E_y: number; H_i_y?: number } };
+    monthly?: { fixed?: Array<{ month: number; E_m: number }> };
+  };
+};
+
+async function fetchPvgisWithCache(url: string): Promise<PvgisApiResponse> {
+  const cached = pvgisGet(url) as PvgisApiResponse | null;
+  if (cached) return cached;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw Object.assign(new Error("PVGIS API error"), { status: 502, pvgisStatus: response.status });
+  }
+
+  const data = (await response.json()) as PvgisApiResponse;
+  pvgisSet(url, data);
+  return data;
+}
 
 // Get PVGIS production data for a system (supports dual orientation)
 router.get("/systems/:id/pvgis", async (req, res): Promise<void> => {
@@ -58,15 +81,17 @@ router.get("/systems/:id/pvgis", async (req, res): Promise<void> => {
   const lon = Number(customer.longitude);
 
   const { inclinacao2, azimute2, numPaineis2 } = query.data;
-  const hasSecondOrientation = inclinacao2 != null && azimute2 != null && numPaineis2 != null && numPaineis2 > 0;
+  const hasSecondOrientation =
+    inclinacao2 != null && azimute2 != null && numPaineis2 != null && numPaineis2 > 0;
 
   const numPaineis1 = hasSecondOrientation
     ? system.numPaineis - (numPaineis2 ?? 0)
     : system.numPaineis;
   const peakpower1 = (numPaineis1 * Number(panel.potencia)) / 1000;
-  const peakpower2 = hasSecondOrientation && numPaineis2
-    ? (numPaineis2 * Number(panel.potencia)) / 1000
-    : 0;
+  const peakpower2 =
+    hasSecondOrientation && numPaineis2
+      ? (numPaineis2 * Number(panel.potencia)) / 1000
+      : 0;
 
   const angle1 = Number(system.inclinacao);
   const aspect1 = Number(system.azimute) - 180;
@@ -92,22 +117,8 @@ router.get("/systems/:id/pvgis", async (req, res): Promise<void> => {
     `&optimalinclination=1&optimalangles=1`;
 
   try {
-    req.log.info({ pvgisUrl }, "Calling PVGIS API (orientation 1)");
-    const response = await fetch(pvgisUrl);
-
-    if (!response.ok) {
-      req.log.error({ status: response.status }, "PVGIS API error");
-      res.status(502).json({ error: "Erro ao comunicar com a API PVGIS" });
-      return;
-    }
-
-    const pvgisData = (await response.json()) as {
-      inputs?: { mounting_system?: { fixed?: { slope?: { value: number }; azimuth?: { value: number } } } };
-      outputs?: {
-        totals?: { fixed?: { E_y: number; H_i_y?: number } };
-        monthly?: { fixed?: Array<{ month: number; E_m: number }> };
-      };
-    };
+    req.log.info({ pvgisUrl: pvgisUrl.slice(0, 80) }, "Calling PVGIS API (orientation 1)");
+    const pvgisData = await fetchPvgisWithCache(pvgisUrl);
 
     const totals = pvgisData.outputs?.totals?.fixed;
     const monthly = pvgisData.outputs?.monthly?.fixed ?? [];
@@ -131,7 +142,7 @@ router.get("/systems/:id/pvgis", async (req, res): Promise<void> => {
       });
     }
   } catch (err) {
-    logger.error({ err }, "Failed to fetch PVGIS data");
+    logger.error({ err }, "Failed to fetch PVGIS data (orientation 1)");
     res.status(502).json({ error: "Falha ao obter dados da API PVGIS" });
     return;
   }
@@ -145,36 +156,27 @@ router.get("/systems/:id/pvgis", async (req, res): Promise<void> => {
       `&angle=${inclinacao2}&aspect=${aspect2}&outputformat=json&mountingplace=building`;
 
     try {
-      req.log.info({ pvgisUrl2 }, "Calling PVGIS API (orientation 2)");
-      const resp2 = await fetch(pvgisUrl2);
+      req.log.info({ pvgisUrl2: pvgisUrl2.slice(0, 80) }, "Calling PVGIS API (orientation 2)");
+      const data2 = await fetchPvgisWithCache(pvgisUrl2);
 
-      if (resp2.ok) {
-        const data2 = (await resp2.json()) as {
-          outputs?: {
-            totals?: { fixed?: { E_y: number } };
-            monthly?: { fixed?: Array<{ month: number; E_m: number }> };
-          };
-        };
+      const totals2 = data2.outputs?.totals?.fixed;
+      const monthly2 = data2.outputs?.monthly?.fixed ?? [];
 
-        const totals2 = data2.outputs?.totals?.fixed;
-        const monthly2 = data2.outputs?.monthly?.fixed ?? [];
-
-        if (totals2) {
-          producaoAnual += totals2.E_y ?? 0;
-          for (const m2 of monthly2) {
-            const existing = monthlyMap.get(m2.month);
-            if (existing) {
-              existing.producaoOr2 = m2.E_m ?? 0;
-              existing.producao += m2.E_m ?? 0;
-            } else {
-              monthlyMap.set(m2.month, {
-                mes: m2.month,
-                nomeMes: MONTH_NAMES[m2.month - 1] ?? `Mês ${m2.month}`,
-                producao: m2.E_m ?? 0,
-                producaoOr1: null,
-                producaoOr2: m2.E_m ?? 0,
-              });
-            }
+      if (totals2) {
+        producaoAnual += totals2.E_y ?? 0;
+        for (const m2 of monthly2) {
+          const existing = monthlyMap.get(m2.month);
+          if (existing) {
+            existing.producaoOr2 = m2.E_m ?? 0;
+            existing.producao += m2.E_m ?? 0;
+          } else {
+            monthlyMap.set(m2.month, {
+              mes: m2.month,
+              nomeMes: MONTH_NAMES[m2.month - 1] ?? `Mês ${m2.month}`,
+              producao: m2.E_m ?? 0,
+              producaoOr1: null,
+              producaoOr2: m2.E_m ?? 0,
+            });
           }
         }
       }
@@ -196,7 +198,7 @@ router.get("/systems/:id/pvgis", async (req, res): Promise<void> => {
       inclinacaoOtima,
       orientacaoOtima,
       temDuasOrientacoes: hasSecondOrientation,
-    })
+    }),
   );
 });
 
