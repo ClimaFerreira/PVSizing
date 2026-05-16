@@ -390,7 +390,7 @@ export default function Wizard() {
 
     const precoKwh = consumoData.precoKwh ?? 0.18;
     const custoKwp = 1050;
-    const custoBateria = 600;
+    const custoBateria = 0; // battery cost not auto-estimated — must be defined by user
 
     return sizing.cenariosDimensionamento.map(c => {
       const mult = CENARIO_COB_MULT[c.tipo] ?? 1.0;

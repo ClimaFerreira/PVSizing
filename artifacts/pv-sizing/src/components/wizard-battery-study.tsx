@@ -4,11 +4,12 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Battery, Plus, Trash2, AlertTriangle, CheckCircle2,
-  TrendingUp, Zap, Info, ChevronRight, Lightbulb,
+  TrendingUp, Zap, Info, ChevronRight, Lightbulb, Euro,
 } from "lucide-react";
 import type { Battery as BatCat } from "@workspace/api-client-react";
 
@@ -43,7 +44,6 @@ interface Props {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const ETA = 0.92; // round-trip efficiency
-const CUSTO_KWH_BAT = 600; // €/kWh installed
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -147,10 +147,6 @@ function calcStudy(sys: NonNullable<ReturnType<typeof calcSystem>>, cenario: Cen
 
   const ganhoAnual        = ganhoMensal.reduce((a, b) => a + b, 0);
   const poupancaAdicional = Math.round(ganhoAnual * precoKwh);
-  const investimentoBat   = Math.round(sys.totalCap * CUSTO_KWH_BAT);
-  const paybackBat        = poupancaAdicional > 0
-    ? Math.round(investimentoBat / poupancaAdicional * 10) / 10
-    : 99;
 
   const autoconsumoComBat     = cenario.autoconsumoAnual + ganhoAnual;
   const autoconsumoPercComBat = cenario.energiaAnualEstimada > 0
@@ -178,8 +174,6 @@ function calcStudy(sys: NonNullable<ReturnType<typeof calcSystem>>, cenario: Cen
     diasParaEncher,
     ganhoAnual,
     poupancaAdicional,
-    investimentoBat,
-    paybackBat,
     ciclosAnuais,
     ganhoMensal,
     autoconsumoComBat,
@@ -218,6 +212,9 @@ function StatusChip({ status }: { status: "subdimensionada" | "equilibrada" | "s
 
 export default function WizardBatteryStudy({ batteries, batteryUnits, onUnitsChange, activeCenario, precoKwh, perfilDiurnoPct }: Props) {
   const [addBatId, setAddBatId] = useState<number | null>(batteries[0]?.id ?? null);
+  const [precoBateriaStr, setPrecoBateriaStr] = useState("");
+  const precoBateria = precoBateriaStr !== "" ? parseFloat(precoBateriaStr.replace(",", ".")) : null;
+  const precoBateriaValido = precoBateria !== null && precoBateria > 0 && !isNaN(precoBateria);
 
   const sys = useMemo(() => calcSystem(batteryUnits, batteries), [batteryUnits, batteries]);
   const study = useMemo(() => {
@@ -484,104 +481,168 @@ export default function WizardBatteryStudy({ batteries, batteryUnits, onUnitsCha
 
       {/* ── Comparison with/without battery ─────────────────────────────────── */}
       {study && sys && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingUp size={18} className="text-emerald-500" />
-              Simulação: Com vs. Sem Bateria
-            </CardTitle>
-            <CardDescription>Impacto da bateria no autoconsumo e na poupança anual</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Comparison table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-[11px] text-muted-foreground uppercase tracking-wide">
-                    <th className="text-left pb-2 pr-4 font-medium">Indicador</th>
-                    <th className="text-right pb-2 pr-4 font-medium">Sem bateria</th>
-                    <th className="text-right pb-2 pr-4 font-medium">Com bateria</th>
-                    <th className="text-right pb-2 font-medium text-emerald-600 dark:text-emerald-400">Ganho</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {[
-                    {
-                      label: "Autoconsumo anual",
-                      sem: `${fmt(activeCenario!.autoconsumoAnual)} kWh`,
-                      com: `${fmt(study.autoconsumoComBat)} kWh`,
-                      ganho: `+${fmt(study.ganhoAnual)} kWh`,
-                    },
-                    {
-                      label: "Taxa de autoconsumo",
-                      sem: `${study.autoconsumoPercSemBat}%`,
-                      com: `${study.autoconsumoPercComBat}%`,
-                      ganho: `+${study.autoconsumoPercComBat - study.autoconsumoPercSemBat} pp`,
-                    },
-                    {
-                      label: "Poupança/ano",
-                      sem: `${fmt(activeCenario!.poupancaAnual)} €`,
-                      com: `${fmt(activeCenario!.poupancaAnual + study.poupancaAdicional)} €`,
-                      ganho: `+${fmt(study.poupancaAdicional)} €`,
-                    },
-                  ].map(r => (
-                    <tr key={r.label}>
-                      <td className="py-2 pr-4 text-muted-foreground">{r.label}</td>
-                      <td className="py-2 pr-4 text-right font-medium">{r.sem}</td>
-                      <td className="py-2 pr-4 text-right font-semibold">{r.com}</td>
-                      <td className="py-2 text-right font-bold text-emerald-600 dark:text-emerald-400">{r.ganho}</td>
+        <>
+          {/* ── Análise Energética ───────────────────────────────────────────── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <TrendingUp size={18} className="text-emerald-500" />
+                Análise Energética: Com vs. Sem Bateria
+              </CardTitle>
+              <CardDescription>Impacto da bateria no autoconsumo e na energia armazenada</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Comparison table — energy only */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                      <th className="text-left pb-2 pr-4 font-medium">Indicador</th>
+                      <th className="text-right pb-2 pr-4 font-medium">Sem bateria</th>
+                      <th className="text-right pb-2 pr-4 font-medium">Com bateria</th>
+                      <th className="text-right pb-2 font-medium text-emerald-600 dark:text-emerald-400">Ganho</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {[
+                      {
+                        label: "Autoconsumo anual",
+                        sem: `${fmt(activeCenario!.autoconsumoAnual)} kWh`,
+                        com: `${fmt(study.autoconsumoComBat)} kWh`,
+                        ganho: `+${fmt(study.ganhoAnual)} kWh`,
+                      },
+                      {
+                        label: "Taxa de autoconsumo",
+                        sem: `${study.autoconsumoPercSemBat}%`,
+                        com: `${study.autoconsumoPercComBat}%`,
+                        ganho: `+${study.autoconsumoPercComBat - study.autoconsumoPercSemBat} pp`,
+                      },
+                      {
+                        label: "Energia armazenada/dia",
+                        sem: "—",
+                        com: `${study.energiaArmazenavel.toFixed(1)} kWh`,
+                        ganho: `${study.energiaEntregue.toFixed(1)} kWh entregue`,
+                      },
+                      {
+                        label: "Excedente disponível/dia",
+                        sem: `${study.excessoMedioDiario.toFixed(1)} kWh`,
+                        com: `${Math.max(0, study.excessoMedioDiario - study.energiaArmazenavel).toFixed(1)} kWh`,
+                        ganho: `${fmt(activeCenario!.excessoAnual)} kWh/ano total`,
+                      },
+                    ].map(r => (
+                      <tr key={r.label}>
+                        <td className="py-2 pr-4 text-muted-foreground">{r.label}</td>
+                        <td className="py-2 pr-4 text-right font-medium">{r.sem}</td>
+                        <td className="py-2 pr-4 text-right font-semibold">{r.com}</td>
+                        <td className="py-2 text-right font-bold text-emerald-600 dark:text-emerald-400">{r.ganho}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Separator />
-
-            {/* Financial summary for battery */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                {
-                  label: "Investimento bateria",
-                  val: `${fmt(study.investimentoBat)} €`,
-                  sub: `${sys.totalCap.toFixed(1)} kWh × ${CUSTO_KWH_BAT} €/kWh`,
-                  hi: false,
-                },
-                {
-                  label: "Poupança adicional/ano",
-                  val: `${fmt(study.poupancaAdicional)} €`,
-                  sub: `${fmt(study.ganhoAnual)} kWh × ${precoKwh} €/kWh`,
-                  hi: false,
-                },
-                {
-                  label: "Payback da bateria",
-                  val: study.paybackBat < 50 ? `${study.paybackBat} anos` : "N/A",
-                  sub: "adicional ao FV",
-                  hi: study.paybackBat <= 12,
-                },
-              ].map(({ label, val, sub, hi }) => (
-                <div key={label} className={cn("rounded-xl p-3 text-center border", hi ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700" : "bg-muted/30 border-border")}>
-                  <p className="text-[10px] text-muted-foreground leading-tight">{label}</p>
-                  <p className={cn("font-bold text-sm mt-0.5", hi ? "text-emerald-700 dark:text-emerald-300" : "text-foreground")}>{val}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
+          {/* ── Análise Financeira ───────────────────────────────────────────── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Euro size={18} className="text-primary" />
+                Análise Financeira da Bateria
+              </CardTitle>
+              <CardDescription>Disponível após definição do custo total da bateria</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Price input */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  Preço total da bateria (€) — fornecido pelo instalador ou catálogo
+                </label>
+                <div className="flex items-center gap-2 max-w-xs">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={100}
+                    placeholder="Ex: 3500"
+                    value={precoBateriaStr}
+                    onChange={e => setPrecoBateriaStr(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                  <span className="text-sm text-muted-foreground shrink-0">€</span>
                 </div>
-              ))}
-            </div>
-
-            {/* Alert if payback is high */}
-            {study.paybackBat > 15 && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
-                <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-amber-700 dark:text-amber-400">
-                  <strong>Payback elevado ({study.paybackBat} anos).</strong> O retorno adicional da bateria é longo.
-                  {study.status === "sobredimensionada"
-                    ? " Reduza a capacidade para melhorar a rentabilidade."
-                    : " Considere se o investimento é prioritário relativamente à expansão FV."}
+                <p className="text-[10px] text-muted-foreground mt-1.5">
+                  Inclua instalação e acessórios. Pode ser preço unitário × quantidade.
                 </p>
               </div>
-            )}
-          </CardContent>
-        </Card>
+
+              <Separator />
+
+              {/* Financial KPIs — only when price is defined */}
+              {precoBateriaValido && precoBateria !== null ? (() => {
+                const payback = study.poupancaAdicional > 0
+                  ? Math.round(precoBateria / study.poupancaAdicional * 10) / 10
+                  : null;
+                const paybackBom = payback !== null && payback <= 12;
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        {
+                          label: "Investimento bateria",
+                          val: `${fmt(Math.round(precoBateria))} €`,
+                          sub: `definido pelo utilizador`,
+                          hi: false,
+                        },
+                        {
+                          label: "Poupança adicional/ano",
+                          val: `${fmt(study.poupancaAdicional)} €`,
+                          sub: `${fmt(study.ganhoAnual)} kWh × ${precoKwh} €/kWh`,
+                          hi: false,
+                        },
+                        {
+                          label: "Payback da bateria",
+                          val: payback !== null && payback < 50 ? `${payback} anos` : "N/A",
+                          sub: "adicional ao sistema FV",
+                          hi: paybackBom,
+                        },
+                      ].map(({ label, val, sub, hi }) => (
+                        <div key={label} className={cn("rounded-xl p-3 text-center border", hi ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700" : "bg-muted/30 border-border")}>
+                          <p className="text-[10px] text-muted-foreground leading-tight">{label}</p>
+                          <p className={cn("font-bold text-sm mt-0.5", hi ? "text-emerald-700 dark:text-emerald-300" : "text-foreground")}>{val}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {payback !== null && payback > 15 && (
+                      <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                        <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                          <strong>Payback elevado ({payback} anos).</strong> O retorno adicional da bateria é longo.
+                          {study.status === "sobredimensionada"
+                            ? " Reduza a capacidade para melhorar a rentabilidade."
+                            : " Considere se o investimento é prioritário relativamente à expansão FV."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : (
+                <div className="flex items-start gap-3 p-4 bg-muted/40 rounded-xl border border-dashed">
+                  <Euro size={18} className="text-muted-foreground mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Análise financeira disponível após definição do custo da bateria.
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Introduza o preço total acima para calcular investimento, poupança e payback.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );

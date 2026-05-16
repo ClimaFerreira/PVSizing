@@ -562,7 +562,7 @@ router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => 
   }
 
   const custoKwp = 1050;
-  const custoBateria = 600;
+  const custoBateria = 0; // battery cost not auto-estimated — must be defined by user
 
   // ── PVGIS real data (async, with 8 s timeout + fallback) ──────────────────
   const pvgisMonthlyKwhPerKwp = await fetchPvgisMonthlyKwhPerKwp(
