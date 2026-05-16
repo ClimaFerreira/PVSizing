@@ -420,6 +420,16 @@ export default function Wizard() {
     );
   }, [manual, activeCenario, sizing]);
 
+  // ── Potência DC efectiva para sugestões (usa painel seleccionado no passo 5) ──
+  const panelIdStep5 = equipForm.watch("panelId");
+  const potenciaKwpEstudo   = (effectiveSizing ?? sizing)?.potenciaInstalada ?? 0;
+  const potenciaKwpEfetiva: number = (() => {
+    const panel = panels?.find(p => p.id === panelIdStep5);
+    const n     = numPaineisStep5 ?? (effectiveSizing ?? sizing)?.numPaineis ?? 0;
+    if (panel && n > 0) return +(panel.potencia * n / 1000).toFixed(2);
+    return potenciaKwpEstudo;
+  })();
+
   // ── Draft handlers ─────────────────────────────────────────────────────────
   const restoreDraft = useCallback((draft: WizardDraftData) => {
     setConsumoData(draft.consumoData as unknown as ConsumoData);
@@ -1549,7 +1559,8 @@ export default function Wizard() {
               </div>
             }>
               <WizardSugestoesInversor
-                potenciaKwp={(effectiveSizing ?? sizing)!.potenciaInstalada}
+                potenciaKwpEstudo={potenciaKwpEstudo}
+                potenciaKwpEfetiva={potenciaKwpEfetiva}
                 energiaAnualEstimada={(effectiveSizing ?? sizing)!.energiaAnualEstimada}
                 inverters={inverters}
                 selectedInverterId={inverterUnits.length === 0 ? equipForm.watch("inverterId") : undefined}

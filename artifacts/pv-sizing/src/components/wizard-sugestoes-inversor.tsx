@@ -6,7 +6,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Zap, CheckCircle2, Info, Sun, BarChart3, AlertTriangle, X } from "lucide-react";
+import {
+  Zap, CheckCircle2, Info, Sun, BarChart3, AlertTriangle, X, SlidersHorizontal,
+} from "lucide-react";
 import { criarUnidade, type InverterUnit } from "@/lib/multi-inverter";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -15,7 +17,7 @@ type TipoLigacao  = "indeferente" | "monofasico" | "trifasico";
 type TipoInversor = "sem-preferencia" | "string" | "hibrido" | "ac-coupled";
 type BateriaOpcao = "nao" | "a-estudar" | "sim";
 type Topologia    = "automatico" | "um" | "multi";
-type ComboTag     = "ideal" | "ok" | "nao-recomendado";
+type ComboTag     = "ideal" | "ok" | "requer-validacao" | "nao-recomendado";
 
 interface InstalacaoParams {
   tipoLigacao:  TipoLigacao;
@@ -32,6 +34,11 @@ type InverterItem = {
   potenciaAc: number | string;
 };
 
+interface ComboViolacao {
+  codigo:   "fase" | "limite-ac" | "tipo-inversor";
+  mensagem: string;
+}
+
 interface Combo {
   key:             string;
   tipo:            "unico" | "duplo" | "triplo";
@@ -39,17 +46,20 @@ interface Combo {
   nome:            string;
   fabricante:      string;
   unidades:        number;
-  potenciaDcAlvo:  number;   // kWp (fixed — same for all, comes from panel sizing)
+  potenciaDcAlvo:  number;
   potenciaAcUnit:  number;
   potenciaAcTotal: number;
   ratioDcAc:       number;
   fase:            "mono" | "tri";
   isHybrid:        boolean;
   tag:             ComboTag;
+  violacoes:       ComboViolacao[];
+  isAlternativa:   boolean;  // flagged when shown as fallback
 }
 
 interface Props {
-  potenciaKwp:          number;
+  potenciaKwpEstudo:    number;  // from scenario/effectiveSizing
+  potenciaKwpEfetiva:   number;  // from actual panel selection (may differ)
   energiaAnualEstimada: number;
   inverters:            InverterItem[] | undefined;
   selectedInverterId:   number | undefined;
@@ -58,25 +68,67 @@ interface Props {
   onSelectMultiInverter:(units: InverterUnit[]) => void;
 }
 
-// ── Hybrid detection heuristic ────────────────────────────────────────────────
+// ── Hybrid detection ──────────────────────────────────────────────────────────
 const HYBRID_RE = /HYB|HYBRID|GEN24|X-HYB|RHI|LP[12]|-EH|-ET|SH-\d|MULTI|STOREDGE|-H\d|\.HV\d/i;
-function isHybridInverter(nome: string) { return HYBRID_RE.test(nome); }
+const isHybridInverter = (nome: string) => HYBRID_RE.test(nome);
 
 // ── Tag classification ─────────────────────────────────────────────────────────
-// Ideal: 0.90–1.20 · Aceitável: 0.75–0.89 or 1.21–1.35 · Não recomendado: outside those
-function classifyTag(ratio: number): ComboTag {
-  if (ratio >= 0.90 && ratio <= 1.20) return "ideal";
-  if (ratio >= 0.75 && ratio <= 1.35) return "ok";
-  return "nao-recomendado";
+function classifyTag(ratio: number, violacoes: ComboViolacao[]): ComboTag {
+  if (violacoes.length > 0)              return "requer-validacao";
+  if (ratio < 0.75 || ratio > 1.35)     return "nao-recomendado";
+  if (ratio >= 0.90 && ratio <= 1.20)   return "ideal";
+  return "ok";
+}
+
+// ── Compute violations for one combo ─────────────────────────────────────────
+function computarViolacoes(
+  fase:        "mono" | "tri",
+  isHybrid:    boolean,
+  totalAc:     number,
+  p:           InstalacaoParams,
+): ComboViolacao[] {
+  const v: ComboViolacao[] = [];
+
+  // Phase
+  if (p.tipoLigacao === "monofasico" && fase !== "mono")
+    v.push({ codigo: "fase", mensagem: "Inversor trifásico (ligação monofásica pretendida)" });
+  if (p.tipoLigacao === "trifasico" && fase !== "tri")
+    v.push({ codigo: "fase", mensagem: "Inversor monofásico (ligação trifásica pretendida)" });
+
+  // AC limit
+  if (p.limiteAcKw !== null && p.limiteAcKw > 0 && totalAc > p.limiteAcKw)
+    v.push({
+      codigo:   "limite-ac",
+      mensagem: `Potência AC total (${totalAc} kW) excede o limite definido (${p.limiteAcKw} kW)`,
+    });
+
+  // Inverter type
+  if (p.tipoInversor === "hibrido" && !isHybrid)
+    v.push({ codigo: "tipo-inversor", mensagem: "Inversor sem bateria integrada — considere solução AC-coupled" });
+  if (p.tipoInversor === "string" && isHybrid)
+    v.push({ codigo: "tipo-inversor", mensagem: "Inversor híbrido (custo superior ao necessário sem bateria)" });
+
+  return v;
 }
 
 // ── Combination generator ─────────────────────────────────────────────────────
+const MIN_STRICT = 3;   // show fallbacks when strict results are below this
+const MAX_TOTAL  = 12;
+
 function gerarCombinacoes(
   potenciaKwp: number,
   inverters:   InverterItem[],
   p:           InstalacaoParams,
 ): Combo[] {
-  const combos: Combo[] = [];
+  if (!inverters.length || potenciaKwp <= 0) return [];
+
+  const unitCounts: number[] =
+    p.topologia === "um"    ? [1]       :
+    p.topologia === "multi" ? [2, 3]    :
+                              [1, 2, 3];
+
+  const allCombos: Combo[] = [];
+  const seen = new Set<string>();
 
   for (const inv of inverters) {
     const potAc = Number(inv.potenciaAc);
@@ -85,34 +137,19 @@ function gerarCombinacoes(
     const fase: "mono" | "tri" = potAc <= 6.0 ? "mono" : "tri";
     const isHybrid = isHybridInverter(inv.nome);
 
-    // ── Hard filters ──────────────────────────────────────────────────────────
-    if (p.tipoLigacao === "monofasico") {
-      if (fase !== "mono") continue;
-      if (p.limiteAcKw !== null && p.limiteAcKw > 0 && potAc > p.limiteAcKw) continue;
-    }
-    if (p.tipoLigacao === "trifasico" && fase === "mono") continue;
-    if (
-      p.tipoLigacao === "indeferente" &&
-      p.limiteAcKw !== null && p.limiteAcKw > 0 &&
-      potAc > p.limiteAcKw
-    ) continue;
-    if (p.tipoInversor === "hibrido" && !isHybrid) continue;
-    if (p.tipoInversor === "string"  &&  isHybrid) continue;
-
-    // ── Unit counts ───────────────────────────────────────────────────────────
-    const unitCounts: number[] =
-      p.topologia === "um"    ? [1]       :
-      p.topologia === "multi" ? [2, 3]    :
-                                [1, 2, 3];
-
     for (const units of unitCounts) {
-      const totalAc = potAc * units;
+      const totalAc = +(potAc * units).toFixed(2);
       const ratio   = Math.round((potenciaKwp / totalAc) * 100) / 100;
-      // Range: 0.65–1.50 (wider than before to include "Não recomendado")
       if (ratio < 0.65 || ratio > 1.50) continue;
 
-      combos.push({
-        key:             units === 1 ? `s-${inv.id}` : `m${units}-${inv.id}`,
+      const key = units === 1 ? `s-${inv.id}` : `m${units}-${inv.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const violacoes = computarViolacoes(fase, isHybrid, totalAc, p);
+
+      allCombos.push({
+        key,
         tipo:            units === 1 ? "unico" : units === 2 ? "duplo" : "triplo",
         inverterId:      inv.id,
         nome:            inv.nome,
@@ -124,54 +161,77 @@ function gerarCombinacoes(
         ratioDcAc:       ratio,
         fase,
         isHybrid,
-        tag:             classifyTag(ratio),
+        tag:             classifyTag(ratio, violacoes),
+        violacoes,
+        isAlternativa:   false,
       });
     }
   }
 
-  // ── Sort ──────────────────────────────────────────────────────────────────
-  return combos.sort((a, b) => {
-    if (p.bateria === "sim") {
-      if (a.isHybrid !== b.isHybrid) return a.isHybrid ? -1 : 1;
-    }
-    if (p.tipoLigacao === "trifasico") {
-      if (a.fase !== b.fase) return a.fase === "tri" ? -1 : 1;
-    }
-    const order: Record<ComboTag, number> = { ideal: 0, ok: 1, "nao-recomendado": 2 };
-    if (a.tag !== b.tag) return order[a.tag] - order[b.tag];
-    return Math.abs(a.ratioDcAc - 1.1) - Math.abs(b.ratioDcAc - 1.1);
-  }).slice(0, 12);
+  // ── Sort helper ───────────────────────────────────────────────────────────
+  const TAG_ORDER: Record<ComboTag, number> = {
+    ideal: 0, ok: 1, "requer-validacao": 2, "nao-recomendado": 3,
+  };
+
+  function sortCombos(list: Combo[], batteriaSim: boolean) {
+    return list.sort((a, b) => {
+      if (batteriaSim && a.isHybrid !== b.isHybrid) return a.isHybrid ? -1 : 1;
+      if (a.tag !== b.tag) return TAG_ORDER[a.tag] - TAG_ORDER[b.tag];
+      if (a.violacoes.length !== b.violacoes.length) return a.violacoes.length - b.violacoes.length;
+      return Math.abs(a.ratioDcAc - 1.1) - Math.abs(b.ratioDcAc - 1.1);
+    });
+  }
+
+  const battSim = p.bateria === "sim";
+  const strict  = sortCombos(allCombos.filter(c => c.violacoes.length === 0), battSim);
+  const alts    = sortCombos(allCombos.filter(c => c.violacoes.length > 0), battSim);
+
+  if (strict.length >= MIN_STRICT) return strict.slice(0, MAX_TOTAL);
+
+  // Mark alternatives
+  alts.forEach(c => { c.isAlternativa = true; });
+
+  const merged = [...strict, ...alts];
+  return merged.slice(0, MAX_TOTAL);
 }
 
 // ── Tag metadata ──────────────────────────────────────────────────────────────
-const TAG_META: Record<ComboTag, { label: string; pill: string; border: string }> = {
+const TAG_META: Record<ComboTag, {
+  label: string; pill: string; border: string; borderSelected: string;
+}> = {
   ideal: {
-    label:  "Ideal",
-    pill:   "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
-    border: "border-green-200 dark:border-green-800",
+    label:          "Ideal",
+    pill:           "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
+    border:         "border-green-200 dark:border-green-800",
+    borderSelected: "border-green-500",
   },
   ok: {
-    label:  "Aceitável",
-    pill:   "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
-    border: "border-amber-200 dark:border-amber-800",
+    label:          "Aceitável",
+    pill:           "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+    border:         "border-amber-200 dark:border-amber-800",
+    borderSelected: "border-amber-500",
+  },
+  "requer-validacao": {
+    label:          "Requer validação",
+    pill:           "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+    border:         "border-blue-200 dark:border-blue-800",
+    borderSelected: "border-blue-500",
   },
   "nao-recomendado": {
-    label:  "Não recomendado",
-    pill:   "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
-    border: "border-red-300 dark:border-red-700",
+    label:          "Não recomendado",
+    pill:           "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
+    border:         "border-red-300 dark:border-red-700",
+    borderSelected: "border-red-500",
   },
 };
 
 // ── ToggleGroup helper ────────────────────────────────────────────────────────
 function ToggleGroup<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
+  label, options, value, onChange,
 }: {
-  label: string;
-  options: { value: T; label: string }[];
-  value: T;
+  label:    string;
+  options:  { value: T; label: string }[];
+  value:    T;
   onChange: (v: T) => void;
 }) {
   return (
@@ -198,37 +258,60 @@ function ToggleGroup<T extends string>({
   );
 }
 
+// ── DataRow ───────────────────────────────────────────────────────────────────
+function DataRow({
+  label, value, highlight,
+}: {
+  label:      string;
+  value:      string;
+  highlight?: "ok" | "warn" | "bad";
+}) {
+  const cls =
+    highlight === "ok"   ? "text-green-600 dark:text-green-400 font-semibold" :
+    highlight === "warn" ? "text-amber-600 dark:text-amber-400 font-semibold" :
+    highlight === "bad"  ? "text-red-600   dark:text-red-400   font-semibold" :
+                           "font-medium";
+  return (
+    <>
+      <span className="text-muted-foreground truncate">{label}</span>
+      <span className={cls}>{value}</span>
+    </>
+  );
+}
+
 // ── ComboCard ─────────────────────────────────────────────────────────────────
 function ComboCard({
-  combo,
-  isSelected,
-  pendingConfirm,
-  onSelect,
-  onConfirm,
-  onCancelConfirm,
+  combo, isSelected, pendingConfirm, onSelect, onConfirm, onCancelConfirm,
 }: {
-  combo:            Combo;
-  isSelected:       boolean;
-  pendingConfirm:   boolean;
-  onSelect:         () => void;
-  onConfirm:        () => void;
-  onCancelConfirm:  () => void;
+  combo:           Combo;
+  isSelected:      boolean;
+  pendingConfirm:  boolean;
+  onSelect:        () => void;
+  onConfirm:       () => void;
+  onCancelConfirm: () => void;
 }) {
   const meta = TAG_META[combo.tag];
+
+  const ratioHighlight: "ok" | "warn" | "bad" | undefined =
+    combo.ratioDcAc >= 0.90 && combo.ratioDcAc <= 1.20 ? "ok"  :
+    combo.ratioDcAc >= 0.75 && combo.ratioDcAc <= 1.35 ? "warn":
+                                                          "bad";
 
   return (
     <div
       className={cn(
-        "rounded-xl border p-3 transition-all",
+        "rounded-xl border p-3 transition-all flex flex-col gap-2",
         isSelected
-          ? "border-primary ring-1 ring-primary bg-primary/5"
+          ? cn("ring-1 ring-primary border-primary bg-primary/5")
           : combo.tag === "nao-recomendado"
-            ? cn("border opacity-80", meta.border)
-            : "border hover:border-primary/40 hover:bg-muted/30",
+            ? cn("opacity-80", meta.border)
+            : combo.tag === "requer-validacao"
+              ? meta.border
+              : "hover:border-primary/40 hover:bg-muted/30",
       )}
     >
-      {/* ── Top row: name + badges ── */}
-      <div className="flex items-start justify-between gap-2 mb-2">
+      {/* ── Top row ── */}
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-semibold truncate">
             {combo.unidades > 1 ? `${combo.unidades}× ` : ""}
@@ -242,49 +325,49 @@ function ComboCard({
               HYB
             </span>
           )}
-          {isSelected && <CheckCircle2 size={15} className="text-primary" />}
+          {isSelected && <CheckCircle2 size={14} className="text-primary" />}
         </div>
       </div>
 
       {/* ── Data grid ── */}
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] mb-2">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px]">
         <DataRow label="Potência DC alvo" value={`${combo.potenciaDcAlvo} kWp`} />
         <DataRow label="Potência AC total" value={`${combo.potenciaAcTotal} kW`} />
         <DataRow
           label="DC/AC ratio"
           value={combo.ratioDcAc.toString()}
-          highlight={
-            combo.ratioDcAc >= 0.90 && combo.ratioDcAc <= 1.20
-              ? "ok"
-              : combo.ratioDcAc >= 0.75 && combo.ratioDcAc <= 1.35
-                ? "warn"
-                : "bad"
-          }
+          highlight={ratioHighlight}
         />
-        <DataRow label="Nº de inversores" value={combo.unidades.toString()} />
+        <DataRow label="Nº inversores" value={combo.unidades.toString()} />
+        <DataRow label="Tipo" value={combo.fase === "mono" ? "Monofásico" : "Trifásico"} />
         <DataRow
-          label="Tipo"
-          value={combo.fase === "mono" ? "Monofásico" : "Trifásico"}
-        />
-        <DataRow
-          label="Compatível com bateria"
-          value={combo.isHybrid ? "Sim" : "Não"}
+          label="Compatível bateria"
+          value={combo.isHybrid ? "Sim (integrada)" : "AC-coupled"}
           highlight={combo.isHybrid ? "ok" : undefined}
         />
       </div>
 
-      {/* ── Estado pill ── */}
-      <div className="flex items-center justify-between gap-2">
+      {/* ── Violações ── */}
+      {combo.violacoes.length > 0 && (
+        <div className="space-y-0.5">
+          {combo.violacoes.map((v, i) => (
+            <p key={i} className="text-[10px] text-blue-600 dark:text-blue-400 flex items-start gap-1">
+              <AlertTriangle size={9} className="shrink-0 mt-0.5" />
+              {v.mensagem}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* ── Bottom row: estado + acção ── */}
+      <div className="flex items-center justify-between gap-2 mt-auto">
         <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-md", meta.pill)}>
           {meta.label}
         </span>
 
-        {/* ── Action area ── */}
         {pendingConfirm ? (
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-              Confirmar?
-            </span>
+            <span className="text-[10px] text-red-600 dark:text-red-400 font-medium">Confirmar?</span>
             <Button
               type="button"
               size="sm"
@@ -294,11 +377,7 @@ function ComboCard({
             >
               Sim
             </Button>
-            <button
-              type="button"
-              onClick={onCancelConfirm}
-              className="text-muted-foreground hover:text-foreground"
-            >
+            <button type="button" onClick={onCancelConfirm} className="text-muted-foreground hover:text-foreground">
               <X size={12} />
             </button>
           </div>
@@ -320,42 +399,20 @@ function ComboCard({
         )}
       </div>
 
-      {/* ── Ratio warning annotation ── */}
       {combo.tag === "nao-recomendado" && (
-        <p className="mt-1.5 text-[10px] text-red-600 dark:text-red-400 flex items-start gap-1">
-          <AlertTriangle size={10} className="shrink-0 mt-0.5" />
-          Ratio DC/AC fora do intervalo recomendado (0,75–1,35). Risco de perdas de produção ou sobrecarga.
+        <p className="text-[10px] text-red-600 dark:text-red-400 flex items-start gap-1">
+          <AlertTriangle size={9} className="shrink-0 mt-0.5" />
+          Ratio DC/AC fora do intervalo 0,75–1,35. Risco de perdas ou sobrecarga.
         </p>
       )}
     </div>
   );
 }
 
-function DataRow({
-  label,
-  value,
-  highlight,
-}: {
-  label:     string;
-  value:     string;
-  highlight?: "ok" | "warn" | "bad";
-}) {
-  const valueClass =
-    highlight === "ok"   ? "text-green-600 dark:text-green-400 font-semibold" :
-    highlight === "warn" ? "text-amber-600 dark:text-amber-400 font-semibold" :
-    highlight === "bad"  ? "text-red-600   dark:text-red-400   font-semibold" :
-                           "font-medium";
-  return (
-    <>
-      <span className="text-muted-foreground">{label}</span>
-      <span className={valueClass}>{value}</span>
-    </>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 export default function WizardSugestoesInversor({
-  potenciaKwp,
+  potenciaKwpEstudo,
+  potenciaKwpEfetiva,
   energiaAnualEstimada,
   inverters,
   selectedInverterId,
@@ -371,7 +428,6 @@ export default function WizardSugestoesInversor({
     topologia:    "automatico",
   });
 
-  // Key of the combo awaiting "Não recomendado" confirmation
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
 
   function setParam<K extends keyof InstalacaoParams>(k: K, v: InstalacaoParams[K]) {
@@ -379,8 +435,8 @@ export default function WizardSugestoesInversor({
   }
 
   const combos = useMemo(
-    () => (inverters ? gerarCombinacoes(potenciaKwp, inverters, params) : []),
-    [potenciaKwp, inverters, params],
+    () => (inverters ? gerarCombinacoes(potenciaKwpEfetiva, inverters, params) : []),
+    [potenciaKwpEfetiva, inverters, params],
   );
 
   const selectedKey = useMemo(() => {
@@ -409,6 +465,12 @@ export default function WizardSugestoesInversor({
     }
   }
 
+  // Split strict vs alternativas for display
+  const comboStrict = combos.filter(c => !c.isAlternativa);
+  const comboAlts   = combos.filter(c =>  c.isAlternativa);
+
+  const potenciasDiferem = Math.abs(potenciaKwpEfetiva - potenciaKwpEstudo) >= 0.01;
+
   return (
     <Card>
       {/* ── Header ── */}
@@ -420,15 +482,21 @@ export default function WizardSugestoesInversor({
               Seleção da Solução Técnica
             </CardTitle>
             <CardDescription className="mt-1">
-              Escolha agora a solução técnica compatível com o sistema dimensionado.
+              Escolha a solução técnica compatível com o sistema dimensionado.
             </CardDescription>
           </div>
           <div className="flex gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5">
               <Sun size={13} className="text-primary" />
-              <span className="text-xs font-semibold text-primary">
-                Potência FV alvo: {potenciaKwp} kWp
-              </span>
+              <div className="text-xs font-semibold text-primary">
+                <span>FV alvo estudo: {potenciaKwpEstudo} kWp</span>
+                {potenciasDiferem && (
+                  <span className="block font-semibold text-primary">
+                    <SlidersHorizontal size={11} className="inline mr-1" />
+                    FV ajustada: {potenciaKwpEfetiva} kWp
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-1.5">
               <BarChart3 size={13} className="text-muted-foreground" />
@@ -438,6 +506,12 @@ export default function WizardSugestoesInversor({
             </div>
           </div>
         </div>
+        {potenciasDiferem && (
+          <p className="text-[11px] text-primary mt-1 flex items-center gap-1">
+            <Info size={11} />
+            As sugestões usam a potência ajustada ({potenciaKwpEfetiva} kWp) — calculada do painel seleccionado.
+          </p>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-5">
@@ -457,7 +531,6 @@ export default function WizardSugestoesInversor({
                 { value: "trifasico",   label: "Trifásica"   },
               ]}
             />
-
             <ToggleGroup
               label="Tipo de inversor pretendido"
               value={params.tipoInversor}
@@ -469,7 +542,6 @@ export default function WizardSugestoesInversor({
                 { value: "ac-coupled",      label: "AC-coupled"  },
               ]}
             />
-
             <ToggleGroup
               label="Bateria"
               value={params.bateria}
@@ -480,14 +552,13 @@ export default function WizardSugestoesInversor({
                 { value: "sim",       label: "Sim"       },
               ]}
             />
-
             <div>
               <p className="text-xs font-medium mb-1.5">Limite de potência AC (kW)</p>
               <Input
                 type="number"
                 min={0}
                 step={0.1}
-                placeholder="Ex: 6 ou 15"
+                placeholder="Ex: 6 ou 20.7"
                 value={params.limiteAcKw ?? ""}
                 onChange={e => {
                   const v = e.target.value === "" ? null : Math.max(0, Number(e.target.value));
@@ -499,7 +570,6 @@ export default function WizardSugestoesInversor({
                 Monofásico típico PT: ≤ 6 kW · Deixe vazio para sem limite
               </p>
             </div>
-
             <div className="sm:col-span-2">
               <ToggleGroup
                 label="Número de inversores"
@@ -517,61 +587,110 @@ export default function WizardSugestoesInversor({
           {params.bateria === "sim" && (
             <div className="mt-3 flex items-start gap-2 p-2.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-400">
               <Info size={13} className="shrink-0 mt-0.5" />
-              Com bateria activada, os inversores híbridos são priorizados nas sugestões.
-              {params.tipoInversor === "sem-preferencia" && " Active «Híbrido» acima para filtrar apenas essa tipologia."}
+              Com bateria activada, os inversores híbridos são priorizados.
+              {params.tipoInversor === "sem-preferencia" && " Filtre por «Híbrido» acima para ver apenas essa tipologia."}
             </div>
           )}
           {params.tipoInversor === "ac-coupled" && (
             <div className="mt-3 flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-700 text-xs text-blue-700 dark:text-blue-400">
               <Info size={13} className="shrink-0 mt-0.5" />
-              AC-coupled: o inversor solar (string) e o inversor de bateria (ex. Victron) são unidades separadas.
-              Seleccione um inversor string nas sugestões; configure a bateria no campo abaixo.
+              AC-coupled: inversor solar (string) + inversor de bateria separados (ex. Victron MultiPlus).
+              Seleccione um inversor string; configure a bateria nos campos abaixo.
             </div>
           )}
         </div>
 
         <Separator />
 
-        {/* ── Auto suggestions ── */}
+        {/* ── Sugestões ── */}
         <div>
-          <div className="flex items-center justify-between mb-3">
+          {/* Legend */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               Soluções Automáticas
             </p>
-            {combos.length > 0 && (
-              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 rounded-full bg-green-400" />Ideal (0,90–1,20)
+            <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+              {(["ideal","ok","requer-validacao","nao-recomendado"] as ComboTag[]).map(t => (
+                <span key={t} className="flex items-center gap-1">
+                  <span className={cn(
+                    "inline-block w-2 h-2 rounded-full",
+                    t === "ideal"             ? "bg-green-400" :
+                    t === "ok"                ? "bg-amber-400" :
+                    t === "requer-validacao"  ? "bg-blue-400"  :
+                                               "bg-red-400",
+                  )} />
+                  {TAG_META[t].label}
                 </span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />Aceitável (0,75–1,35)
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 rounded-full bg-red-400" />Não rec.
-                </span>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
 
           {combos.length === 0 ? (
-            <div className="flex items-center gap-2 p-4 bg-muted/40 rounded-lg text-sm text-muted-foreground">
-              <Info size={16} className="shrink-0" />
-              Nenhuma combinação encontrada. Alargue os parâmetros (ex: mude ligação para "Indiferente" ou remova o limite AC).
+            <div className="flex items-start gap-3 p-4 bg-muted/40 rounded-lg">
+              <Info size={18} className="text-muted-foreground shrink-0 mt-0.5" />
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p className="font-medium">Nenhuma combinação encontrada no catálogo.</p>
+                <p className="text-xs">
+                  Potência DC alvo: <strong>{potenciaKwpEfetiva} kWp</strong>.
+                  Tente alargue os filtros: mude o tipo de ligação para «Indiferente», remova o limite AC,
+                  ou mude o número de inversores para «Automático».
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {combos.map(combo => (
-                <ComboCard
-                  key={combo.key}
-                  combo={combo}
-                  isSelected={combo.key === selectedKey}
-                  pendingConfirm={pendingConfirm === combo.key}
-                  onSelect={() => handleSelectClick(combo)}
-                  onConfirm={() => applyCombo(combo)}
-                  onCancelConfirm={() => setPendingConfirm(null)}
-                />
-              ))}
-            </div>
+            <>
+              {/* Strict results */}
+              {comboStrict.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {comboStrict.map(combo => (
+                    <ComboCard
+                      key={combo.key}
+                      combo={combo}
+                      isSelected={combo.key === selectedKey}
+                      pendingConfirm={pendingConfirm === combo.key}
+                      onSelect={() => handleSelectClick(combo)}
+                      onConfirm={() => applyCombo(combo)}
+                      onCancelConfirm={() => setPendingConfirm(null)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Fallback alternatives */}
+              {comboAlts.length > 0 && (
+                <>
+                  <div className="flex items-center gap-3 my-3">
+                    <Separator className="flex-1" />
+                    <span className="text-[11px] text-muted-foreground font-medium whitespace-nowrap flex items-center gap-1.5">
+                      <AlertTriangle size={11} className="text-blue-500" />
+                      {comboStrict.length === 0
+                        ? "Sem correspondência exacta — soluções alternativas disponíveis"
+                        : "Alternativas (fora de alguns filtros)"}
+                    </span>
+                    <Separator className="flex-1" />
+                  </div>
+                  {comboStrict.length === 0 && (
+                    <p className="text-xs text-muted-foreground mb-3 p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-100 dark:border-blue-800">
+                      O catálogo não tem inversores que cumpram todos os filtros para {potenciaKwpEfetiva} kWp.
+                      As soluções abaixo requerem validação — verifique as advertências em cada card.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {comboAlts.map(combo => (
+                      <ComboCard
+                        key={combo.key}
+                        combo={combo}
+                        isSelected={combo.key === selectedKey}
+                        pendingConfirm={pendingConfirm === combo.key}
+                        onSelect={() => handleSelectClick(combo)}
+                        onConfirm={() => applyCombo(combo)}
+                        onCancelConfirm={() => setPendingConfirm(null)}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
           )}
 
           <p className="text-[10px] text-muted-foreground mt-3">
