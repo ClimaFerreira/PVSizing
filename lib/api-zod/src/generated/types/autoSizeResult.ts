@@ -34,8 +34,18 @@ export interface AutoSizeResult {
    * @nullable
    */
   capacidadeBateriaRecomendada?: number | null;
-  /** Peak sun hours at location */
+  /** Peak sun hours used for sizing (PVGIS-derived when available, formula estimate as fallback) */
   hsp: number;
+  /**
+   * Monthly HSP equivalent derived from PVGIS (h/day × 12 months). Present only when PVGIS data was available.
+   * @minItems 12
+   * @maxItems 12
+   */
+  hspMensal?: number[];
+  /** Minimum monthly HSP (typically Dec–Jan). Present only when PVGIS data was available. */
+  hspMin?: number;
+  /** Maximum monthly HSP (typically Jun–Jul). Present only when PVGIS data was available. */
+  hspMax?: number;
   /** System efficiency factor used */
   fatorRendimento: number;
   /** Panel count scenarios for common wattages */

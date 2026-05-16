@@ -2124,7 +2124,20 @@ components:
           description: Recommended battery capacity in kWh (null if not requested)
         hsp:
           type: number
-          description: Peak sun hours at location
+          description: Peak sun hours used for sizing (PVGIS-derived when available, formula estimate as fallback)
+        hspMensal:
+          type: array
+          items:
+            type: number
+          description: Monthly HSP equivalent derived from PVGIS (h/day × 12 months). Present only when PVGIS data was available.
+          minItems: 12
+          maxItems: 12
+        hspMin:
+          type: number
+          description: Minimum monthly HSP (typically Dec–Jan). Present only when PVGIS data was available.
+        hspMax:
+          type: number
+          description: Maximum monthly HSP (typically Jun–Jul). Present only when PVGIS data was available.
         fatorRendimento:
           type: number
           description: System efficiency factor used

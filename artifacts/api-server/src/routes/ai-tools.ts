@@ -547,7 +547,7 @@ router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => 
   const baseHsp = 5.2 - latRad * 1.8;
   const tiltFactor = 1 - Math.abs(inclinacao - 35) * 0.005;
   const azimuthFactor = 1 - Math.abs(azimute) * 0.003;
-  const hsp = Math.max(2.5, baseHsp * tiltFactor * azimuthFactor);
+  let hsp = Math.max(2.5, baseHsp * tiltFactor * azimuthFactor);
 
   const margemPerdas = 0.22;
   const fatorRendimento = 1 - margemPerdas;
@@ -569,6 +569,22 @@ router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => 
     latitude, longitude, inclinacao, azimute,
   );
   req.log.info({ pvgisOk: pvgisMonthlyKwhPerKwp !== null }, "auto-size PVGIS fetch");
+
+  // ── Derive HSP from PVGIS data (overrides formula estimate when available) ─
+  let hspMensal: number[] | undefined;
+  let hspMin: number | undefined;
+  let hspMax: number | undefined;
+
+  if (pvgisMonthlyKwhPerKwp) {
+    hspMensal = pvgisMonthlyKwhPerKwp.map((e, i) =>
+      Math.round((e / DAYS_PER_MONTH[i]) * 100) / 100,
+    );
+    hspMin = Math.round(Math.min(...hspMensal) * 100) / 100;
+    hspMax = Math.round(Math.max(...hspMensal) * 100) / 100;
+    const hspPvgisAnual = pvgisMonthlyKwhPerKwp.reduce((a, b) => a + b, 0) / 365;
+    hsp = Math.round(hspPvgisAnual * 100) / 100;   // override formula estimate
+    req.log.info({ hspPvgisAnual: hsp, hspMin, hspMax }, "PVGIS-derived HSP");
+  }
 
   // ── Validate / normalise optional monthly consumption input ──────────────
   const consumoMensalNorm =
@@ -700,6 +716,9 @@ router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => 
     coberturaReal,
     capacidadeBateriaRecomendada,
     hsp: Math.round(hsp * 100) / 100,
+    hspMensal,
+    hspMin,
+    hspMax,
     percVazio,
     percCheio,
     percPonta,

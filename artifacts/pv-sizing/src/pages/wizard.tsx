@@ -149,6 +149,9 @@ interface AutoSizeResult {
   coberturaReal: number;
   capacidadeBateriaRecomendada: number | null;
   hsp: number;
+  hspMensal?: number[];
+  hspMin?: number;
+  hspMax?: number;
   percVazio: number;
   percCheio: number;
   percPonta: number;
@@ -1333,18 +1336,65 @@ export default function Wizard() {
 
                   <Separator />
 
-                  {/* Tech details + tariff distribution */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {[
-                      { label: "Horas Sol Pico (HSP)", value: `${sizing.hsp} h/dia` },
-                      { label: "Rendimento Global",     value: `${(sizing.fatorRendimento * 100).toFixed(0)}%` },
-                      { label: "Consumo Diário",        value: `${sizing.consumoDiario} kWh/dia` },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="flex flex-col gap-0.5 p-3 bg-muted/40 rounded-lg">
-                        <p className="text-xs text-muted-foreground">{label}</p>
-                        <p className="font-semibold text-sm">{value}</p>
+                  {/* Tech details + HSP PVGIS breakdown */}
+                  <div className="space-y-3">
+                    {/* HSP Card */}
+                    <div className={cn(
+                      "rounded-xl border p-4",
+                      sizing.confianca?.pvgis
+                        ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
+                        : "bg-muted/40 border-border"
+                    )}>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Horas Sol Pico (HSP)
+                        </p>
+                        <span className={cn(
+                          "text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                          sizing.confianca?.pvgis
+                            ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                            : "bg-muted text-muted-foreground"
+                        )}>
+                          {sizing.confianca?.pvgis ? "PVGIS JRC" : "Estimativa"}
+                        </span>
                       </div>
-                    ))}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="flex flex-col gap-0.5">
+                          <p className="text-[10px] text-muted-foreground">Média anual</p>
+                          <p className="font-bold text-base">{sizing.hsp} h/dia</p>
+                        </div>
+                        {sizing.hspMin !== undefined && (
+                          <div className="flex flex-col gap-0.5">
+                            <p className="text-[10px] text-muted-foreground">Mínima mensal</p>
+                            <p className="font-semibold text-sm text-blue-600 dark:text-blue-400">{sizing.hspMin} h/dia</p>
+                          </div>
+                        )}
+                        {sizing.hspMax !== undefined && (
+                          <div className="flex flex-col gap-0.5">
+                            <p className="text-[10px] text-muted-foreground">Máxima mensal</p>
+                            <p className="font-semibold text-sm text-amber-600 dark:text-amber-400">{sizing.hspMax} h/dia</p>
+                          </div>
+                        )}
+                      </div>
+                      {!sizing.confianca?.pvgis && (
+                        <p className="text-[10px] text-muted-foreground mt-2">
+                          Calculado por fórmula (lat/inclinação/azimute). Consulte PVGIS manualmente para confirmação.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Rendimento + Consumo */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: "Rendimento Global", value: `${(sizing.fatorRendimento * 100).toFixed(0)}%` },
+                        { label: "Consumo Diário",    value: `${sizing.consumoDiario} kWh/dia` },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="flex flex-col gap-0.5 p-3 bg-muted/40 rounded-lg">
+                          <p className="text-xs text-muted-foreground">{label}</p>
+                          <p className="font-semibold text-sm">{value}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Tariff distribution (always shown) */}

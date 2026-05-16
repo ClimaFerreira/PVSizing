@@ -914,6 +914,9 @@ export const AutoSizeSystemBody = zod.object({
     .describe("Daytime consumption percentage 0–100 (default 60)"),
 });
 
+export const autoSizeSystemResponseHspMensalMin = 12;
+export const autoSizeSystemResponseHspMensalMax = 12;
+
 export const AutoSizeSystemResponse = zod.object({
   consumoDiario: zod
     .number()
@@ -949,7 +952,31 @@ export const AutoSizeSystemResponse = zod.object({
     .number()
     .nullish()
     .describe("Recommended battery capacity in kWh (null if not requested)"),
-  hsp: zod.number().describe("Peak sun hours at location"),
+  hsp: zod
+    .number()
+    .describe(
+      "Peak sun hours used for sizing (PVGIS-derived when available, formula estimate as fallback)",
+    ),
+  hspMensal: zod
+    .array(zod.number())
+    .min(autoSizeSystemResponseHspMensalMin)
+    .max(autoSizeSystemResponseHspMensalMax)
+    .optional()
+    .describe(
+      "Monthly HSP equivalent derived from PVGIS (h\/day × 12 months). Present only when PVGIS data was available.",
+    ),
+  hspMin: zod
+    .number()
+    .optional()
+    .describe(
+      "Minimum monthly HSP (typically Dec–Jan). Present only when PVGIS data was available.",
+    ),
+  hspMax: zod
+    .number()
+    .optional()
+    .describe(
+      "Maximum monthly HSP (typically Jun–Jul). Present only when PVGIS data was available.",
+    ),
   fatorRendimento: zod.number().describe("System efficiency factor used"),
   cenariosPaineis: zod
     .array(
