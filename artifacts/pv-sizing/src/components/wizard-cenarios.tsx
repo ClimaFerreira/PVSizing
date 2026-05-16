@@ -14,30 +14,13 @@ import {
   TrendingDown,
   Target,
   TrendingUp,
-  Battery,
   AlertTriangle,
   Info,
   CircleCheck,
-  Cpu,
   Sun,
 } from "lucide-react";
 
 type CenarioTipo = "conservador" | "equilibrado" | "agressivo";
-
-interface InversorRec {
-  id: number;
-  nome: string;
-  fabricante: string;
-  potenciaAc: number;
-  numUnidades: number;
-}
-
-interface BateriaRec {
-  id: number;
-  nome: string;
-  fabricante: string;
-  capacidade: number;
-}
 
 interface Alerta {
   tipo: "info" | "aviso" | "erro";
@@ -59,8 +42,6 @@ export interface CenarioComparacao {
   poupancaAnual: number;
   paybackAnos: number;
   capacidadeBateriaRecomendada: number | null;
-  inversorRecomendado?: InversorRec | null;
-  bateriaRecomendada?: BateriaRec | null;
   alertas?: Alerta[];
 }
 
@@ -223,64 +204,6 @@ function WizardCenarios({ cenarios, recomendado, selectedTipo, coberturaMeta, on
                     <MetricTooltip label="Autoconsumo" tip="Percentagem da energia solar produzida que é consumida directamente no local (vs. injectada na rede)" />
                     <span className="font-semibold tabular-nums">{c.autoconsumoPerc}%</span>
                   </div>
-                </div>
-
-                <Separator />
-
-                {/* ── Equipment recommendations ── */}
-                <div className="space-y-1.5 text-xs">
-                  <p className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground">
-                    Equipamento Sugerido
-                  </p>
-                  {c.inversorRecomendado ? (
-                    <div className="flex items-start gap-1.5">
-                      <Cpu size={11} className="text-muted-foreground shrink-0 mt-0.5" />
-                      <span>
-                        <span className="text-muted-foreground">Inversor: </span>
-                        <span className="font-medium">
-                          {c.inversorRecomendado.numUnidades > 1
-                            ? `${c.inversorRecomendado.numUnidades}× `
-                            : ""}
-                          {c.inversorRecomendado.nome}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {" "}
-                          ({c.inversorRecomendado.potenciaAc} kW)
-                        </span>
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5 text-muted-foreground italic">
-                      <Cpu size={11} className="shrink-0" />
-                      <span>Seleccione inversor no passo seguinte</span>
-                    </div>
-                  )}
-
-                  {c.bateriaRecomendada ? (
-                    <div className="flex items-start gap-1.5">
-                      <Battery size={11} className="text-amber-500 shrink-0 mt-0.5" />
-                      <span>
-                        <span className="text-muted-foreground">Bateria: </span>
-                        <span className="font-medium">{c.bateriaRecomendada.nome}</span>
-                        <span className="text-muted-foreground">
-                          {" "}
-                          ({c.bateriaRecomendada.capacidade} kWh)
-                        </span>
-                      </span>
-                    </div>
-                  ) : c.capacidadeBateriaRecomendada ? (
-                    <div className="flex items-center gap-1.5">
-                      <Battery size={11} className="text-amber-400 shrink-0" />
-                      <span className="text-muted-foreground">
-                        Bateria {c.capacidadeBateriaRecomendada} kWh (catálogo vazio)
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Battery size={11} className="shrink-0 opacity-40" />
-                      <span>Sem bateria</span>
-                    </div>
-                  )}
                 </div>
 
                 <Separator />

@@ -3,7 +3,6 @@ import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
-import { db, invertersTable, batteriesTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -217,56 +216,7 @@ function buildCenario(p: CenarioParams) {
   };
 }
 
-type DbInverter = typeof invertersTable.$inferSelect;
-type DbBattery = typeof batteriesTable.$inferSelect;
 type RawCenario = ReturnType<typeof buildCenario>;
-
-function matchInversor(potenciaKwp: number, allInverters: DbInverter[]) {
-  if (allInverters.length === 0) return null;
-  let best: DbInverter | null = null;
-  let bestUnits = Infinity;
-  let bestOversizing = Infinity;
-  for (const inv of allInverters) {
-    const potAc = Number(inv.potenciaAc);
-    if (!potAc || potAc <= 0) continue;
-    const units = Math.ceil(potenciaKwp / potAc);
-    const oversizing = units * potAc - potenciaKwp;
-    if (units < bestUnits || (units === bestUnits && oversizing < bestOversizing)) {
-      best = inv;
-      bestUnits = units;
-      bestOversizing = oversizing;
-    }
-  }
-  if (!best) return null;
-  return {
-    id: best.id,
-    nome: best.nome,
-    fabricante: best.fabricante,
-    potenciaAc: Number(best.potenciaAc),
-    numUnidades: bestUnits,
-  };
-}
-
-function matchBateria(capacidadeKwh: number | null, allBatteries: DbBattery[]) {
-  if (!capacidadeKwh || capacidadeKwh <= 0 || allBatteries.length === 0) return null;
-  const valid = allBatteries.filter((b) => Number(b.capacidade) > 0);
-  if (valid.length === 0) return null;
-  const bigger = valid.filter((b) => Number(b.capacidade) >= capacidadeKwh);
-  const best =
-    bigger.length > 0
-      ? bigger.reduce((min, b) =>
-          Number(b.capacidade) < Number(min.capacidade) ? b : min,
-        )
-      : valid.reduce((max, b) =>
-          Number(b.capacidade) > Number(max.capacidade) ? b : max,
-        );
-  return {
-    id: best.id,
-    nome: best.nome,
-    fabricante: best.fabricante,
-    capacidade: Number(best.capacidade),
-  };
-}
 
 function generateAlertas(
   c: RawCenario,
@@ -562,23 +512,6 @@ router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => 
     `produção anual ${energiaAnualEstimada.toLocaleString("pt-PT")} kWh → cobertura real ${coberturaReal}%.` +
     tarifaTexto;
 
-  const [allInverters, allBatteries] = await Promise.all([
-    db.select().from(invertersTable),
-    incluirBateria
-      ? db.select().from(batteriesTable)
-      : Promise.resolve<(typeof batteriesTable.$inferSelect)[]>([]),
-  ]);
-
-  const enrichCenario = (c: RawCenario) => ({
-    ...c,
-    inversorRecomendado: matchInversor(c.potenciaInstalada, allInverters),
-    bateriaRecomendada: matchBateria(
-      c.capacidadeBateriaRecomendada,
-      allBatteries,
-    ),
-    alertas: generateAlertas(c),
-  });
-
   res.json({
     consumoDiario: Math.round(consumoDiario * 10) / 10,
     consumoAnualAjustado: Math.round(consumoAnualAjustado),
@@ -607,9 +540,9 @@ router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => 
     percPonta,
     cenariosPaineis,
     cenariosDimensionamento: [
-      enrichCenario(cenConservador),
-      enrichCenario(cenEquilibrado),
-      enrichCenario(cenAgressivo),
+      { ...cenConservador, alertas: generateAlertas(cenConservador) },
+      { ...cenEquilibrado, alertas: generateAlertas(cenEquilibrado) },
+      { ...cenAgressivo,   alertas: generateAlertas(cenAgressivo)   },
     ],
     recomendado,
     explicacao,

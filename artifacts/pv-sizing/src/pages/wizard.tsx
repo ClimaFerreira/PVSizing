@@ -52,8 +52,9 @@ import WizardStep1Cliente, {
   type ClienteForm, type LocalizacaoForm,
 } from "@/components/wizard-step1-cliente";
 // ── Code-split heavy step components ─────────────────────────────────────────
-const WizardStep3Perfil       = lazy(() => import("@/components/wizard-step3-perfil"));
-const WizardStep5Tecnica      = lazy(() => import("@/components/wizard-step5-tecnica"));
+const WizardStep3Perfil          = lazy(() => import("@/components/wizard-step3-perfil"));
+const WizardSugestoesInversor    = lazy(() => import("@/components/wizard-sugestoes-inversor"));
+const WizardStep5Tecnica         = lazy(() => import("@/components/wizard-step5-tecnica"));
 const WizardStep6MultiTecnica = lazy(() => import("@/components/wizard-step6-multi-tecnica"));
 const WizardStep7Financeiro   = lazy(() => import("@/components/wizard-step7-financeiro"));
 const WizardOrcamento         = lazy(() => import("@/components/wizard-orcamento"));
@@ -118,8 +119,6 @@ interface AutoSizeCenario {
   poupancaAnual: number;
   paybackAnos: number;
   capacidadeBateriaRecomendada: number | null;
-  inversorRecomendado?: { id: number; nome: string; fabricante: string; potenciaAc: number; numUnidades: number } | null;
-  bateriaRecomendada?: { id: number; nome: string; fabricante: string; capacidade: number } | null;
   alertas?: Array<{ tipo: "info" | "aviso" | "erro"; mensagem: string }>;
 }
 
@@ -343,14 +342,8 @@ export default function Wizard() {
         coberturaMeta: consumoData.coberturaMeta,
       });
       setShowManualAdjust(false);
-      if (c?.inversorRecomendado?.id) {
-        equipForm.setValue("inverterId", c.inversorRecomendado.id);
-      }
-      if (c?.bateriaRecomendada?.id && consumoData.incluirBateria) {
-        equipForm.setValue("batteryId", c.bateriaRecomendada.id);
-      }
     }
-  }, [sizing, consumoData.coberturaMeta, consumoData.incluirBateria, equipForm]);
+  }, [sizing, consumoData.coberturaMeta, equipForm]);
 
   // Effective sizing: active scenario base + manual overrides
   const effectiveSizing = useMemo(() => {
@@ -1548,10 +1541,34 @@ export default function Wizard() {
             );
           })()}
 
+          {/* ── Auto inverter suggestions ── */}
+          {(effectiveSizing ?? sizing) && inverters && inverters.length > 0 && (
+            <Suspense fallback={
+              <div className="flex justify-center py-6">
+                <Loader2 size={24} className="animate-spin text-muted-foreground" />
+              </div>
+            }>
+              <WizardSugestoesInversor
+                potenciaKwp={(effectiveSizing ?? sizing)!.potenciaInstalada}
+                inverters={inverters}
+                selectedInverterId={inverterUnits.length === 0 ? equipForm.watch("inverterId") : undefined}
+                inverterUnits={inverterUnits}
+                onSelectInverter={id => {
+                  equipForm.setValue("inverterId", id);
+                  setInverterUnits([]);
+                }}
+                onSelectMultiInverter={units => {
+                  setInverterUnits(units);
+                  if (units.length > 0) equipForm.setValue("inverterId", units[0].inverterId);
+                }}
+              />
+            </Suspense>
+          )}
+
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Settings2 size={20} /> Seleção de Equipamentos</CardTitle>
-              <CardDescription>Escolha os equipamentos do catálogo. Use o resumo acima como referência.</CardDescription>
+              <CardTitle className="flex items-center gap-2"><Settings2 size={20} /> Seleção do Catálogo</CardTitle>
+              <CardDescription>Confirme ou ajuste a seleção automática acima. O painel solar é sempre obrigatório.</CardDescription>
             </CardHeader>
             <CardContent>
               <Form {...equipForm}>
