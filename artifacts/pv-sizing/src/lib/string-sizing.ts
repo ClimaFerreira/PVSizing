@@ -27,7 +27,8 @@ export interface InverterElec {
   corrMaxMppt: number;
   numMppt: number;
   stringsPorMppt: number;
-  potenciaDcMax: number;
+  potenciaAc: number;    // rated AC output power in kW
+  potenciaDcMax: number; // max DC input power in kW
   vdcMax: number | null;
 }
 
@@ -162,13 +163,39 @@ function buildAlerts(
     }
   });
 
-  // DC/AC ratio
-  if (dcAcRatio > 1.5) {
-    alertas.push({ tipo: "aviso", mensagem: `Oversizing DC/AC elevado (${(dcAcRatio * 100).toFixed(0)}%) — pode causar clipping significativo` });
+  // DC/AC ratio — 4 tiers per PT-PT engineering practice
+  const pct = (dcAcRatio * 100).toFixed(0);
+  if (dcAcRatio < 0.6) {
+    alertas.push({ tipo: "erro", mensagem:
+      `DC/AC ratio muito baixo (${pct}%): inversor fortemente sobredimensionado face aos painéis. ` +
+      `Impacto: eficiência muito reduzida em carga parcial; investimento no inversor desaproveitado. ` +
+      `Sugestões: usar inversor de menor potência ou adicionar significativamente mais painéis.` });
+  } else if (dcAcRatio > 1.7) {
+    alertas.push({ tipo: "erro", mensagem:
+      `DC/AC ratio muito elevado (${pct}%): risco de clipping severo e possíveis danos no inversor. ` +
+      `Impacto: perdas de produção acentuadas em horas de pico; degradação acelerada do inversor. ` +
+      `Sugestões: usar inversor de maior potência ou reduzir o número de painéis.` });
+  } else if (dcAcRatio < 0.8) {
+    alertas.push({ tipo: "aviso", mensagem:
+      `DC/AC ratio baixo (${pct}%): inversor sobredimensionado face aos painéis. ` +
+      `Impacto: menor eficiência em carga parcial; maior custo relativo do inversor; sistema funcional mas pouco optimizado. ` +
+      `Sugestões: usar inversor menor, adicionar mais painéis, usar múltiplos MPPTs ou dividir em múltiplos inversores.` });
+  } else if (dcAcRatio > 1.4) {
+    alertas.push({ tipo: "aviso", mensagem:
+      `DC/AC ratio elevado (${pct}%): oversizing significativo — possível clipping nas horas de maior radiação. ` +
+      `Impacto: perdas de produção estimadas de 2–8% nos meses de verão; inversor próximo do limite. ` +
+      `Sugestões: aumentar potência AC do inversor, reduzir painéis ou dividir em múltiplos inversores.` });
+  } else if (dcAcRatio < 0.9) {
+    alertas.push({ tipo: "aviso", mensagem:
+      `DC/AC ratio aceitável mas ligeiramente baixo (${pct}%): inversor com margem face aos painéis. ` +
+      `Não prejudica o funcionamento; verifique se está prevista expansão futura do sistema.` });
   } else if (dcAcRatio > 1.3) {
-    alertas.push({ tipo: "aviso", mensagem: `Oversizing DC/AC (${(dcAcRatio * 100).toFixed(0)}%) — verifique se o inversor aceita potência DC adicional` });
+    alertas.push({ tipo: "aviso", mensagem:
+      `DC/AC ratio com ligeiro oversizing (${pct}%): pequeno clipping esperado em condições de pico. ` +
+      `Impacto: perdas inferiores a 3% na produção anual; geralmente vantajoso economicamente.` });
   } else {
-    alertas.push({ tipo: "ok", mensagem: `Rácio DC/AC (${(dcAcRatio * 100).toFixed(0)}%) dentro do intervalo recomendado` });
+    alertas.push({ tipo: "ok", mensagem:
+      `DC/AC ratio excelente (${pct}%): dimensionamento optimizado entre painéis e inversor.` });
   }
 
   // Total strings vs inverter capacity
@@ -385,8 +412,9 @@ export function calcStringSizing(
   const vocSTC    = panel.voc * highPanel;
   const vmpSTC    = panel.vmp * highPanel;
   const iscString = panel.isc;
+  // potenciaDCTotal in W; inv.potenciaAc in kW → ratio is dimensionless
   const potenciaDCTotal = numPaineis * panel.potencia;
-  const dcAcRatio = inv.potenciaDcMax > 0 ? potenciaDCTotal / inv.potenciaDcMax : 0;
+  const dcAcRatio = inv.potenciaAc > 0 ? (potenciaDCTotal / 1000) / inv.potenciaAc : 0;
 
   const alertas = buildAlerts(
     panel, inv, mpptConfig,
@@ -458,8 +486,9 @@ export function calcStringSizingManual(
   const stringsPorMppt = mpptConfig.map(s => s.length);
   const numStrings    = stringsPorMppt.reduce((a, b) => a + b, 0);
   const totalPaineis  = allCounts.reduce((a, b) => a + b, 0);
+  // potenciaDCTotal in W; inv.potenciaAc in kW → ratio is dimensionless
   const potenciaDCTotal = totalPaineis * panel.potencia;
-  const dcAcRatio     = inv.potenciaDcMax > 0 ? potenciaDCTotal / inv.potenciaDcMax : 0;
+  const dcAcRatio     = inv.potenciaAc > 0 ? (potenciaDCTotal / 1000) / inv.potenciaAc : 0;
 
   // Check if any MPPT has mixed panel counts
   const isMixed = mpptConfig.some(strings => new Set(strings).size > 1);

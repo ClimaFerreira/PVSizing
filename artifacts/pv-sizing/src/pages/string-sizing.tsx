@@ -146,7 +146,7 @@ export default function StringSizing() {
                   <SelectContent>
                     {inverters?.map((i) => (
                       <SelectItem key={i.id} value={String(i.id)}>
-                        {i.fabricante} {i.nome} — {i.potenciaAc}W
+                        {i.fabricante} {i.nome} — {Number(i.potenciaAc) > 500 ? (Number(i.potenciaAc) / 1000).toFixed(1) : Number(i.potenciaAc)} kW AC
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -17,6 +17,11 @@ import {
 } from "@/lib/multi-inverter";
 import type { SolarPanel, Inverter, Battery } from "@workspace/api-client-react";
 
+/** Normalise a power field that may have been imported in W instead of kW (e.g. 32000 → 32). */
+function normalizarKW(val: number): number {
+  return val > 500 ? val / 1000 : val;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    Shared tiny components
 ───────────────────────────────────────────────────────────────────────────── */
@@ -54,6 +59,7 @@ interface PerUnitTechTableProps {
     potenciaAc: number; potenciaDcMax: number;
     mpptMin: number; mpptMax: number; corrMaxMppt: number;
     numMppt: number; stringsPorMppt: number;
+    vdcMax: number | null;
   };
   panelIsc: number;
 }
@@ -80,8 +86,11 @@ function PerUnitTechTable({ sizing, invElec, panelIsc }: PerUnitTechTableProps) 
     {
       label: "DC/AC Ratio",
       obtido: `${(config.dcAcRatio * 100).toFixed(1)}%`,
-      limite: "100–140%",
-      status: config.dcAcRatio < 0.95 ? "aviso" : config.dcAcRatio > 1.5 ? "aviso" : "ok",
+      limite: "90–130% excelente · 80–140% aceitável",
+      status: (config.dcAcRatio < 0.6 || config.dcAcRatio > 1.7) ? "erro"
+            : (config.dcAcRatio < 0.8 || config.dcAcRatio > 1.4) ? "aviso"
+            : (config.dcAcRatio < 0.9 || config.dcAcRatio > 1.3) ? "aviso"
+            : "ok",
     },
     {
       label: "Nº de MPPTs em uso",
@@ -193,7 +202,7 @@ interface PerUnitStringCardProps {
   maxStringsPorMppt: number;
   maxPaineisPorString: number;
   panelElec: { voc: number; vmp: number; isc: number; imp: number; potencia: number; coeficienteTemperaturaVoc: number | null; noct: number | null };
-  invElec:   { mpptMin: number; mpptMax: number; corrMaxMppt: number; numMppt: number; stringsPorMppt: number; potenciaDcMax: number; vdcMax: number | null };
+  invElec:   { mpptMin: number; mpptMax: number; corrMaxMppt: number; numMppt: number; stringsPorMppt: number; potenciaAc: number; potenciaDcMax: number; vdcMax: number | null };
   numPaineisAuto: number;
   onConfigChange?: (config: MpptConfig, totalPaineis: number) => void;
 }
@@ -499,7 +508,8 @@ function InverterUnitCard({ unit, index, inverter, panel, numPaineis, onUnitChan
     corrMaxMppt:   Number(inverter.corrMaxMppt),
     numMppt:       inverter.numMppt,
     stringsPorMppt: inverter.stringsPorMppt,
-    potenciaDcMax: Number(inverter.potenciaDcMax),
+    potenciaAc:    normalizarKW(Number(inverter.potenciaAc)),
+    potenciaDcMax: normalizarKW(Number(inverter.potenciaDcMax)),
     vdcMax:        inverter.vdcMax != null ? Number(inverter.vdcMax) : null,
   }), [inverter]);
 
@@ -571,15 +581,7 @@ function InverterUnitCard({ unit, index, inverter, panel, numPaineis, onUnitChan
             <>
               <PerUnitTechTable
                 sizing={activeSizing}
-                invElec={{
-                  potenciaAc:    Number(inverter.potenciaAc),
-                  potenciaDcMax: invElec.potenciaDcMax,
-                  mpptMin:       invElec.mpptMin,
-                  mpptMax:       invElec.mpptMax,
-                  corrMaxMppt:   invElec.corrMaxMppt,
-                  numMppt:       invElec.numMppt,
-                  stringsPorMppt: invElec.stringsPorMppt,
-                }}
+                invElec={invElec}
                 panelIsc={panelElec.isc}
               />
               {autoSizing && (
@@ -658,7 +660,7 @@ function WizardStep6MultiTecnica({
     const n = numPaineisMap.get(u.key) ?? 0;
     if (n === 0) return false;
     const panelElec = { voc: Number(panel.voc), vmp: Number(panel.vmp), isc: Number(panel.isc), imp: Number(panel.imp), potencia: Number(panel.potencia), coeficienteTemperaturaVoc: panel.coeficienteTemperaturaVoc != null ? Number(panel.coeficienteTemperaturaVoc) : null, noct: panel.noct != null ? Number(panel.noct) : null };
-    const invElec = { mpptMin: Number(inv.mpptMin), mpptMax: Number(inv.mpptMax), corrMaxMppt: Number(inv.corrMaxMppt), numMppt: inv.numMppt, stringsPorMppt: inv.stringsPorMppt, potenciaDcMax: Number(inv.potenciaDcMax), vdcMax: inv.vdcMax != null ? Number(inv.vdcMax) : null };
+    const invElec = { mpptMin: Number(inv.mpptMin), mpptMax: Number(inv.mpptMax), corrMaxMppt: Number(inv.corrMaxMppt), numMppt: inv.numMppt, stringsPorMppt: inv.stringsPorMppt, potenciaAc: normalizarKW(Number(inv.potenciaAc)), potenciaDcMax: normalizarKW(Number(inv.potenciaDcMax)), vdcMax: inv.vdcMax != null ? Number(inv.vdcMax) : null };
     const sizing = u.mpptConfig ? calcStringSizingManual(panelElec, invElec, u.mpptConfig, n) : calcStringSizing(panelElec, invElec, n);
     return sizing.alertas.some(a => a.tipo === "erro");
   });
@@ -669,7 +671,7 @@ function WizardStep6MultiTecnica({
     const n = numPaineisMap.get(u.key) ?? 0;
     if (n === 0) return false;
     const panelElec = { voc: Number(panel.voc), vmp: Number(panel.vmp), isc: Number(panel.isc), imp: Number(panel.imp), potencia: Number(panel.potencia), coeficienteTemperaturaVoc: panel.coeficienteTemperaturaVoc != null ? Number(panel.coeficienteTemperaturaVoc) : null, noct: panel.noct != null ? Number(panel.noct) : null };
-    const invElec = { mpptMin: Number(inv.mpptMin), mpptMax: Number(inv.mpptMax), corrMaxMppt: Number(inv.corrMaxMppt), numMppt: inv.numMppt, stringsPorMppt: inv.stringsPorMppt, potenciaDcMax: Number(inv.potenciaDcMax), vdcMax: inv.vdcMax != null ? Number(inv.vdcMax) : null };
+    const invElec = { mpptMin: Number(inv.mpptMin), mpptMax: Number(inv.mpptMax), corrMaxMppt: Number(inv.corrMaxMppt), numMppt: inv.numMppt, stringsPorMppt: inv.stringsPorMppt, potenciaAc: normalizarKW(Number(inv.potenciaAc)), potenciaDcMax: normalizarKW(Number(inv.potenciaDcMax)), vdcMax: inv.vdcMax != null ? Number(inv.vdcMax) : null };
     const sizing = u.mpptConfig ? calcStringSizingManual(panelElec, invElec, u.mpptConfig, n) : calcStringSizing(panelElec, invElec, n);
     return sizing.alertas.some(a => a.tipo === "aviso");
   });

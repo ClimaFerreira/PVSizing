@@ -97,10 +97,12 @@ export function checkPanelInverter(
 
   itens.push({
     categoria: "Potência DC/AC",
-    descricao: "Rácio de oversizing DC/AC",
+    descricao: "Rácio de oversizing DC/AC (90–130% excelente · 80–140% aceitável)",
     valorObtido: `${(dcAcRatio * 100).toFixed(0)}%`,
-    valorLimite: "100–140%",
-    status: dcAcRatio < 0.8 ? "aviso" : dcAcRatio > 1.5 ? "aviso" : "ok",
+    valorLimite: "90–130%",
+    status: (dcAcRatio < 0.6 || dcAcRatio > 1.7) ? "erro"
+          : (dcAcRatio < 0.8 || dcAcRatio > 1.4) ? "aviso"
+          : "ok",
   });
 
   itens.push({

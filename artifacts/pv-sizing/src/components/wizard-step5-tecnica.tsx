@@ -21,6 +21,11 @@ import {
 } from "@/lib/string-sizing";
 import { checkPanelData, checkPanelInverter, checkBatteryInverter, type CompatResult } from "@/lib/compat-check";
 
+/** Normalise a power field that may have been imported in W instead of kW (e.g. 32000 → 32). */
+function normalizarKW(val: number): number {
+  return val > 500 ? val / 1000 : val;
+}
+
 interface Props {
   panel: SolarPanel | null;
   inverter: Inverter | null;
@@ -176,8 +181,11 @@ function TechSummaryTable({ sizing, invElec, panelIsc, battery }: TechSummaryTab
     {
       label: "DC/AC Ratio",
       obtido: `${(config.dcAcRatio * 100).toFixed(1)}%`,
-      limite: "100–140%",
-      status: config.dcAcRatio < 0.95 ? "aviso" : config.dcAcRatio > 1.5 ? "aviso" : "ok",
+      limite: "90–130% excelente · 80–140% aceitável",
+      status: (config.dcAcRatio < 0.6 || config.dcAcRatio > 1.7) ? "erro"
+            : (config.dcAcRatio < 0.8 || config.dcAcRatio > 1.4) ? "aviso"
+            : (config.dcAcRatio < 0.9 || config.dcAcRatio > 1.3) ? "aviso"
+            : "ok",
     },
     {
       label: "Nº de MPPTs em uso",
@@ -314,7 +322,7 @@ interface StringSizingCardProps {
   maxStringsPorMppt: number;
   maxPaineisPorString: number;
   panelElec: { voc: number; vmp: number; isc: number; imp: number; potencia: number; coeficienteTemperaturaVoc: number | null; noct: number | null };
-  invElec: { mpptMin: number; mpptMax: number; corrMaxMppt: number; numMppt: number; stringsPorMppt: number; potenciaDcMax: number; vdcMax: number | null };
+  invElec: { mpptMin: number; mpptMax: number; corrMaxMppt: number; numMppt: number; stringsPorMppt: number; potenciaAc: number; potenciaDcMax: number; vdcMax: number | null };
   numPaineisAuto: number;
   onConfigChange?: (mpptConfig: MpptConfig) => void;
 }
@@ -886,13 +894,15 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
     noct: panel.noct != null ? Number(panel.noct) : null,
   } : null, [panel]);
 
+  // Normalise power values: some records may be stored in W (e.g. 32000) instead of kW (32)
   const invElec = useMemo(() => inverter ? {
     mpptMin: Number(inverter.mpptMin),
     mpptMax: Number(inverter.mpptMax),
     corrMaxMppt: Number(inverter.corrMaxMppt),
     numMppt: inverter.numMppt,
     stringsPorMppt: inverter.stringsPorMppt,
-    potenciaDcMax: Number(inverter.potenciaDcMax),
+    potenciaAc:    normalizarKW(Number(inverter.potenciaAc)),
+    potenciaDcMax: normalizarKW(Number(inverter.potenciaDcMax)),
     vdcMax: inverter.vdcMax != null ? Number(inverter.vdcMax) : null,
   } : null, [inverter]);
 
@@ -1038,7 +1048,7 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Inversor</p>
             <p className="text-sm font-medium truncate">{inverter.fabricante} {inverter.nome}</p>
-            <p className="text-xs text-muted-foreground">{inverter.potenciaAc} kW · {inverter.numMppt} MPPT</p>
+            <p className="text-xs text-muted-foreground">{normalizarKW(Number(inverter.potenciaAc)).toFixed(1)} kW · {inverter.numMppt} MPPT</p>
           </div>
         </div>
         {battery && (
