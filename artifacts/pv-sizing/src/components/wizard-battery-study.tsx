@@ -45,6 +45,25 @@ const DIAS_MES = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 const ETA = 0.92; // round-trip efficiency
 const CUSTO_KWH_BAT = 600; // €/kWh installed
 
+// Normalized solar bell-curve: 6h–20h, peak at 13h, σ = 3h (Portugal)
+const SOLAR_FRACS: readonly number[] = (() => {
+  const raw = Array.from({ length: 24 }, (_, h) => {
+    if (h < 6 || h >= 20) return 0;
+    return Math.exp(-((h - 13) ** 2) / (2 * 3 * 3));
+  });
+  const s = raw.reduce((a, b) => a + b, 0);
+  return raw.map(v => v / s);
+})();
+
+// Hourly consumption fractions: daytime 7h–22h / night 22h–7h
+function consumoFracs(diurnoPct: number): readonly number[] {
+  const d = diurnoPct / 100;
+  const n = 1 - d;
+  return Array.from({ length: 24 }, (_, h) =>
+    h >= 7 && h < 22 ? d / 15 : n / 9,
+  );
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function calcSystem(units: BatteryUnit[], bats: BatCat[]) {
@@ -72,37 +91,87 @@ function calcSystem(units: BatteryUnit[], bats: BatCat[]) {
 }
 
 function calcStudy(sys: NonNullable<ReturnType<typeof calcSystem>>, cenario: CenarioLike, perfilDiurnoPct: number, precoKwh: number) {
-  const excessoMedioDiario = cenario.excessoAnual / 365;
-  const energiaParaCarregar = sys.utilCap / ETA;
+  const cFracs = consumoFracs(perfilDiurnoPct);
 
-  const percCargaDiaria = energiaParaCarregar > 0
-    ? Math.min(100, Math.round(excessoMedioDiario / energiaParaCarregar * 100))
+  // Fallback charger / inverter limits when not specified in the battery datasheet
+  const maxCarga = sys.potCarga > 0 ? sys.potCarga : sys.totalCap / 2;
+  const maxDesc  = sys.potDesc  > 0 ? sys.potDesc  : sys.totalCap;
+
+  let excedenteTotalAnual = 0;  // instantaneous solar surplus (before battery)
+  let armazenadoAnual     = 0;  // energy stored in battery (annual)
+  let entregueAnual       = 0;  // energy delivered from battery to loads (annual)
+  const ganhoMensal: number[] = [];
+
+  for (let m = 0; m < 12; m++) {
+    // Monthly production = direct autoconsumo + grid export
+    const producaoMes = (cenario.autoconsumoMensal[m] ?? 0) + (cenario.excessoMensal[m] ?? 0);
+    const producaoDia = producaoMes / DIAS_MES[m];
+    const consumoDia  = cenario.consumoMensal[m] / DIAS_MES[m];
+
+    // Hourly solar production and consumption (kWh per hour)
+    const solar   = SOLAR_FRACS.map(f => f * producaoDia);
+    const consumo = cFracs.map(f => f * consumoDia);
+
+    // Instantaneous surplus / deficit per hour
+    const excedente = solar.map((s, h) => Math.max(0, s - consumo[h]));
+    const deficit   = solar.map((s, h) => Math.max(0, consumo[h] - s));
+
+    excedenteTotalAnual += excedente.reduce((a, b) => a + b, 0) * DIAS_MES[m];
+
+    // ── One-day battery simulation (hourly forward pass) ─────────────────────
+    let soc = 0;           // state-of-charge in kWh (battery starts empty)
+    let armazenadoDia = 0;
+    let entregouDia   = 0;
+
+    for (let h = 0; h < 24; h++) {
+      // Charge: limited by charger power, remaining capacity, and surplus
+      if (excedente[h] > 0 && soc < sys.utilCap) {
+        const space  = sys.utilCap - soc;
+        const charge = Math.min(excedente[h], maxCarga, space / ETA);
+        soc          += charge * ETA;
+        armazenadoDia += charge;
+      }
+      // Discharge: limited by inverter/battery power and SOC
+      if (deficit[h] > 0 && soc > 0) {
+        const draw   = Math.min(deficit[h] / ETA, maxDesc / ETA, soc);
+        soc         -= draw;
+        entregouDia += draw * ETA;
+      }
+    }
+
+    armazenadoAnual += armazenadoDia * DIAS_MES[m];
+    entregueAnual   += entregouDia   * DIAS_MES[m];
+
+    // Monthly gain capped by nocturnal demand
+    const consumoNoturnoMes = cenario.consumoMensal[m] * (1 - perfilDiurnoPct / 100);
+    ganhoMensal.push(Math.round(Math.min(entregouDia * DIAS_MES[m], consumoNoturnoMes)));
+  }
+
+  // ── Derived KPIs ────────────────────────────────────────────────────────────
+  const excessoMedioDiario = excedenteTotalAnual / 365;  // real instantaneous surplus
+  const energiaArmazenavel = armazenadoAnual / 365;       // avg stored per day
+  const energiaEntregue    = entregueAnual   / 365;       // avg delivered per day
+
+  const percCargaDiaria = sys.utilCap > 0
+    ? Math.min(100, Math.round(energiaArmazenavel / (sys.utilCap / ETA) * 100))
     : 0;
 
-  const diasParaEncher = excessoMedioDiario > 0 ? energiaParaCarregar / excessoMedioDiario : 999;
+  const diasParaEncher = energiaArmazenavel > 0
+    ? Math.round((sys.utilCap / ETA / energiaArmazenavel) * 10) / 10
+    : 999;
 
-  // Monthly autoconsumo gain from battery
-  const ganhoMensal = cenario.excessoMensal.map((exc, m) => {
-    const excDia = exc / DIAS_MES[m];
-    const batDia = Math.min(excDia, sys.utilCap);
-    const batMes = batDia * DIAS_MES[m] * ETA;
-    const consumoNoturnoMes = cenario.consumoMensal[m] * (1 - perfilDiurnoPct / 100);
-    return Math.round(Math.min(batMes, consumoNoturnoMes));
-  });
+  const ciclosAnuais = sys.utilCap > 0
+    ? Math.round(entregueAnual / sys.utilCap)
+    : 0;
 
-  const ganhoAnual = ganhoMensal.reduce((a, b) => a + b, 0);
+  const ganhoAnual        = ganhoMensal.reduce((a, b) => a + b, 0);
   const poupancaAdicional = Math.round(ganhoAnual * precoKwh);
-  const investimentoBat = Math.round(sys.totalCap * CUSTO_KWH_BAT);
-  const paybackBat = poupancaAdicional > 0
+  const investimentoBat   = Math.round(sys.totalCap * CUSTO_KWH_BAT);
+  const paybackBat        = poupancaAdicional > 0
     ? Math.round(investimentoBat / poupancaAdicional * 10) / 10
     : 99;
 
-  const ciclosAnuais = energiaParaCarregar > 0
-    ? Math.round(Math.min(365, (cenario.excessoAnual / energiaParaCarregar)))
-    : 0;
-
-  // Autoconsumo comparison
-  const autoconsumoComBat = cenario.autoconsumoAnual + ganhoAnual;
+  const autoconsumoComBat     = cenario.autoconsumoAnual + ganhoAnual;
   const autoconsumoPercComBat = cenario.energiaAnualEstimada > 0
     ? Math.round((autoconsumoComBat / cenario.energiaAnualEstimada) * 100)
     : 0;
@@ -110,20 +179,20 @@ function calcStudy(sys: NonNullable<ReturnType<typeof calcSystem>>, cenario: Cen
     ? Math.round((cenario.autoconsumoAnual / cenario.energiaAnualEstimada) * 100)
     : 0;
 
-  // Sizing status
+  // Sizing assessment based on realistic hourly surplus
   let status: "subdimensionada" | "equilibrada" | "sobredimensionada";
-  if (diasParaEncher > 4) status = "sobredimensionada";
-  else if (sys.utilCap < excessoMedioDiario * 0.4) status = "subdimensionada";
-  else status = "equilibrada";
+  if (diasParaEncher > 4)                           status = "sobredimensionada";
+  else if (sys.utilCap < excessoMedioDiario * 0.4)  status = "subdimensionada";
+  else                                              status = "equilibrada";
 
-  // Recommendation text
   const recCap = excessoMedioDiario > 0
     ? `${(excessoMedioDiario * 1.2).toFixed(0)}–${(excessoMedioDiario * 2).toFixed(0)} kWh`
     : null;
 
   return {
     excessoMedioDiario,
-    energiaParaCarregar,
+    energiaArmazenavel,
+    energiaEntregue,
     percCargaDiaria,
     diasParaEncher,
     ganhoAnual,
@@ -364,16 +433,16 @@ export default function WizardBatteryStudy({ batteries, batteryUnits, onUnitsCha
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 {
-                  label: "Excedente médio/dia",
+                  label: "Excedente instant. médio/dia",
                   val: `${study.excessoMedioDiario.toFixed(1)} kWh`,
-                  sub: "disponível para bateria",
+                  sub: "pico solar vs. consumo horário",
                   hi: false,
                 },
                 {
-                  label: "Energia p/ carregar",
-                  val: `${study.energiaParaCarregar.toFixed(1)} kWh`,
-                  sub: `cap. útil ÷ η (${(ETA * 100).toFixed(0)}%)`,
-                  hi: false,
+                  label: "Energia armazenável/dia",
+                  val: `${study.energiaArmazenavel.toFixed(1)} kWh`,
+                  sub: `entregue ${study.energiaEntregue.toFixed(1)} kWh/dia (η ${(ETA * 100).toFixed(0)}%)`,
+                  hi: study.energiaArmazenavel >= sys.utilCap * 0.5,
                 },
                 {
                   label: "Carga diária média",
@@ -384,7 +453,7 @@ export default function WizardBatteryStudy({ batteries, batteryUnits, onUnitsCha
                 {
                   label: "Ciclos/ano estimados",
                   val: `${study.ciclosAnuais}`,
-                  sub: "cargas completas equivalentes",
+                  sub: "simulação horária mensal",
                   hi: false,
                 },
               ].map(({ label, val, sub, hi }) => (
