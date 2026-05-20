@@ -2037,27 +2037,13 @@ export default function Wizard() {
             </CardContent>
           </Card>
 
-          <Card className="border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
-            <CardContent className="pt-5 pb-5">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <p className="font-medium">Guardar como Proposta Técnica</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Cria uma proposta com o estudo e equipamentos selecionados</p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <Button onClick={handleSaveProposal} disabled={createProposal.isPending}>
-                    {createProposal.isPending
-                      ? <Loader2 size={16} className="mr-2 animate-spin" />
-                      : <CheckCircle2 size={16} className="mr-2" />}
-                    Guardar Proposta
-                  </Button>
-                  <Button variant="outline" onClick={() => navigate("/sistemas/novo")}>
-                    Criar Sistema Completo
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800">
+            <ChevronRight size={16} className="text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-sm text-blue-700 dark:text-blue-400">
+              Continue para a <strong>Análise Técnica</strong> (passo 6) para validar strings, MPPT e compatibilidade de equipamentos.
+              A proposta só poderá ser guardada após completar o estudo financeiro e o orçamento.
+            </p>
+          </div>
         </div>
       )}
 
@@ -2145,27 +2131,13 @@ export default function Wizard() {
               />
             )}
 
-            <Card className="border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
-              <CardContent className="pt-5 pb-5">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <p className="font-medium">Guardar como Proposta Técnica</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Cria uma proposta com o estudo, equipamentos e análise técnica</p>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <Button onClick={handleSaveProposal} disabled={createProposal.isPending}>
-                      {createProposal.isPending
-                        ? <Loader2 size={16} className="mr-2 animate-spin" />
-                        : <CheckCircle2 size={16} className="mr-2" />}
-                      Guardar Proposta
-                    </Button>
-                    <Button variant="outline" onClick={() => navigate("/sistemas/novo")}>
-                      Criar Sistema Completo
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800">
+              <ChevronRight size={16} className="text-blue-600 mt-0.5 shrink-0" />
+              <p className="text-sm text-blue-700 dark:text-blue-400">
+                Continue para o <strong>Estudo Financeiro</strong> (passo 7) para calcular poupança, payback e retorno ao longo de 25 anos.
+                A proposta será guardada no passo final após completar o orçamento.
+              </p>
+            </div>
           </div>
         );
       })()}
@@ -2306,18 +2278,20 @@ export default function Wizard() {
             <CardContent className="pt-5 pb-5">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                  <p className="font-medium">Guardar como Proposta Técnica</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Cria uma proposta com o estudo, equipamentos e análise técnica</p>
+                  <p className="font-medium">Guardar Proposta e Criar Sistema</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Equipamentos, análise técnica, estudo financeiro e orçamento concluídos — proposta pronta a guardar
+                  </p>
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-2 shrink-0 flex-wrap">
                   <Button onClick={handleSaveProposal} disabled={createProposal.isPending}>
                     {createProposal.isPending
                       ? <Loader2 size={16} className="mr-2 animate-spin" />
-                      : <CheckCircle2 size={16} className="mr-2" />}
+                      : <Save size={16} className="mr-2" />}
                     Guardar Proposta
                   </Button>
-                  <Button variant="outline" onClick={() => navigate("/sistemas/novo")}>
-                    Criar Sistema Completo
+                  <Button variant="outline" onClick={() => navigate("/sistemas/novo")} className="gap-1.5">
+                    <Settings2 size={15} /> Criar Sistema
                   </Button>
                 </div>
               </div>
@@ -2417,7 +2391,7 @@ export default function Wizard() {
         {step < 8 ? (
           <Button onClick={goNext} disabled={isSizing} className="gap-1.5">
             {isSizing && <Loader2 size={15} className="animate-spin" />}
-            {step === 3 ? "Calcular" : step === 5 ? "Análise Técnica" : step === 7 ? "Gerar Orçamento" : "Seguinte"}
+            {step === 3 ? "Calcular" : step === 5 ? "Análise Técnica" : step === 6 ? "Estudo Financeiro" : step === 7 ? "Orçamento" : "Seguinte"}
             {!isSizing && <ChevronRight size={15} />}
           </Button>
         ) : (
