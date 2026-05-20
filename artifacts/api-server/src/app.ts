@@ -2,6 +2,7 @@ import express, { type Express, type NextFunction, type Request, type Response }
 import cors from "cors";
 import compression from "compression";
 import pinoHttp from "pino-http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -11,26 +12,26 @@ const app: Express = express();
 app.use(
   pinoHttp({
     logger,
-    customLogLevel(_req, res, err) {
+    customLogLevel(_req: IncomingMessage, res: ServerResponse, err: Error | undefined) {
       if (err || res.statusCode >= 500) return "error";
       if (res.statusCode >= 400) return "warn";
       return "info";
     },
     serializers: {
-      req(req) {
+      req(req: IncomingMessage & { id?: unknown }) {
         return {
           id: req.id,
           method: req.method,
           url: req.url?.split("?")[0],
         };
       },
-      res(res) {
+      res(res: ServerResponse) {
         return {
           statusCode: res.statusCode,
         };
       },
     },
-    customSuccessMessage(req, res) {
+    customSuccessMessage(req: IncomingMessage, res: ServerResponse) {
       const time = (res as Response & { responseTime?: number }).responseTime;
       if (time && time > 3000) {
         return `SLOW ${req.method} ${req.url?.split("?")[0]} (${time}ms)`;
