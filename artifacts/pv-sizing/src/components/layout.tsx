@@ -22,7 +22,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const navItems = [
-    { href: "/", label: "Painel Principal", icon: LayoutDashboard },
+    { href: "/painel", label: "Painel Principal", icon: LayoutDashboard },
     { href: "/clientes", label: "Clientes", icon: Users },
     { href: "/sistemas", label: "Sistemas PV", icon: Sun },
     { href: "/equipamentos/paineis", label: "Painéis Solares", icon: BoxSelect },
