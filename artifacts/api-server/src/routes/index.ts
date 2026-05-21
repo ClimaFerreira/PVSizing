@@ -14,6 +14,7 @@ import locationsRouter from "./locations";
 import aiToolsRouter from "./ai-tools";
 import proposalsRouter from "./proposals";
 import wizardDraftRouter from "./wizard-draft";
+import projectsRouter from "./projects";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(locationsRouter);
 router.use(aiToolsRouter);
 router.use(proposalsRouter);
 router.use(wizardDraftRouter);
+router.use(projectsRouter);
 
 export default router;

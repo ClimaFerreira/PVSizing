@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Sun, Map as MapIcon, ArrowRight } from "lucide-react";
+import { Sun, Map as MapIcon, ArrowRight, FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -22,7 +22,7 @@ export default function Landing() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
         <Card className="hover:shadow-lg transition-shadow flex flex-col">
           <CardHeader>
             <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary mb-3">
@@ -68,6 +68,30 @@ export default function Landing() {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </a>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow flex flex-col border-primary/20">
+          <CardHeader>
+            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary mb-3">
+              <FolderKanban size={24} />
+            </div>
+            <CardTitle className="text-xl">Estudos / Projetos</CardTitle>
+            <CardDescription>Dados partilhados</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col">
+            <p className="text-sm text-muted-foreground mb-6 flex-1">
+              Crie um estudo comum aos dois módulos: cliente, morada, painel,
+              número de painéis, potência FV, inclinação, orientação e layout
+              do telhado. Carregue o estudo no FotoCalc para pré-preencher os
+              parâmetros.
+            </p>
+            <Link href="/estudos">
+              <Button className="w-full" variant="outline" data-testid="button-open-projects">
+                Gerir Estudos
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

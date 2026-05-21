@@ -978,6 +978,93 @@ export interface CreateProposalBody {
   alertas?: string[];
 }
 
+export interface Project {
+  id: number;
+  nome: string;
+  /** @nullable */
+  customerId: number | null;
+  /** @nullable */
+  morada: string | null;
+  /** @nullable */
+  panelId: number | null;
+  /** @nullable */
+  numPaineis: number | null;
+  /** @nullable */
+  potenciaKwp: number | null;
+  /** @nullable */
+  inclinacao: number | null;
+  /** @nullable */
+  azimute: number | null;
+  /** @nullable */
+  orientacao: string | null;
+  /** @nullable */
+  layoutRows: number | null;
+  /** @nullable */
+  layoutCols: number | null;
+  /** @nullable */
+  mountType: string | null;
+  /** @nullable */
+  notas: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateProjectBody {
+  nome: string;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  morada?: string | null;
+  /** @nullable */
+  panelId?: number | null;
+  /** @nullable */
+  numPaineis?: number | null;
+  /** @nullable */
+  potenciaKwp?: number | null;
+  /** @nullable */
+  inclinacao?: number | null;
+  /** @nullable */
+  azimute?: number | null;
+  /** @nullable */
+  orientacao?: string | null;
+  /** @nullable */
+  layoutRows?: number | null;
+  /** @nullable */
+  layoutCols?: number | null;
+  /** @nullable */
+  mountType?: string | null;
+  /** @nullable */
+  notas?: string | null;
+}
+
+export interface UpdateProjectBody {
+  nome?: string;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  morada?: string | null;
+  /** @nullable */
+  panelId?: number | null;
+  /** @nullable */
+  numPaineis?: number | null;
+  /** @nullable */
+  potenciaKwp?: number | null;
+  /** @nullable */
+  inclinacao?: number | null;
+  /** @nullable */
+  azimute?: number | null;
+  /** @nullable */
+  orientacao?: string | null;
+  /** @nullable */
+  layoutRows?: number | null;
+  /** @nullable */
+  layoutCols?: number | null;
+  /** @nullable */
+  mountType?: string | null;
+  /** @nullable */
+  notas?: string | null;
+}
+
 export type GetSystemPvgisParams = {
   /**
    * Second MPPT tilt angle (degrees)

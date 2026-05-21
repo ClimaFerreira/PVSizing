@@ -20,6 +20,7 @@ import SystemDetail from "@/pages/system-detail";
 import StringSizing from "@/pages/string-sizing";
 import Wizard from "@/pages/wizard";
 import Proposals from "@/pages/proposals";
+import Projects from "@/pages/projects";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +53,7 @@ function Router() {
         <Route path="/calculadora-strings" component={StringSizing} />
         <Route path="/wizard" component={Wizard} />
         <Route path="/propostas" component={Proposals} />
+        <Route path="/estudos" component={Projects} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

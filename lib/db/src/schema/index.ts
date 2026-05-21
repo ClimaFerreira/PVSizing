@@ -5,3 +5,4 @@ export * from "./batteries";
 export * from "./systems";
 export * from "./proposals";
 export * from "./wizard-drafts";
+export * from "./projects";

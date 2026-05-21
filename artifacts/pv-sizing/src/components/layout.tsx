@@ -10,6 +10,7 @@ import {
   GitBranch,
   Wand2,
   FileText,
+  FolderKanban,
   Map as MapIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/calculadora-strings", label: "Calculadora Strings", icon: GitBranch },
     { href: "/wizard", label: "Wizard Dimensionamento", icon: Wand2 },
     { href: "/propostas", label: "Propostas Técnicas", icon: FileText },
+    { href: "/estudos", label: "Estudos / Projetos", icon: FolderKanban },
   ];
 
   const SidebarContent = () => (

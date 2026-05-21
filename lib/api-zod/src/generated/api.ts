@@ -1310,3 +1310,120 @@ export const GetDashboardSummaryResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary List all shared studies/projects
+ */
+export const ListProjectsResponseItem = zod.object({
+  id: zod.number(),
+  nome: zod.string(),
+  customerId: zod.number().nullable(),
+  morada: zod.string().nullable(),
+  panelId: zod.number().nullable(),
+  numPaineis: zod.number().nullable(),
+  potenciaKwp: zod.number().nullable(),
+  inclinacao: zod.number().nullable(),
+  azimute: zod.number().nullable(),
+  orientacao: zod.string().nullable(),
+  layoutRows: zod.number().nullable(),
+  layoutCols: zod.number().nullable(),
+  mountType: zod.string().nullable(),
+  notas: zod.string().nullable(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListProjectsResponse = zod.array(ListProjectsResponseItem);
+
+/**
+ * @summary Create a shared study/project
+ */
+export const CreateProjectBody = zod.object({
+  nome: zod.string(),
+  customerId: zod.number().nullish(),
+  morada: zod.string().nullish(),
+  panelId: zod.number().nullish(),
+  numPaineis: zod.number().nullish(),
+  potenciaKwp: zod.number().nullish(),
+  inclinacao: zod.number().nullish(),
+  azimute: zod.number().nullish(),
+  orientacao: zod.string().nullish(),
+  layoutRows: zod.number().nullish(),
+  layoutCols: zod.number().nullish(),
+  mountType: zod.string().nullish(),
+  notas: zod.string().nullish(),
+});
+
+/**
+ * @summary Get a project by ID
+ */
+export const GetProjectParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetProjectResponse = zod.object({
+  id: zod.number(),
+  nome: zod.string(),
+  customerId: zod.number().nullable(),
+  morada: zod.string().nullable(),
+  panelId: zod.number().nullable(),
+  numPaineis: zod.number().nullable(),
+  potenciaKwp: zod.number().nullable(),
+  inclinacao: zod.number().nullable(),
+  azimute: zod.number().nullable(),
+  orientacao: zod.string().nullable(),
+  layoutRows: zod.number().nullable(),
+  layoutCols: zod.number().nullable(),
+  mountType: zod.string().nullable(),
+  notas: zod.string().nullable(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update a project
+ */
+export const UpdateProjectParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateProjectBody = zod.object({
+  nome: zod.string().optional(),
+  customerId: zod.number().nullish(),
+  morada: zod.string().nullish(),
+  panelId: zod.number().nullish(),
+  numPaineis: zod.number().nullish(),
+  potenciaKwp: zod.number().nullish(),
+  inclinacao: zod.number().nullish(),
+  azimute: zod.number().nullish(),
+  orientacao: zod.string().nullish(),
+  layoutRows: zod.number().nullish(),
+  layoutCols: zod.number().nullish(),
+  mountType: zod.string().nullish(),
+  notas: zod.string().nullish(),
+});
+
+export const UpdateProjectResponse = zod.object({
+  id: zod.number(),
+  nome: zod.string(),
+  customerId: zod.number().nullable(),
+  morada: zod.string().nullable(),
+  panelId: zod.number().nullable(),
+  numPaineis: zod.number().nullable(),
+  potenciaKwp: zod.number().nullable(),
+  inclinacao: zod.number().nullable(),
+  azimute: zod.number().nullable(),
+  orientacao: zod.string().nullable(),
+  layoutRows: zod.number().nullable(),
+  layoutCols: zod.number().nullable(),
+  mountType: zod.string().nullable(),
+  notas: zod.string().nullable(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a project
+ */
+export const DeleteProjectParams = zod.object({
+  id: zod.coerce.number(),
+});

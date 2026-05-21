@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildCrossSectionSvg, buildLayoutSvg, buildCoplanarLayoutSvg } from "@/lib/svg-utils";
 import { AlertTriangle, Info, MapPin, Loader2, Zap } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ProjectPicker } from "@/components/project-picker";
 
 interface GeoResult {
   lat: string;
@@ -66,10 +67,12 @@ export default function CalculatorPage() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col mb-8">
+      <div className="flex flex-col mb-6">
         <h1 className="text-3xl font-bold text-[#0D2B45] tracking-tight">Espaçamento entre Painéis</h1>
         <p className="text-muted-foreground">Cálculo de sombras e distância livre entre fileiras.</p>
       </div>
+
+      <ProjectPicker />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* ── Left column: inputs ── */}

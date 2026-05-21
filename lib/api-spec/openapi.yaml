@@ -34,6 +34,8 @@ tags:
     description: AI-powered tools (invoice parsing, datasheet import, auto-sizing)
   - name: proposals
     description: Technical proposals
+  - name: projects
+    description: Shared studies / projects (SolarDim + FotoCalc)
 
 paths:
   /healthz:
@@ -886,6 +888,102 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+
+  # --- Shared Projects (Estudos) ---
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all shared studies/projects
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a shared study/project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectBody"
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: Validation error
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectBody"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
 
 components:
   schemas:
@@ -2379,3 +2477,121 @@ components:
             type: string
       required:
         - titulo
+
+    # --- Project (Estudo) ---
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        customerId:
+          type: ["integer", "null"]
+        morada:
+          type: ["string", "null"]
+        panelId:
+          type: ["integer", "null"]
+        numPaineis:
+          type: ["integer", "null"]
+        potenciaKwp:
+          type: ["number", "null"]
+        inclinacao:
+          type: ["number", "null"]
+        azimute:
+          type: ["number", "null"]
+        orientacao:
+          type: ["string", "null"]
+        layoutRows:
+          type: ["integer", "null"]
+        layoutCols:
+          type: ["integer", "null"]
+        mountType:
+          type: ["string", "null"]
+        notas:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - nome
+        - customerId
+        - morada
+        - panelId
+        - numPaineis
+        - potenciaKwp
+        - inclinacao
+        - azimute
+        - orientacao
+        - layoutRows
+        - layoutCols
+        - mountType
+        - notas
+        - createdAt
+        - updatedAt
+
+    CreateProjectBody:
+      type: object
+      properties:
+        nome:
+          type: string
+        customerId:
+          type: ["integer", "null"]
+        morada:
+          type: ["string", "null"]
+        panelId:
+          type: ["integer", "null"]
+        numPaineis:
+          type: ["integer", "null"]
+        potenciaKwp:
+          type: ["number", "null"]
+        inclinacao:
+          type: ["number", "null"]
+        azimute:
+          type: ["number", "null"]
+        orientacao:
+          type: ["string", "null"]
+        layoutRows:
+          type: ["integer", "null"]
+        layoutCols:
+          type: ["integer", "null"]
+        mountType:
+          type: ["string", "null"]
+        notas:
+          type: ["string", "null"]
+      required:
+        - nome
+
+    UpdateProjectBody:
+      type: object
+      properties:
+        nome:
+          type: string
+        customerId:
+          type: ["integer", "null"]
+        morada:
+          type: ["string", "null"]
+        panelId:
+          type: ["integer", "null"]
+        numPaineis:
+          type: ["integer", "null"]
+        potenciaKwp:
+          type: ["number", "null"]
+        inclinacao:
+          type: ["number", "null"]
+        azimute:
+          type: ["number", "null"]
+        orientacao:
+          type: ["string", "null"]
+        layoutRows:
+          type: ["integer", "null"]
+        layoutCols:
+          type: ["integer", "null"]
+        mountType:
+          type: ["string", "null"]
+        notas:
+          type: ["string", "null"]
