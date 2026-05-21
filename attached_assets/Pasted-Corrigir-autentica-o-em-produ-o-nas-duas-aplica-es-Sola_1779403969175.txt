@@ -1,0 +1,93 @@
+Corrigir autenticação em produção nas duas aplicações: SolarDim e FotoCalc.
+
+Problema:
+Após publicar, não é possível entrar em nenhuma das aplicações.
+
+SolarDim:
+URL: /login
+Email: geralmarciof@gmail.com
+Password: 123456MF
+Erro: Credenciais inválidas
+
+FotoCalc:
+URL: /fotocalc-web/login
+Email: pinheiro.iec@gmail.com
+Password: Pinheiro506505170
+Erro: Credenciais inválidas
+
+Objetivo:
+Garantir que os dois utilizadores conseguem autenticar em produção e que cada um entra no seu módulo personalizado.
+
+Verificar e corrigir:
+
+1. Base de dados em produção
+- confirmar qual DATABASE_URL está a ser usada no publish;
+- confirmar se é a mesma base de dados onde os users foram criados;
+- se for diferente, correr migrations + seed na base de dados publicada.
+
+2. Seed dos utilizadores
+Garantir que existem estes utilizadores na BD de produção:
+
+Utilizador 1:
+email=geralmarciof@gmail.com
+password=123456MF
+empresa=SolarDim / Márcio Ferreira
+módulo principal=SolarDim
+
+Utilizador 2:
+email=pinheiro.iec@gmail.com
+password=Pinheiro506505170
+empresa=Pinheiro Instalações Eléctricas e Canalizações Unipessoal Lda
+módulo principal=FotoCalc
+
+As passwords devem ser gravadas com hash bcrypt.
+
+3. Autenticação partilhada
+- SolarDim e FotoCalc devem usar o mesmo backend/auth;
+- ambos devem consultar a mesma tabela de utilizadores;
+- login em /login e /fotocalc-web/login deve funcionar;
+- tokens/sessões devem ser compatíveis nos dois módulos.
+
+4. Verificar password
+No endpoint de login adicionar logs temporários:
+- email recebido;
+- utilizador encontrado? sim/não;
+- hash existente? sim/não;
+- bcrypt.compare resultou true/false;
+- tenant/company associado;
+- sessão/token criado.
+
+Não mostrar passwords nos logs.
+
+5. Corrigir diferenças entre development e production
+O login funciona em dev mas falha após publish.
+Verificar:
+- variáveis de ambiente;
+- DATABASE_URL;
+- SESSION_SECRET / JWT_SECRET;
+- CORS;
+- cookies secure/sameSite;
+- base URL da API usada pelo frontend publicado;
+- se o frontend está a chamar /api/login correto e não localhost.
+
+6. Criar script seguro de seed
+Criar ou corrigir script:
+pnpm --filter @workspace/scripts run seed-auth-users
+
+Este script deve:
+- criar companies/tenants se não existirem;
+- criar users se não existirem;
+- atualizar password hash se o utilizador já existir;
+- associar cada user à empresa correta;
+- imprimir apenas emails e estado, nunca passwords.
+
+7. Testar
+Depois de corrigir:
+- testar login SolarDim com geralmarciof@gmail.com / 123456MF;
+- testar login FotoCalc com pinheiro.iec@gmail.com / Pinheiro506505170;
+- confirmar que cada utilizador vê o nome/logo/tema da respetiva empresa;
+- confirmar que dados ficam isolados por empresa.
+
+8. Depois de funcionar
+Remover logs temporários sensíveis.
+Manter apenas logs seguros.
