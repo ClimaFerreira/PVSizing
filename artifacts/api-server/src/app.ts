@@ -1,6 +1,9 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import compression from "compression";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import { pool } from "@workspace/db";
 import { pinoHttp } from "pino-http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import router from "./routes";
@@ -44,8 +47,36 @@ app.use(
 // ── Core middleware ────────────────────────────────────────────────────────────
 app.use(compression());
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// ── Session middleware (PG-backed) ─────────────────────────────────────────────
+const PgStore = connectPgSimple(session);
+const sessionSecret = process.env["SESSION_SECRET"];
+if (!sessionSecret) {
+  throw new Error("SESSION_SECRET environment variable is required");
+}
+app.set("trust proxy", 1);
+app.use(
+  session({
+    store: new PgStore({
+      pool,
+      tableName: "session",
+      createTableIfMissing: false,
+    }),
+    name: "sd.sid",
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false, // behind Replit proxy in dev; OK to keep false in prod too because the proxy terminates TLS
+      maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+    },
+  }),
+);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api", router);

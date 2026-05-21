@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, customersTable } from "@workspace/db";
 import {
   ListCustomersResponse,
@@ -11,30 +11,29 @@ import {
   UpdateCustomerResponse,
   DeleteCustomerParams,
 } from "@workspace/api-zod";
+import { getCompanyId } from "../lib/auth";
 
 const router: IRouter = Router();
 
-// List all customers
 router.get("/customers", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const customers = await db
     .select()
     .from(customersTable)
+    .where(eq(customersTable.companyId, cid))
     .orderBy(customersTable.createdAt);
   res.json(ListCustomersResponse.parse(customers.map(toCustomerResponse)));
 });
 
-// Create a customer
 router.post("/customers", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const parsed = CreateCustomerBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const data = parsed.data;
   const [customer] = await db
     .insert(customersTable)
     .values({
+      companyId: cid,
       nome: data.nome,
       morada: data.morada,
       latitude: String(data.latitude),
@@ -47,45 +46,27 @@ router.post("/customers", async (req, res): Promise<void> => {
       consumoAnual: data.consumoAnual != null ? String(data.consumoAnual) : null,
     })
     .returning();
-
   res.status(201).json(GetCustomerResponse.parse(toCustomerResponse(customer)));
 });
 
-// Get a customer by id
 router.get("/customers/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = GetCustomerParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [customer] = await db
     .select()
     .from(customersTable)
-    .where(eq(customersTable.id, params.data.id));
-
-  if (!customer) {
-    res.status(404).json({ error: "Cliente não encontrado" });
-    return;
-  }
-
+    .where(and(eq(customersTable.id, params.data.id), eq(customersTable.companyId, cid)));
+  if (!customer) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
   res.json(GetCustomerResponse.parse(toCustomerResponse(customer)));
 });
 
-// Update a customer
 router.patch("/customers/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = UpdateCustomerParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateCustomerBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const data = parsed.data;
   const updateValues: Record<string, unknown> = {};
   if (data.nome !== undefined) updateValues.nome = data.nome;
@@ -98,43 +79,27 @@ router.patch("/customers/:id", async (req, res): Promise<void> => {
   if (data.perfilConsumo !== undefined) updateValues.perfilConsumo = data.perfilConsumo;
   if (data.consumoMensal !== undefined) updateValues.consumoMensal = data.consumoMensal != null ? String(data.consumoMensal) : null;
   if (data.consumoAnual !== undefined) updateValues.consumoAnual = data.consumoAnual != null ? String(data.consumoAnual) : null;
-
   const [customer] = await db
     .update(customersTable)
     .set(updateValues)
-    .where(eq(customersTable.id, params.data.id))
+    .where(and(eq(customersTable.id, params.data.id), eq(customersTable.companyId, cid)))
     .returning();
-
-  if (!customer) {
-    res.status(404).json({ error: "Cliente não encontrado" });
-    return;
-  }
-
+  if (!customer) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
   res.json(UpdateCustomerResponse.parse(toCustomerResponse(customer)));
 });
 
-// Delete a customer
 router.delete("/customers/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = DeleteCustomerParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [customer] = await db
     .delete(customersTable)
-    .where(eq(customersTable.id, params.data.id))
+    .where(and(eq(customersTable.id, params.data.id), eq(customersTable.companyId, cid)))
     .returning();
-
-  if (!customer) {
-    res.status(404).json({ error: "Cliente não encontrado" });
-    return;
-  }
-
+  if (!customer) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
   res.sendStatus(204);
 });
 
-// Convert DB row to API response (numeric strings -> numbers)
 function toCustomerResponse(row: typeof customersTable.$inferSelect) {
   return {
     ...row,

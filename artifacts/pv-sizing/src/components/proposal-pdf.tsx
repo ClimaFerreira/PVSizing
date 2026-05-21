@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Sun, Zap, Battery, BarChart3, Leaf, AlertTriangle } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 interface Panel { nome: string; fabricante: string; potencia: number; voc: number; vmp: number; isc: number; imp: number; }
 interface Inverter { nome: string; fabricante: string; potenciaAc: number; potenciaDcMax: number; }
@@ -29,6 +30,10 @@ interface Props {
 }
 
 export function ProposalPDF({ proposal, panel, inverter, battery }: Props) {
+  const { company } = useAuth();
+  const brandName = company?.nome ?? "SolarDim";
+  const brandPrimary = company?.corPrimaria;
+
   const cobertura = proposal.consumoAnualEstimado && proposal.producaoAnualEstimada
     ? Math.min(100, (proposal.producaoAnualEstimada / proposal.consumoAnualEstimado) * 100)
     : null;
@@ -39,18 +44,31 @@ export function ProposalPDF({ proposal, panel, inverter, battery }: Props) {
   return (
     <div className="space-y-4 print:text-black print:bg-white">
       {/* Cover-style header */}
-      <Card className="bg-gradient-to-br from-primary/10 via-background to-background border-primary/20 print:border print:shadow-none">
+      <Card
+        className="bg-gradient-to-br from-primary/10 via-background to-background border-primary/20 print:border print:shadow-none"
+        style={brandPrimary ? { borderColor: brandPrimary } : undefined}
+      >
         <CardContent className="pt-6 pb-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Sun size={28} className="text-primary" />
-                <span className="text-2xl font-bold text-primary">SolarDim</span>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {company?.logoUrl ? (
+                <img src={company.logoUrl} alt={brandName} className="h-14 w-auto object-contain" />
+              ) : (
+                <Sun size={36} className="text-primary" style={brandPrimary ? { color: brandPrimary } : undefined} />
+              )}
+              <div>
+                <div className="text-xl font-bold" style={brandPrimary ? { color: brandPrimary } : undefined}>{brandName}</div>
+                <h2 className="text-lg font-semibold mt-1">{proposal.titulo}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Proposta Técnica de Sistema Fotovoltaico</p>
               </div>
-              <h2 className="text-xl font-bold">{proposal.titulo}</h2>
-              <p className="text-sm text-muted-foreground mt-1">Proposta Técnica de Sistema Fotovoltaico</p>
             </div>
-            <Badge className="text-sm px-3 py-1">{proposal.status.toUpperCase()}</Badge>
+            <div className="text-right text-xs text-muted-foreground space-y-0.5">
+              {company?.nif && <div>NIF: {company.nif}</div>}
+              {company?.morada && <div className="max-w-[200px]">{company.morada}</div>}
+              {company?.telefone && <div>Tel: {company.telefone}</div>}
+              {company?.email && <div>{company.email}</div>}
+              <div className="pt-1"><Badge className="text-xs px-2 py-0.5">{proposal.status.toUpperCase()}</Badge></div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -195,8 +213,10 @@ export function ProposalPDF({ proposal, panel, inverter, battery }: Props) {
       )}
 
       {/* Footer */}
-      <div className="text-center text-xs text-muted-foreground py-4 border-t print:block">
-        <p>Proposta gerada por SolarDim · {new Date(proposal.createdAt).toLocaleDateString("pt-PT")} · Valores estimados sujeitos a confirmação técnica</p>
+      <div className="text-center text-xs text-muted-foreground py-4 border-t print:block space-y-1">
+        {company?.iban && <p>IBAN: {company.iban}</p>}
+        {company?.rodapeProposta && <p className="whitespace-pre-line">{company.rodapeProposta}</p>}
+        <p>Proposta gerada por {brandName} · {new Date(proposal.createdAt).toLocaleDateString("pt-PT")} · Valores estimados sujeitos a confirmação técnica</p>
       </div>
     </div>
   );

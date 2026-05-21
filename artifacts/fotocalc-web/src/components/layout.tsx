@@ -1,9 +1,12 @@
 import { Link, useLocation } from "wouter";
 import logoSrc from "@/logo.png";
-import { Calculator, Map as MapIcon, LineChart, FileText, Sun } from "lucide-react";
+import { Calculator, Map as MapIcon, LineChart, FileText, Sun, Settings, LogOut } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { user, company, logout } = useAuth();
+  const brandName = company?.nome ?? "FotoCalc";
 
   const navItems = [
     { href: "/calculator", icon: Calculator, label: "Espaçamento" },
@@ -16,12 +19,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <aside className="w-64 bg-[#0D2B45] text-white flex flex-col shrink-0 border-r border-[#1a3d5c]">
         <div className="p-6 border-b border-[#1a3d5c]">
-          <img src={logoSrc} alt="FotoCalc Logo" className="h-10 mb-2 brightness-0 invert" />
-          <h1 className="text-xl font-bold tracking-tight text-[#F5A623]">FotoCalc</h1>
+          {company?.logoUrl ? (
+            <img src={company.logoUrl} alt={brandName} className="h-12 mb-2 object-contain" />
+          ) : (
+            <img src={logoSrc} alt="FotoCalc Logo" className="h-10 mb-2 brightness-0 invert" />
+          )}
+          <h1 className="text-xl font-bold tracking-tight text-[#F5A623] truncate" title={brandName}>{brandName}</h1>
           <p className="text-xs text-[#8ca3b8]">Precision Engineering Tool</p>
         </div>
-        
-        <nav className="flex-1 py-6 px-3 space-y-1">
+
+        <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const active = location === item.href || (location === "/" && item.href === "/calculator");
             const Icon = item.icon;
@@ -43,14 +50,31 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 Dimensionamento FV
               </div>
             </a>
+            <Link href="/empresa">
+              <div className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
+                location === "/empresa" ? "bg-[#1E88E5] text-white font-medium" : "text-[#b4c6d6] hover:bg-[#1a3d5c] hover:text-white"
+              }`}>
+                <Settings size={18} className={location === "/empresa" ? "text-white" : "text-[#8ca3b8]"} />
+                Definições da Empresa
+              </div>
+            </Link>
           </div>
         </nav>
 
         <div className="p-4 border-t border-[#1a3d5c] text-xs text-[#8ca3b8] space-y-1 bg-[#0a2238]">
-          <div className="font-semibold text-white mb-2">Pinheiro Instalações</div>
-          <div>NIF: 506505170</div>
-          <div>Tel: 964 119 508</div>
-          <div className="truncate" title="Quinta do Chão Grande nº78 Massarocas, 3660-409 São Pedro do Sul">São Pedro do Sul</div>
+          <div className="font-semibold text-white mb-1 truncate" title={brandName}>{brandName}</div>
+          {company?.nif && <div>NIF: {company.nif}</div>}
+          {company?.telefone && <div>Tel: {company.telefone}</div>}
+          {company?.morada && <div className="truncate" title={company.morada}>{company.morada}</div>}
+          {user && (
+            <div className="pt-2 mt-2 border-t border-[#1a3d5c] flex items-center justify-between gap-2">
+              <span className="truncate text-[10px]" title={user.email}>{user.nome}</span>
+              <button onClick={() => { void logout(); }}
+                className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-[#1a3d5c] hover:bg-[#1E88E5] text-white">
+                <LogOut size={11} /> Sair
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 

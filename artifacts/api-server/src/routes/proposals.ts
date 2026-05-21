@@ -1,17 +1,22 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, proposalsTable } from "@workspace/db";
+import { getCompanyId } from "../lib/auth";
 
 const router: IRouter = Router();
 
-// List all proposals
-router.get("/proposals", async (_req, res): Promise<void> => {
-  const proposals = await db.select().from(proposalsTable).orderBy(proposalsTable.createdAt);
+router.get("/proposals", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
+  const proposals = await db
+    .select()
+    .from(proposalsTable)
+    .where(eq(proposalsTable.companyId, cid))
+    .orderBy(proposalsTable.createdAt);
   res.json(proposals.map(toResponse));
 });
 
-// Create a proposal
 router.post("/proposals", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const body = req.body as {
     titulo: string;
     customerId?: number | null;
@@ -37,6 +42,7 @@ router.post("/proposals", async (req, res): Promise<void> => {
   const [proposal] = await db
     .insert(proposalsTable)
     .values({
+      companyId: cid,
       titulo: body.titulo,
       customerId: body.customerId ?? null,
       systemId: body.systemId ?? null,
@@ -58,25 +64,21 @@ router.post("/proposals", async (req, res): Promise<void> => {
   res.status(201).json(toResponse(proposal));
 });
 
-// Get proposal by id
 router.get("/proposals/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
-
-  const [proposal] = await db.select().from(proposalsTable).where(eq(proposalsTable.id, id));
+  const [proposal] = await db.select().from(proposalsTable).where(and(eq(proposalsTable.id, id), eq(proposalsTable.companyId, cid)));
   if (!proposal) { res.status(404).json({ error: "Proposta não encontrada" }); return; }
-
   res.json(toResponse(proposal));
 });
 
-// Delete proposal
 router.delete("/proposals/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
-
-  const [deleted] = await db.delete(proposalsTable).where(eq(proposalsTable.id, id)).returning();
+  const [deleted] = await db.delete(proposalsTable).where(and(eq(proposalsTable.id, id), eq(proposalsTable.companyId, cid))).returning();
   if (!deleted) { res.status(404).json({ error: "Proposta não encontrada" }); return; }
-
   res.sendStatus(204);
 });
 

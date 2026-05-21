@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const invertersTable = pgTable("inverters", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id"),
   nome: text("nome").notNull(),
   fabricante: text("fabricante").notNull(),
   potenciaAc: numeric("potencia_ac", { precision: 10, scale: 2 }).notNull(),

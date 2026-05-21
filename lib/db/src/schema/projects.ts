@@ -6,6 +6,7 @@ import { panelsTable } from "./panels";
 
 export const projectsTable = pgTable("projects", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id"),
   nome: text("nome").notNull(),
   customerId: integer("customer_id").references(() => customersTable.id, { onDelete: "set null" }),
   morada: text("morada"),

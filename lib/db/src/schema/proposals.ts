@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 
 export const proposalsTable = pgTable("proposals", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id"),
   customerId: integer("customer_id"),
   systemId: integer("system_id"),
   titulo: text("titulo").notNull(),
@@ -25,6 +26,7 @@ export type Proposal = typeof proposalsTable.$inferSelect;
 
 export const invoiceUploadsTable = pgTable("invoice_uploads", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id"),
   customerId: integer("customer_id"),
   filename: text("filename").notNull(),
   rawText: text("raw_text"),

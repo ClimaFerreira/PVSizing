@@ -2,6 +2,7 @@ import { pgTable, serial, text, integer, jsonb, timestamp } from "drizzle-orm/pg
 
 export const wizardDraftsTable = pgTable("wizard_drafts", {
   id:        serial("id").primaryKey(),
+  companyId: integer("company_id"),
   sessionId: text("session_id").notNull().unique(),
   step:      integer("step").notNull().default(1),
   data:      jsonb("data").notNull(),

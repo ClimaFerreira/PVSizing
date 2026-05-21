@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, wizardDraftsTable } from "@workspace/db";
+import { getCompanyId } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -23,10 +24,11 @@ router.get("/wizard/draft", async (req, res): Promise<void> => {
     return;
   }
 
+  const cid = getCompanyId(req);
   const [row] = await db
     .select()
     .from(wizardDraftsTable)
-    .where(eq(wizardDraftsTable.sessionId, query.data.sessionId))
+    .where(and(eq(wizardDraftsTable.sessionId, query.data.sessionId), eq(wizardDraftsTable.companyId, cid)))
     .limit(1);
 
   if (!row) {
@@ -46,11 +48,13 @@ router.put("/wizard/draft", async (req, res): Promise<void> => {
   }
 
   const { sessionId, step, data } = body.data;
+  const cid = getCompanyId(req);
   const now = new Date();
 
   const [row] = await db
     .insert(wizardDraftsTable)
     .values({
+      companyId: cid,
       sessionId,
       step,
       data: data as Record<string, unknown>,
@@ -60,6 +64,7 @@ router.put("/wizard/draft", async (req, res): Promise<void> => {
     .onConflictDoUpdate({
       target: wizardDraftsTable.sessionId,
       set: {
+        companyId: cid,
         step,
         data: data as Record<string, unknown>,
         updatedAt: now,
@@ -77,9 +82,10 @@ router.delete("/wizard/draft", async (req, res): Promise<void> => {
     res.status(400).json({ error: "sessionId é obrigatório" });
     return;
   }
+  const cid = getCompanyId(req);
   await db
     .delete(wizardDraftsTable)
-    .where(eq(wizardDraftsTable.sessionId, query.data.sessionId));
+    .where(and(eq(wizardDraftsTable.sessionId, query.data.sessionId), eq(wizardDraftsTable.companyId, cid)));
   res.status(204).end();
 });
 

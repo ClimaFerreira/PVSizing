@@ -1,5 +1,12 @@
-const DRAFT_KEY    = "solardim:wizard-draft:v1";
-const SESSION_KEY  = "solardim:session-id";
+const DRAFT_KEY_PREFIX   = "solardim:wizard-draft:v1";
+const SESSION_KEY_PREFIX = "solardim:session-id";
+
+function draftKey(companyId: number | null | undefined): string {
+  return companyId == null ? `${DRAFT_KEY_PREFIX}:anon` : `${DRAFT_KEY_PREFIX}:c${companyId}`;
+}
+function sessionKey(companyId: number | null | undefined): string {
+  return companyId == null ? `${SESSION_KEY_PREFIX}:anon` : `${SESSION_KEY_PREFIX}:c${companyId}`;
+}
 
 export interface WizardDraftData {
   version: 1;
@@ -20,14 +27,14 @@ export interface WizardDraftData {
   panelRefId?: number | null;
 }
 
-// ── Session ID ────────────────────────────────────────────────────────────────
-/** Returns a stable device/browser identifier, creating one if absent. */
-export function getOrCreateSessionId(): string {
+// ── Session ID (per-tenant) ──────────────────────────────────────────────────
+export function getOrCreateSessionId(companyId: number | null | undefined): string {
   try {
-    let id = localStorage.getItem(SESSION_KEY);
+    const key = sessionKey(companyId);
+    let id = localStorage.getItem(key);
     if (!id) {
       id = crypto.randomUUID();
-      localStorage.setItem(SESSION_KEY, id);
+      localStorage.setItem(key, id);
     }
     return id;
   } catch {
@@ -35,19 +42,22 @@ export function getOrCreateSessionId(): string {
   }
 }
 
-// ── localStorage ──────────────────────────────────────────────────────────────
-export function saveDraft(data: Omit<WizardDraftData, "version" | "savedAt">): void {
+// ── localStorage (per-tenant) ────────────────────────────────────────────────
+export function saveDraft(
+  companyId: number | null | undefined,
+  data: Omit<WizardDraftData, "version" | "savedAt">,
+): void {
   try {
     const draft: WizardDraftData = { ...data, version: 1, savedAt: new Date().toISOString() };
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    localStorage.setItem(draftKey(companyId), JSON.stringify(draft));
   } catch {
-    // quota exceeded or private browsing — silently ignore
+    // ignore
   }
 }
 
-export function loadDraft(): WizardDraftData | null {
+export function loadDraft(companyId: number | null | undefined): WizardDraftData | null {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY);
+    const raw = localStorage.getItem(draftKey(companyId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WizardDraftData;
     if (parsed.version !== 1) return null;
@@ -57,16 +67,15 @@ export function loadDraft(): WizardDraftData | null {
   }
 }
 
-export function clearDraft(): void {
+export function clearDraft(companyId: number | null | undefined): void {
   try {
-    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(draftKey(companyId));
   } catch {
     // ignore
   }
 }
 
 // ── Remote DB sync ────────────────────────────────────────────────────────────
-/** Push current draft to the server (fire-and-forget, never throws). */
 export async function syncDraftToDb(draft: WizardDraftData, sessionId: string): Promise<void> {
   try {
     await fetch("/api/wizard/draft", {
@@ -75,11 +84,10 @@ export async function syncDraftToDb(draft: WizardDraftData, sessionId: string): 
       body: JSON.stringify({ sessionId, step: draft.step, data: draft }),
     });
   } catch {
-    // network error — silently ignore
+    // ignore
   }
 }
 
-/** Load the latest draft from the server for this session. */
 export async function loadDraftFromDb(sessionId: string): Promise<WizardDraftData | null> {
   try {
     const res = await fetch(`/api/wizard/draft?sessionId=${encodeURIComponent(sessionId)}`);
@@ -93,18 +101,14 @@ export async function loadDraftFromDb(sessionId: string): Promise<WizardDraftDat
   }
 }
 
-/** Delete the server-side draft for this session (fire-and-forget). */
 export async function clearDraftFromDb(sessionId: string): Promise<void> {
   try {
-    await fetch(`/api/wizard/draft?sessionId=${encodeURIComponent(sessionId)}`, {
-      method: "DELETE",
-    });
+    await fetch(`/api/wizard/draft?sessionId=${encodeURIComponent(sessionId)}`, { method: "DELETE" });
   } catch {
     // ignore
   }
 }
 
-// ── Utilities ─────────────────────────────────────────────────────────────────
 export function draftAge(draft: WizardDraftData): string {
   const ms = Date.now() - new Date(draft.savedAt).getTime();
   const minutes = Math.floor(ms / 60_000);

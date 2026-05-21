@@ -1,9 +1,10 @@
-import { pgTable, serial, text, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const batteriesTable = pgTable("batteries", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id"),
   nome: text("nome").notNull(),
   fabricante: text("fabricante").notNull(),
   capacidade: numeric("capacidade", { precision: 10, scale: 2 }).notNull(),

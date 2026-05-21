@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, panelsTable } from "@workspace/db";
 import {
   ListPanelsResponse,
@@ -11,27 +11,25 @@ import {
   UpdatePanelResponse,
   DeletePanelParams,
 } from "@workspace/api-zod";
+import { getCompanyId } from "../lib/auth";
 
 const router: IRouter = Router();
 
-// List all solar panels
 router.get("/panels", async (req, res): Promise<void> => {
-  const panels = await db.select().from(panelsTable).orderBy(panelsTable.createdAt);
+  const cid = getCompanyId(req);
+  const panels = await db.select().from(panelsTable).where(eq(panelsTable.companyId, cid)).orderBy(panelsTable.createdAt);
   res.json(ListPanelsResponse.parse(panels.map(toPanelResponse)));
 });
 
-// Create a solar panel
 router.post("/panels", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const parsed = CreatePanelBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
   const [panel] = await db
     .insert(panelsTable)
     .values({
+      companyId: cid,
       nome: d.nome,
       fabricante: d.fabricante,
       potencia: String(d.potencia),
@@ -44,45 +42,24 @@ router.post("/panels", async (req, res): Promise<void> => {
       noct: d.noct != null ? String(d.noct) : null,
     })
     .returning();
-
   res.status(201).json(GetPanelResponse.parse(toPanelResponse(panel)));
 });
 
-// Get a panel by id
 router.get("/panels/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = GetPanelParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const [panel] = await db
-    .select()
-    .from(panelsTable)
-    .where(eq(panelsTable.id, params.data.id));
-
-  if (!panel) {
-    res.status(404).json({ error: "Painel não encontrado" });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [panel] = await db.select().from(panelsTable).where(and(eq(panelsTable.id, params.data.id), eq(panelsTable.companyId, cid)));
+  if (!panel) { res.status(404).json({ error: "Painel não encontrado" }); return; }
   res.json(GetPanelResponse.parse(toPanelResponse(panel)));
 });
 
-// Update a panel
 router.patch("/panels/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = UpdatePanelParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdatePanelBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
   const updateValues: Record<string, unknown> = {};
   if (d.nome !== undefined) updateValues.nome = d.nome;
@@ -95,39 +72,24 @@ router.patch("/panels/:id", async (req, res): Promise<void> => {
   if (d.coeficienteTemperatura !== undefined) updateValues.coeficienteTemperatura = String(d.coeficienteTemperatura);
   if (d.coeficienteTemperaturaVoc !== undefined) updateValues.coeficienteTemperaturaVoc = d.coeficienteTemperaturaVoc != null ? String(d.coeficienteTemperaturaVoc) : null;
   if (d.noct !== undefined) updateValues.noct = d.noct != null ? String(d.noct) : null;
-
   const [panel] = await db
     .update(panelsTable)
     .set(updateValues)
-    .where(eq(panelsTable.id, params.data.id))
+    .where(and(eq(panelsTable.id, params.data.id), eq(panelsTable.companyId, cid)))
     .returning();
-
-  if (!panel) {
-    res.status(404).json({ error: "Painel não encontrado" });
-    return;
-  }
-
+  if (!panel) { res.status(404).json({ error: "Painel não encontrado" }); return; }
   res.json(UpdatePanelResponse.parse(toPanelResponse(panel)));
 });
 
-// Delete a panel
 router.delete("/panels/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = DeletePanelParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [panel] = await db
     .delete(panelsTable)
-    .where(eq(panelsTable.id, params.data.id))
+    .where(and(eq(panelsTable.id, params.data.id), eq(panelsTable.companyId, cid)))
     .returning();
-
-  if (!panel) {
-    res.status(404).json({ error: "Painel não encontrado" });
-    return;
-  }
-
+  if (!panel) { res.status(404).json({ error: "Painel não encontrado" }); return; }
   res.sendStatus(204);
 });
 

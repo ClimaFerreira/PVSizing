@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { db, projectsTable } from "@workspace/db";
 import {
   ListProjectsResponse,
@@ -11,27 +11,29 @@ import {
   UpdateProjectResponse,
   DeleteProjectParams,
 } from "@workspace/api-zod";
+import { getCompanyId } from "../lib/auth";
 
 const router: IRouter = Router();
 
-router.get("/projects", async (_req, res): Promise<void> => {
+router.get("/projects", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const rows = await db
     .select()
     .from(projectsTable)
+    .where(eq(projectsTable.companyId, cid))
     .orderBy(desc(projectsTable.updatedAt));
   res.json(ListProjectsResponse.parse(rows.map(toProjectResponse)));
 });
 
 router.post("/projects", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const parsed = CreateProjectBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
   const [row] = await db
     .insert(projectsTable)
     .values({
+      companyId: cid,
       nome: d.nome,
       customerId: d.customerId ?? null,
       morada: d.morada ?? null,
@@ -51,33 +53,20 @@ router.post("/projects", async (req, res): Promise<void> => {
 });
 
 router.get("/projects/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = GetProjectParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [row] = await db
-    .select()
-    .from(projectsTable)
-    .where(eq(projectsTable.id, params.data.id));
-  if (!row) {
-    res.status(404).json({ error: "Estudo não encontrado" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [row] = await db.select().from(projectsTable).where(and(eq(projectsTable.id, params.data.id), eq(projectsTable.companyId, cid)));
+  if (!row) { res.status(404).json({ error: "Estudo não encontrado" }); return; }
   res.json(GetProjectResponse.parse(toProjectResponse(row)));
 });
 
 router.patch("/projects/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = UpdateProjectParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateProjectBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
   const values: Record<string, unknown> = { updatedAt: new Date() };
   if (d.nome !== undefined) values.nome = d.nome;
@@ -97,29 +86,21 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   const [row] = await db
     .update(projectsTable)
     .set(values)
-    .where(eq(projectsTable.id, params.data.id))
+    .where(and(eq(projectsTable.id, params.data.id), eq(projectsTable.companyId, cid)))
     .returning();
-  if (!row) {
-    res.status(404).json({ error: "Estudo não encontrado" });
-    return;
-  }
+  if (!row) { res.status(404).json({ error: "Estudo não encontrado" }); return; }
   res.json(UpdateProjectResponse.parse(toProjectResponse(row)));
 });
 
 router.delete("/projects/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = DeleteProjectParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [row] = await db
     .delete(projectsTable)
-    .where(eq(projectsTable.id, params.data.id))
+    .where(and(eq(projectsTable.id, params.data.id), eq(projectsTable.companyId, cid)))
     .returning();
-  if (!row) {
-    res.status(404).json({ error: "Estudo não encontrado" });
-    return;
-  }
+  if (!row) { res.status(404).json({ error: "Estudo não encontrado" }); return; }
   res.sendStatus(204);
 });
 

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, systemsTable } from "@workspace/db";
 import {
   ListSystemsResponse,
@@ -11,25 +11,25 @@ import {
   UpdateSystemResponse,
   DeleteSystemParams,
 } from "@workspace/api-zod";
+import { getCompanyId } from "../lib/auth";
 
 const router: IRouter = Router();
 
 router.get("/systems", async (req, res): Promise<void> => {
-  const systems = await db.select().from(systemsTable).orderBy(systemsTable.createdAt);
+  const cid = getCompanyId(req);
+  const systems = await db.select().from(systemsTable).where(eq(systemsTable.companyId, cid)).orderBy(systemsTable.createdAt);
   res.json(ListSystemsResponse.parse(systems.map(toSystemResponse)));
 });
 
 router.post("/systems", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const parsed = CreateSystemBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
   const [system] = await db
     .insert(systemsTable)
     .values({
+      companyId: cid,
       customerId: d.customerId,
       panelId: d.panelId,
       inverterId: d.inverterId,
@@ -41,43 +41,24 @@ router.post("/systems", async (req, res): Promise<void> => {
       azimute: String(d.azimute),
     })
     .returning();
-
   res.status(201).json(GetSystemResponse.parse(toSystemResponse(system)));
 });
 
 router.get("/systems/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = GetSystemParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const [system] = await db
-    .select()
-    .from(systemsTable)
-    .where(eq(systemsTable.id, params.data.id));
-
-  if (!system) {
-    res.status(404).json({ error: "Sistema não encontrado" });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [system] = await db.select().from(systemsTable).where(and(eq(systemsTable.id, params.data.id), eq(systemsTable.companyId, cid)));
+  if (!system) { res.status(404).json({ error: "Sistema não encontrado" }); return; }
   res.json(GetSystemResponse.parse(toSystemResponse(system)));
 });
 
 router.patch("/systems/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = UpdateSystemParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateSystemBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
   const updateValues: Record<string, unknown> = {};
   if (d.customerId !== undefined) updateValues.customerId = d.customerId;
@@ -89,38 +70,24 @@ router.patch("/systems/:id", async (req, res): Promise<void> => {
   if (d.numStrings !== undefined) updateValues.numStrings = d.numStrings;
   if (d.inclinacao !== undefined) updateValues.inclinacao = String(d.inclinacao);
   if (d.azimute !== undefined) updateValues.azimute = String(d.azimute);
-
   const [system] = await db
     .update(systemsTable)
     .set(updateValues)
-    .where(eq(systemsTable.id, params.data.id))
+    .where(and(eq(systemsTable.id, params.data.id), eq(systemsTable.companyId, cid)))
     .returning();
-
-  if (!system) {
-    res.status(404).json({ error: "Sistema não encontrado" });
-    return;
-  }
-
+  if (!system) { res.status(404).json({ error: "Sistema não encontrado" }); return; }
   res.json(UpdateSystemResponse.parse(toSystemResponse(system)));
 });
 
 router.delete("/systems/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = DeleteSystemParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [system] = await db
     .delete(systemsTable)
-    .where(eq(systemsTable.id, params.data.id))
+    .where(and(eq(systemsTable.id, params.data.id), eq(systemsTable.companyId, cid)))
     .returning();
-
-  if (!system) {
-    res.status(404).json({ error: "Sistema não encontrado" });
-    return;
-  }
-
+  if (!system) { res.status(404).json({ error: "Sistema não encontrado" }); return; }
   res.sendStatus(204);
 });
 

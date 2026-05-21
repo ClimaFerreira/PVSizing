@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, invertersTable } from "@workspace/db";
 import {
   ListInvertersResponse,
@@ -11,25 +11,25 @@ import {
   UpdateInverterResponse,
   DeleteInverterParams,
 } from "@workspace/api-zod";
+import { getCompanyId } from "../lib/auth";
 
 const router: IRouter = Router();
 
 router.get("/inverters", async (req, res): Promise<void> => {
-  const inverters = await db.select().from(invertersTable).orderBy(invertersTable.createdAt);
+  const cid = getCompanyId(req);
+  const inverters = await db.select().from(invertersTable).where(eq(invertersTable.companyId, cid)).orderBy(invertersTable.createdAt);
   res.json(ListInvertersResponse.parse(inverters.map(toInverterResponse)));
 });
 
 router.post("/inverters", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const parsed = CreateInverterBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
   const [inverter] = await db
     .insert(invertersTable)
     .values({
+      companyId: cid,
       nome: d.nome,
       fabricante: d.fabricante,
       potenciaAc: String(d.potenciaAc),
@@ -42,43 +42,24 @@ router.post("/inverters", async (req, res): Promise<void> => {
       vdcMax: d.vdcMax != null ? String(d.vdcMax) : null,
     })
     .returning();
-
   res.status(201).json(GetInverterResponse.parse(toInverterResponse(inverter)));
 });
 
 router.get("/inverters/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = GetInverterParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const [inverter] = await db
-    .select()
-    .from(invertersTable)
-    .where(eq(invertersTable.id, params.data.id));
-
-  if (!inverter) {
-    res.status(404).json({ error: "Inversor não encontrado" });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [inverter] = await db.select().from(invertersTable).where(and(eq(invertersTable.id, params.data.id), eq(invertersTable.companyId, cid)));
+  if (!inverter) { res.status(404).json({ error: "Inversor não encontrado" }); return; }
   res.json(GetInverterResponse.parse(toInverterResponse(inverter)));
 });
 
 router.patch("/inverters/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = UpdateInverterParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateInverterBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
   const updateValues: Record<string, unknown> = {};
   if (d.nome !== undefined) updateValues.nome = d.nome;
@@ -91,38 +72,24 @@ router.patch("/inverters/:id", async (req, res): Promise<void> => {
   if (d.numMppt !== undefined) updateValues.numMppt = d.numMppt;
   if (d.stringsPorMppt !== undefined) updateValues.stringsPorMppt = d.stringsPorMppt;
   if (d.vdcMax !== undefined) updateValues.vdcMax = d.vdcMax != null ? String(d.vdcMax) : null;
-
   const [inverter] = await db
     .update(invertersTable)
     .set(updateValues)
-    .where(eq(invertersTable.id, params.data.id))
+    .where(and(eq(invertersTable.id, params.data.id), eq(invertersTable.companyId, cid)))
     .returning();
-
-  if (!inverter) {
-    res.status(404).json({ error: "Inversor não encontrado" });
-    return;
-  }
-
+  if (!inverter) { res.status(404).json({ error: "Inversor não encontrado" }); return; }
   res.json(UpdateInverterResponse.parse(toInverterResponse(inverter)));
 });
 
 router.delete("/inverters/:id", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = DeleteInverterParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [inverter] = await db
     .delete(invertersTable)
-    .where(eq(invertersTable.id, params.data.id))
+    .where(and(eq(invertersTable.id, params.data.id), eq(invertersTable.companyId, cid)))
     .returning();
-
-  if (!inverter) {
-    res.status(404).json({ error: "Inversor não encontrado" });
-    return;
-  }
-
+  if (!inverter) { res.status(404).json({ error: "Inversor não encontrado" }); return; }
   res.sendStatus(204);
 });
 

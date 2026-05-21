@@ -1,15 +1,17 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, systemsTable, panelsTable, invertersTable, batteriesTable } from "@workspace/db";
 import {
   CheckSystemCompatibilityParams,
   CheckSystemCompatibilityResponse,
 } from "@workspace/api-zod";
+import { getCompanyId } from "../lib/auth";
 
 const router: IRouter = Router();
 
 // Check system compatibility
 router.get("/systems/:id/compatibility", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
   const params = CheckSystemCompatibilityParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -19,7 +21,7 @@ router.get("/systems/:id/compatibility", async (req, res): Promise<void> => {
   const [system] = await db
     .select()
     .from(systemsTable)
-    .where(eq(systemsTable.id, params.data.id));
+    .where(and(eq(systemsTable.id, params.data.id), eq(systemsTable.companyId, cid)));
 
   if (!system) {
     res.status(404).json({ error: "Sistema não encontrado" });

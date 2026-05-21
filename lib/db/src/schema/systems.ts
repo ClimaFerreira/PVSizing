@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const systemsTable = pgTable("pv_systems", {
   id: serial("id").primaryKey(),
+  companyId: integer("company_id"),
   customerId: integer("customer_id").notNull(),
   panelId: integer("panel_id").notNull(),
   inverterId: integer("inverter_id").notNull(),

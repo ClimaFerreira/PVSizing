@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
+import companiesRouter from "./companies";
 import customersRouter from "./customers";
 import panelsRouter from "./panels";
 import invertersRouter from "./inverters";
@@ -15,10 +17,18 @@ import aiToolsRouter from "./ai-tools";
 import proposalsRouter from "./proposals";
 import wizardDraftRouter from "./wizard-draft";
 import projectsRouter from "./projects";
+import { requireAuth } from "../lib/auth";
 
 const router: IRouter = Router();
 
+// Public routes
 router.use(healthRouter);
+router.use(authRouter);
+
+// Everything below requires authentication
+router.use(requireAuth);
+
+router.use(companiesRouter);
 router.use(customersRouter);
 router.use(panelsRouter);
 router.use(invertersRouter);

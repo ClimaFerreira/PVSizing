@@ -21,6 +21,11 @@ import StringSizing from "@/pages/string-sizing";
 import Wizard from "@/pages/wizard";
 import Proposals from "@/pages/proposals";
 import Projects from "@/pages/projects";
+import LoginPage from "@/pages/login";
+import CompanySettingsPage from "@/pages/company-settings";
+
+import { AuthProvider, ProtectedRoute } from "@/lib/auth";
+import { BrandingProvider } from "@/components/branding-provider";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,33 +35,43 @@ const queryClient = new QueryClient({
       staleTime: 5 * 60 * 1_000,
       refetchOnWindowFocus: false,
     },
-    mutations: {
-      retry: 0,
-    },
+    mutations: { retry: 0 },
   },
 });
 
+function ProtectedApp() {
+  return (
+    <ProtectedRoute>
+      <Layout>
+        <Switch>
+          <Route path="/" component={Landing} />
+          <Route path="/painel" component={Dashboard} />
+          <Route path="/clientes" component={Customers} />
+          <Route path="/clientes/:id" component={CustomerDetail} />
+          <Route path="/equipamentos/paineis" component={Panels} />
+          <Route path="/equipamentos/inversores" component={Inverters} />
+          <Route path="/equipamentos/baterias" component={Batteries} />
+          <Route path="/sistemas" component={Systems} />
+          <Route path="/sistemas/novo" component={SystemNew} />
+          <Route path="/sistemas/:id" component={SystemDetail} />
+          <Route path="/calculadora-strings" component={StringSizing} />
+          <Route path="/wizard" component={Wizard} />
+          <Route path="/propostas" component={Proposals} />
+          <Route path="/estudos" component={Projects} />
+          <Route path="/empresa" component={CompanySettingsPage} />
+          <Route component={NotFound} />
+        </Switch>
+      </Layout>
+    </ProtectedRoute>
+  );
+}
+
 function Router() {
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={Landing} />
-        <Route path="/painel" component={Dashboard} />
-        <Route path="/clientes" component={Customers} />
-        <Route path="/clientes/:id" component={CustomerDetail} />
-        <Route path="/equipamentos/paineis" component={Panels} />
-        <Route path="/equipamentos/inversores" component={Inverters} />
-        <Route path="/equipamentos/baterias" component={Batteries} />
-        <Route path="/sistemas" component={Systems} />
-        <Route path="/sistemas/novo" component={SystemNew} />
-        <Route path="/sistemas/:id" component={SystemDetail} />
-        <Route path="/calculadora-strings" component={StringSizing} />
-        <Route path="/wizard" component={Wizard} />
-        <Route path="/propostas" component={Proposals} />
-        <Route path="/estudos" component={Projects} />
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+    <Switch>
+      <Route path="/login" component={LoginPage} />
+      <Route component={ProtectedApp} />
+    </Switch>
   );
 }
 
@@ -65,9 +80,13 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <ErrorBoundary>
-            <Router />
-          </ErrorBoundary>
+          <AuthProvider>
+            <BrandingProvider>
+              <ErrorBoundary>
+                <Router />
+              </ErrorBoundary>
+            </BrandingProvider>
+          </AuthProvider>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

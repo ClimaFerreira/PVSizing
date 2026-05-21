@@ -21,6 +21,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import {
   Zap, MapPin, Settings2, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown,
   Loader2, Sun, Battery, BarChart3, AlertTriangle, TrendingUp, TrendingDown,
@@ -216,7 +217,9 @@ export default function Wizard() {
   const [orcamentoState, setOrcamentoState] = useState<OrcamentoState | null>(null);
   const [lastSaved, setLastSaved]   = useState<Date | null>(null);
   const [dbSynced, setDbSynced]     = useState(false);
-  const sessionId = useRef<string>(getOrCreateSessionId());
+  const { company } = useAuth();
+  const companyId = company?.id ?? null;
+  const sessionId = useRef<string>(getOrCreateSessionId(companyId));
   const saveTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dbSyncTimerRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextManualReset    = useRef(false);
@@ -292,7 +295,7 @@ export default function Wizard() {
     // Guard: only show the dialog once per session lifecycle
     if (draftDialogShownRef.current) return;
 
-    const local = loadDraft();
+    const local = loadDraft(companyId);
     if (local && (local.step > 1 || local.sizing !== null)) {
       draftDialogShownRef.current = true;
       setPendingDraft(local);
@@ -345,13 +348,13 @@ export default function Wizard() {
 
     // localStorage — fast (800ms)
     saveTimerRef.current = setTimeout(() => {
-      saveDraft(snapshot);
+      saveDraft(companyId, snapshot);
       setLastSaved(new Date());
     }, 800);
 
     // DB — deferred (4s), fire-and-forget
     dbSyncTimerRef.current = setTimeout(() => {
-      const saved = loadDraft();
+      const saved = loadDraft(companyId);
       if (saved) {
         syncDraftToDb(saved, sessionId.current).then(() => setDbSynced(true));
       }
@@ -651,7 +654,7 @@ export default function Wizard() {
   }, [locForm, equipForm]);
 
   const discardDraft = useCallback(() => {
-    clearDraft();
+    clearDraft(companyId);
     clearDraftFromDb(sessionId.current);
     setDbSynced(false);
     setShowRecovery(false);
@@ -660,7 +663,7 @@ export default function Wizard() {
   }, []);
 
   const resetWizard = useCallback(() => {
-    clearDraft();
+    clearDraft(companyId);
     clearDraftFromDb(sessionId.current);
     setDbSynced(false);
     setConsumoData(DEFAULT_CONSUMO_DATA);
@@ -741,7 +744,7 @@ export default function Wizard() {
         alertas:               [],
       }},
       {
-        onSuccess: () => { clearDraft(); toast({ title: "Proposta guardada!" }); navigate("/propostas"); },
+        onSuccess: () => { clearDraft(companyId); toast({ title: "Proposta guardada!" }); navigate("/propostas"); },
         onError:   () => toast({ title: "Erro ao guardar proposta", variant: "destructive" }),
       }
     );
