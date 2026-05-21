@@ -14,7 +14,7 @@ Full-stack PV solar sizing and financial analysis web app in Portuguese (Portuga
 
 - **Monorepo**: pnpm workspaces
 - **Node.js**: 24, **TypeScript**: 5.9
-- **Frontend**: React + Vite + Tailwind + shadcn/ui (`artifacts/pv-sizing`)
+- **Frontend**: React + Vite + Tailwind + shadcn/ui (`artifacts/pv-sizing` — SolarDim; `artifacts/fotocalc-web` — FotoCalc)
 - **Backend**: Express 5 + Drizzle ORM + Zod (`artifacts/api-server`)
 - **Database**: PostgreSQL
 - **AI**: Anthropic Claude via `@workspace/integrations-anthropic-ai`

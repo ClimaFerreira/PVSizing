@@ -9,7 +9,8 @@ import {
   Menu,
   GitBranch,
   Wand2,
-  FileText
+  FileText,
+  Map as MapIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Link>
           );
         })}
+        <div className="pt-3 mt-3 border-t border-sidebar-border">
+          <a href="/fotocalc-web/" onClick={() => setIsMobileOpen(false)}>
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors cursor-pointer text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+              <MapIcon size={18} className="text-sidebar-foreground/50" />
+              Layout / Mapa
+            </div>
+          </a>
+        </div>
       </nav>
       <div className="p-4 border-t border-sidebar-border text-xs text-sidebar-foreground/50 text-center">
         SolarDim v1.0.0
