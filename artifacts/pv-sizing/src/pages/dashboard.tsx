@@ -123,35 +123,35 @@ export default function Dashboard() {
       label: "Novo Dimensionamento",
       desc: "Iniciar o wizard passo-a-passo",
       icon: TrendingUp,
-      path: "/wizard",
+      path: "/dimensionamento",
       accent: "text-primary",
     },
     {
       label: "Gerir Clientes",
       desc: "Consultar e editar registos",
       icon: Users,
-      path: "/customers",
+      path: "/clientes",
       accent: "text-blue-600 dark:text-blue-400",
     },
     {
       label: "Catálogo de Painéis",
       desc: "Painéis disponíveis",
       icon: Boxes,
-      path: "/panels",
+      path: "/equipamentos/paineis",
       accent: "text-green-600 dark:text-green-400",
     },
     {
       label: "Catálogo de Inversores",
       desc: "Inversores disponíveis",
       icon: Zap,
-      path: "/inverters",
+      path: "/equipamentos/inversores",
       accent: "text-violet-600 dark:text-violet-400",
     },
     {
       label: "Catálogo de Baterias",
       desc: "Baterias disponíveis",
       icon: Battery,
-      path: "/batteries",
+      path: "/equipamentos/baterias",
       accent: "text-teal-600 dark:text-teal-400",
     },
   ];
@@ -169,7 +169,7 @@ export default function Dashboard() {
           </p>
         </div>
         <Button
-          onClick={() => navigate("/wizard")}
+          onClick={() => navigate("/dimensionamento")}
           className="self-start sm:self-auto shrink-0 gap-1.5"
         >
           <Plus size={15} /> Novo Dimensionamento
@@ -301,7 +301,7 @@ export default function Dashboard() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => navigate("/customers")}
+                    onClick={() => navigate("/clientes")}
                     className="gap-1.5 mt-1"
                   >
                     <Users size={13} /> Gerir Clientes

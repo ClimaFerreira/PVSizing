@@ -55,7 +55,7 @@ export default function Proposals() {
           <h1 className="text-3xl font-bold tracking-tight">Propostas Técnicas</h1>
           <p className="text-muted-foreground mt-1">Gerir e exportar propostas de sistemas solares.</p>
         </div>
-        <Button onClick={() => navigate("/wizard")} className="shrink-0">
+        <Button onClick={() => navigate("/dimensionamento")} className="shrink-0">
           <Wand2 size={16} className="mr-2" />
           Nova Proposta (Wizard)
         </Button>
@@ -100,7 +100,7 @@ export default function Proposals() {
                     <div className="flex flex-col items-center gap-3 text-muted-foreground">
                       <FileText size={36} />
                       <p className="font-medium">Nenhuma proposta encontrada</p>
-                      <Button variant="outline" size="sm" onClick={() => navigate("/wizard")}>
+                      <Button variant="outline" size="sm" onClick={() => navigate("/dimensionamento")}>
                         <Plus size={14} className="mr-1" /> Criar com Wizard
                       </Button>
                     </div>
