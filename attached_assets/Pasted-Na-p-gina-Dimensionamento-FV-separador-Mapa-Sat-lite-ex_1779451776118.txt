@@ -1,0 +1,157 @@
+Na página “Dimensionamento FV”, separador “Mapa Satélite”, existem problemas graves de layout responsivo e usabilidade do editor manual.
+
+1. Corrigir layout quebrado
+
+Problemas atuais visíveis:
+
+O mapa ocupa espaço excessivo.
+O painel lateral fica comprimido.
+Existe scroll duplo.
+Parte do conteúdo desaparece.
+Em resoluções menores o layout quebra.
+O mapa ultrapassa o viewport.
+O container principal não está a respeitar width/height.
+
+Quero refatorar o layout usando:
+
+CSS Grid ou Flex moderno.
+Estrutura:
+sidebar fixa
+painel parâmetros
+painel mapa
+Altura total:
+height: calc(100vh - header)
+Apenas UM scroll vertical principal.
+Containers internos com:
+overflow: hidden
+min-width: 0
+flex: 1
+2. Melhorar estrutura do mapa
+
+O mapa deve funcionar como um editor profissional.
+
+Implementar:
+
+Painel esquerdo fixo:
+parâmetros
+modos
+propriedades
+Painel direito:
+mapa responsivo
+Divisor redimensionável entre painéis.
+Fullscreen para o mapa.
+Zoom sem limite prematuro.
+O mapa nunca pode desaparecer ao fazer zoom.
+
+Se usar Leaflet:
+
+Corrigir:
+invalidateSize()
+resize observer
+tile rendering
+Definir:
+maxZoom: 24,
+zoomSnap: 0.25,
+zoomDelta: 0.5,
+wheelPxPerZoomLevel: 80
+3. Criar verdadeiro modo MANUAL
+
+O modo Manual deve funcionar como software CAD solar.
+
+Ferramentas necessárias:
+Selecionar
+Arrastar
+Rodar painéis
+Duplicar fileiras
+Apagar
+Multi-seleção
+Snap to grid
+Alinhamento automático
+4. Colocação manual de painéis
+
+Quero poder:
+
+clicar no telhado para adicionar painéis;
+desenhar áreas;
+criar múltiplas zonas;
+rodar grupos de painéis;
+alterar orientação:
+vertical
+horizontal;
+definir:
+espaçamento horizontal
+espaçamento vertical;
+mover fileiras completas.
+5. Sistema inteligente de preenchimento
+
+Adicionar:
+
+“Auto Fill Area”
+
+O sistema deve:
+
+preencher automaticamente a área desenhada;
+respeitar:
+obstáculos
+margens
+espaçamentos
+orientação;
+mostrar:
+nº painéis
+potência total
+área ocupada.
+6. Melhorar performance
+
+Implementar:
+
+virtualização de elementos;
+debounce no redraw;
+renderização otimizada;
+lazy loading;
+memoização React.
+7. Mobile responsivo
+
+No mobile:
+
+mapa fullscreen;
+toolbar flutuante;
+menus recolhíveis;
+gestures touch:
+pinch zoom
+rotate
+drag.
+8. Arquitetura recomendada
+
+Separar em componentes:
+
+/components/map/
+  MapCanvas
+  PanelLayer
+  RoofEditor
+  Toolbar
+  ZoomControls
+  PropertyPanel
+  ManualPlacement
+
+Criar estado global:
+
+MapContext
+LayoutContext
+PanelPlacementStore
+9. Objetivo final
+
+Quero que esta página funcione como:
+
+Aurora Solar
+PVsyst layout tool
+OpenSolar
+SolarEdge Designer
+
+Mas mantendo a interface atual da SolarDim.
+
+Além disso:
+
+corrigir todos os problemas de overflow;
+eliminar scrolls duplicados;
+garantir funcionamento fluido em desktop e Samsung mobile;
+garantir que nenhum elemento desaparece ao ampliar o mapa.
