@@ -9,133 +9,60 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{width:100%;height:100%;overflow:hidden;background:#0D2B45;}
-#map{
-  position:absolute;top:0;left:0;right:0;bottom:0;
-  width:100%;height:100%;
-  z-index:1;
-}
-/* ── Toolbar ── */
-#toolbar{
-  position:absolute;top:8px;left:50%;transform:translateX(-50%);
-  display:flex;gap:3px;z-index:1001;
-  background:rgba(13,43,69,0.95);
-  border:1px solid rgba(245,166,35,0.4);border-radius:10px;padding:3px;
-  box-shadow:0 4px 20px rgba(0,0,0,0.5);
-}
-.tb-btn{
-  display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:7px;
-  border:none;cursor:pointer;font-size:11px;font-family:-apple-system,sans-serif;
-  font-weight:600;color:#94A3B8;background:transparent;transition:all .15s;white-space:nowrap;
-}
+#map{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;z-index:1;}
+/* Toolbar */
+#toolbar{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:3px;z-index:1001;background:rgba(13,43,69,0.95);border:1px solid rgba(245,166,35,0.4);border-radius:10px;padding:3px;box-shadow:0 4px 20px rgba(0,0,0,0.5);}
+.tb-btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:7px;border:none;cursor:pointer;font-size:11px;font-family:-apple-system,sans-serif;font-weight:600;color:#94A3B8;background:transparent;transition:all .15s;white-space:nowrap;}
 .tb-btn:hover{background:rgba(255,255,255,0.1);color:#fff;}
 .tb-btn.active{background:rgba(30,136,229,0.85);color:#fff;}
 .tb-btn.sat-on{background:rgba(245,166,35,0.25);color:#F5A623;}
-.tb-btn.danger:hover{background:rgba(239,68,68,0.3);color:#FCA5A5;}
+.tb-btn.warn:hover{background:rgba(239,68,68,0.3);color:#FCA5A5;}
 .tb-sep{width:1px;background:rgba(255,255,255,0.12);margin:3px 1px;}
-/* ── Info bar ── */
-#info{
-  position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
-  background:rgba(13,43,69,0.92);color:#fff;padding:5px 14px;
-  border-radius:14px;font-family:-apple-system,sans-serif;font-size:11px;
-  z-index:1000;pointer-events:none;white-space:nowrap;max-width:92%;
-  border:1px solid rgba(245,166,35,0.35);overflow:hidden;text-overflow:ellipsis;
-}
-#mountBadge{
-  position:absolute;bottom:36px;left:50%;transform:translateX(-50%);
-  background:rgba(13,43,69,0.88);color:#F5A623;padding:3px 10px;
-  border-radius:10px;font-family:-apple-system,sans-serif;font-size:10px;
-  z-index:1000;pointer-events:none;border:1px solid rgba(245,166,35,0.3);
-}
-/* ── Nudge pads ── */
-.nudge-pad,.move-pad{
-  position:absolute;bottom:66px;z-index:1001;
-  display:grid;grid-template-columns:repeat(3,30px);grid-template-rows:repeat(3,30px);gap:2px;
-}
-.nudge-pad{left:8px;}
-.move-pad{left:108px;}
-.nudge-btn{
-  background:rgba(13,43,69,0.88);color:#F5A623;
-  border:1px solid rgba(245,166,35,0.5);border-radius:6px;
-  font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;
-  width:30px;height:30px;font-family:-apple-system,sans-serif;
-  user-select:none;touch-action:manipulation;transition:background .1s;
-}
+/* Info bar */
+#info{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(13,43,69,0.92);color:#fff;padding:5px 14px;border-radius:14px;font-family:-apple-system,sans-serif;font-size:11px;z-index:1000;pointer-events:none;white-space:nowrap;max-width:92%;border:1px solid rgba(245,166,35,0.35);overflow:hidden;text-overflow:ellipsis;}
+/* Mount badge */
+#mountBadge{position:absolute;bottom:36px;left:50%;transform:translateX(-50%);background:rgba(13,43,69,0.88);color:#F5A623;padding:3px 10px;border-radius:10px;font-family:-apple-system,sans-serif;font-size:10px;z-index:1000;pointer-events:none;border:1px solid rgba(245,166,35,0.3);}
+/* Area badge (top-right) */
+#areaBadge{position:absolute;top:48px;right:8px;z-index:1001;background:rgba(13,43,69,0.95);border:2px solid #F5A623;border-radius:8px;padding:4px 10px;font-size:10px;font-family:-apple-system,sans-serif;color:#F5A623;pointer-events:none;display:none;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Nudge pads */
+.nudge-pad,.move-pad{position:absolute;z-index:1001;display:grid;grid-template-columns:repeat(3,28px);grid-template-rows:repeat(3,28px);gap:2px;}
+.nudge-pad{bottom:64px;left:8px;}
+.move-pad{bottom:64px;left:100px;}
+.nudge-btn{background:rgba(13,43,69,0.88);color:#F5A623;border:1px solid rgba(245,166,35,0.5);border-radius:5px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;font-family:-apple-system,sans-serif;user-select:none;touch-action:manipulation;}
 .nudge-btn:hover,.nudge-btn:active{background:rgba(30,136,229,0.7);}
-.nudge-reset{font-size:10px;color:#fff;}
-/* ── Compass ── */
-#compassBox{
-  position:absolute;right:8px;bottom:110px;z-index:1001;
-  text-align:center;pointer-events:none;
-}
-#compassLabel{
-  background:rgba(13,43,69,0.93);color:#F5A623;font-size:9px;
-  font-family:-apple-system,sans-serif;border-radius:5px;padding:2px 7px;margin-top:2px;
-  border:1px solid rgba(245,166,35,0.45);white-space:nowrap;display:block;
-}
-/* ── Hints ── */
-.sel-hint,.loc-badge{
-  position:absolute;z-index:1001;pointer-events:none;
-  font-family:-apple-system,sans-serif;border-radius:8px;font-size:11px;
-}
-.sel-hint{
-  top:48px;left:50%;transform:translateX(-50%);
-  background:rgba(245,166,35,0.15);border:1px solid rgba(245,166,35,0.5);
-  color:#F5A623;padding:6px 14px;
-}
-.loc-badge{
-  top:48px;right:8px;
-  background:rgba(13,43,69,0.9);border:1px solid rgba(30,136,229,0.5);
-  color:#60A5FA;padding:4px 10px;font-size:10px;max-width:180px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
+.nudge-reset{font-size:9px;color:#fff;}
+/* Compass */
+#compassBox{position:absolute;right:8px;bottom:108px;z-index:1001;text-align:center;pointer-events:none;}
+#compassLabel{display:block;background:rgba(13,43,69,0.93);color:#F5A623;font-size:9px;font-family:-apple-system,sans-serif;border-radius:5px;padding:2px 6px;margin-top:2px;border:1px solid rgba(245,166,35,0.45);white-space:nowrap;}
+/* Floating badges */
+.hint-badge{position:absolute;z-index:1001;pointer-events:none;font-family:-apple-system,sans-serif;border-radius:8px;font-size:11px;padding:5px 12px;white-space:nowrap;}
+.loc-badge{top:48px;left:50%;transform:translateX(-50%);background:rgba(13,43,69,0.9);border:1px solid rgba(30,136,229,0.5);color:#60A5FA;font-size:10px;}
 </style>
 </head>
 <body>
-
 <div id="map"></div>
-
 <div id="toolbar">
-  <button class="tb-btn" id="btn-auto" title="Auto-preencher área">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-      <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-    </svg>
-    Auto
-  </button>
-  <button class="tb-btn" id="btn-manual" title="Clique para colocar painel">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-      <path d="M12 5v14M5 12h14"/>
-    </svg>
-    Manual
-  </button>
-  <button class="tb-btn" id="btn-select" title="Selecionar/apagar painéis">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-      <path d="M4 4l6 18 3-7 7-3L4 4z"/>
-    </svg>
-    Seleção
+  <button class="tb-btn" id="btn-draw" title="Desenhar novo telhado" onclick="startDraw()">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg> Área
   </button>
   <div class="tb-sep"></div>
-  <button class="tb-btn danger" id="btn-clear" title="Apagar painéis manuais">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
-    </svg>
-    Limpar
+  <button class="tb-btn active" id="btn-auto" title="Preencher automaticamente" onclick="setMode('auto')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Auto
+  </button>
+  <button class="tb-btn" id="btn-manual" title="Colocar painéis manualmente" onclick="setMode('manual')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Manual
   </button>
   <div class="tb-sep"></div>
-  <button class="tb-btn" id="btn-sat" title="Satélite / mapa base">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-      <circle cx="12" cy="12" r="10"/>
-      <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-    </svg>
-    Satélite
+  <button class="tb-btn sat-on" id="btn-sat" title="Satélite / mapa base" onclick="toggleSat()">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Satélite
   </button>
 </div>
-
-<div id="info">📐 Desenhe a área do telhado com a ferramenta de polígono</div>
+<div id="info">📐 Clique em "Área" para desenhar um telhado</div>
 <div id="mountBadge">▲ Triângulos</div>
+<div id="areaBadge"></div>
 
 <div id="compassBox">
-  <svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+  <svg width="50" height="50" viewBox="0 0 50 50">
     <circle cx="25" cy="25" r="23" fill="rgba(13,43,69,0.93)" stroke="rgba(245,166,35,0.55)" stroke-width="1.5"/>
     <text x="25" y="12" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="7" font-family="-apple-system">N</text>
     <text x="25" y="44" text-anchor="middle" fill="#F5A623" font-size="7" font-weight="bold" font-family="-apple-system">S</text>
@@ -149,459 +76,458 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0D2B45;}
   <span id="compassLabel">Sul · ideal</span>
 </div>
 
-<!-- Leaflet -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- Leaflet.Draw -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-
 <script>
-// ─── Configuration ────────────────────────────────────────────────────────────
-var cfg = {
-  panelW: 1.13, panelH: 2.28, panelProjDepth: 1.974, rowSpacing: 4.132,
-  mountType: 'triangulos', powerWp: 400, maxPanels: 0, azimuth: 180
-};
-var gridOffset = { lat: 0, lng: 0 };
-var MOVE_LAT = 0.4 / 111000;
-var MOVE_LNG = 0.4 / 80000;
+// ─── Constants ────────────────────────────────────────────────────────────────
+var AREA_COLORS = ['#F5A623','#1E88E5','#43A047','#E53935','#8E24AA','#00ACC1','#FB8C00','#3949AB'];
+var AREA_DARKS  = ['#B8791A','#1456B0','#2E7D32','#B71C1C','#6A1B9A','#00838F','#C96800','#283593'];
+var STR_COLORS  = ['#FF5722','#2196F3','#4CAF50','#FF9800','#9C27B0','#00BCD4','#FFEB3B','#F44336','#009688','#3F51B5'];
+var MOVE_LAT=0.4/111000, MOVE_LNG=0.4/80000, NUDGE=5;
 
 // ─── State ────────────────────────────────────────────────────────────────────
-var mode = 'auto';
-var polygon = null;
-var manualList = [];
-var selectedId = null;
-var nextId = 1;
-var satOn = false;
+var areas   = {};   // id -> AreaData
+var activeId= null;
+var areaIdx = 0;
+var mode    = 'auto';
+var layerPanels = true;
+var satOn   = true;
 
-// ─── Map init ─────────────────────────────────────────────────────────────────
-var map = L.map('map', {
-  zoomControl: true,
-  maxZoom: 24, minZoom: 2,
-  zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 80,
-  preferCanvas: true
-}).setView([39.5, -8.0], 7);
+// ─── Map ──────────────────────────────────────────────────────────────────────
+var map = L.map('map',{
+  zoomControl:true, maxZoom:24, minZoom:2,
+  zoomSnap:0.25, zoomDelta:0.5, wheelPxPerZoomLevel:80, preferCanvas:true
+}).setView([39.5,-8.0],7);
 
-// Tile layers
-var osmLayer = L.tileLayer(
-  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  { attribution: '© OpenStreetMap', maxZoom: 24, maxNativeZoom: 19, subdomains: ['a','b','c'] }
-);
-var esriSat = L.tileLayer(
-  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-  { attribution: 'Esri', maxZoom: 24, maxNativeZoom: 19 }
-);
-var esriLbl = L.tileLayer(
-  'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-  { attribution: 'Esri', maxZoom: 24, maxNativeZoom: 19, opacity: 0.85 }
-);
+var esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {attribution:'Esri',maxZoom:24,maxNativeZoom:19});
+var esriLbl = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  {attribution:'Esri',maxZoom:24,maxNativeZoom:19,opacity:0.85});
+var osmLayer= L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {attribution:'© OSM',maxZoom:24,maxNativeZoom:19,subdomains:['a','b','c']});
 
-// Start with satellite view on (most useful for roof drawing)
-esriSat.addTo(map);
-esriLbl.addTo(map);
-satOn = true;
-document.getElementById('btn-sat').classList.add('sat-on');
+esriSat.addTo(map); esriLbl.addTo(map);
 
-// ─── Critical: call invalidateSize early and repeatedly ──────────────────────
-function inv() { map.invalidateSize({ animate: false }); }
-inv();
-setTimeout(inv, 50);
-setTimeout(inv, 200);
-setTimeout(inv, 600);
-setTimeout(inv, 1500);
+function inv(){map.invalidateSize({animate:false});}
+inv(); setTimeout(inv,50); setTimeout(inv,200); setTimeout(inv,600); setTimeout(inv,1500);
+if(typeof ResizeObserver!=='undefined') new ResizeObserver(inv).observe(document.getElementById('map'));
 
-// ResizeObserver for container size changes
-if (typeof ResizeObserver !== 'undefined') {
-  new ResizeObserver(inv).observe(document.getElementById('map'));
-}
-
-// ─── Draw layers ──────────────────────────────────────────────────────────────
+// ─── Draw control ─────────────────────────────────────────────────────────────
 var drawnItems = new L.FeatureGroup().addTo(map);
-var panelLayer = new L.FeatureGroup().addTo(map);
-var manualLayer = new L.FeatureGroup().addTo(map);
-
 var drawCtrl = new L.Control.Draw({
-  edit: { featureGroup: drawnItems },
-  draw: {
-    polygon: {
-      shapeOptions: { color: '#F5A623', fillColor: 'rgba(245,166,35,0.1)', fillOpacity: 0.3, weight: 2 }
-    },
-    polyline: false, rectangle: false, circle: false, circlemarker: false, marker: false
+  edit:{featureGroup:drawnItems},
+  draw:{
+    polygon:{shapeOptions:{color:'rgba(245,166,35,0.8)',fillColor:'rgba(245,166,35,0.08)',fillOpacity:1,weight:2,dashArray:'6 4'}},
+    polyline:false,rectangle:false,circle:false,circlemarker:false,marker:false
   }
 }).addTo(map);
 
-map.on(L.Draw.Event.CREATED, function(e) {
-  drawnItems.clearLayers();
-  panelLayer.clearLayers();
-  polygon = null;
-  polygon = e.layer;
-  drawnItems.addLayer(polygon);
-  gridOffset = { lat: 0, lng: 0 };
-  if (mode === 'auto') fillPanels();
-  else emitResults(0, 0, 0);
-});
+// Hide leaflet.draw toolbar (we use our own buttons)
+setTimeout(function(){
+  var ct=document.querySelector('.leaflet-draw-toolbar');
+  if(ct) ct.style.display='none';
+  var et=document.querySelector('.leaflet-draw-edit-toolbar');
+  if(et) et.style.display='none';
+},200);
 
-map.on(L.Draw.Event.EDITED, function() {
-  panelLayer.clearLayers();
-  polygon = null;
-  drawnItems.eachLayer(function(l) { polygon = l; });
-  if (polygon && mode === 'auto') fillPanels();
-});
-
-map.on(L.Draw.Event.DELETED, function() {
-  panelLayer.clearLayers();
-  polygon = null;
-  document.getElementById('info').textContent = '📐 Desenhe a área do telhado';
-  emit({ type: 'roofCleared' });
-});
-
-// ─── Mode management ──────────────────────────────────────────────────────────
-function setMode(m) {
-  mode = m;
-  ['auto','manual','select'].forEach(function(k) {
-    document.getElementById('btn-' + k).classList.toggle('active', k === m);
+var drawHandler=null;
+function startDraw(){
+  if(drawHandler&&drawHandler._enabled){drawHandler.disable();drawHandler=null;document.getElementById('btn-draw').classList.remove('active');return;}
+  drawHandler=new L.Draw.Polygon(map,{
+    shapeOptions:{color:'rgba(245,166,35,0.9)',fillColor:'rgba(245,166,35,0.08)',fillOpacity:1,weight:2,dashArray:'6 4'}
   });
-  if (m !== 'select') deselectAll();
-  if (m === 'select') {
-    var h = document.createElement('div');
-    h.className = 'sel-hint'; h.id = 'sel-hint';
-    h.textContent = 'Clique no painel · ↑↓←→ mover · Delete apagar';
-    document.body.appendChild(h);
-    setTimeout(function() { var x = document.getElementById('sel-hint'); if (x) x.remove(); }, 3500);
-  }
-  if (m === 'auto' && polygon) fillPanels();
+  drawHandler.enable();
+  document.getElementById('btn-draw').classList.add('active');
 }
 
-document.getElementById('btn-auto').addEventListener('click', function() { setMode('auto'); });
-document.getElementById('btn-manual').addEventListener('click', function() { setMode('manual'); });
-document.getElementById('btn-select').addEventListener('click', function() { setMode('select'); });
-document.getElementById('btn-clear').addEventListener('click', clearManual);
-document.getElementById('btn-sat').addEventListener('click', toggleSat);
+map.on(L.Draw.Event.CREATED,function(e){
+  document.getElementById('btn-draw').classList.remove('active');
+  drawHandler=null;
+  var ci=areaIdx%AREA_COLORS.length; areaIdx++;
+  var color=AREA_COLORS[ci], dark=AREA_DARKS[ci];
+  var id='a'+Date.now();
+  var poly=e.layer;
+  poly.setStyle({color:color,fillColor:color,fillOpacity:0.07,weight:2.5});
+  drawnItems.addLayer(poly);
 
-// ─── Satellite toggle ─────────────────────────────────────────────────────────
-function toggleSat() {
-  satOn = !satOn;
-  var btn = document.getElementById('btn-sat');
-  if (satOn) {
-    osmLayer.remove(); esriSat.addTo(map); esriLbl.addTo(map);
-    btn.classList.add('sat-on');
-  } else {
-    esriSat.remove(); esriLbl.remove(); osmLayer.addTo(map);
-    btn.classList.remove('sat-on');
-  }
-}
+  var pLayer=new L.FeatureGroup();
+  if(layerPanels) pLayer.addTo(map);
 
-// ─── Keyboard ─────────────────────────────────────────────────────────────────
-document.addEventListener('keydown', function(e) {
-  if (selectedId !== null && mode === 'select') {
-    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
-    var dLat = 0, dLng = 0;
-    if      (e.key === 'ArrowUp')    dLat =  MOVE_LAT * 4;
-    else if (e.key === 'ArrowDown')  dLat = -MOVE_LAT * 4;
-    else if (e.key === 'ArrowLeft')  dLng = -MOVE_LNG * 4;
-    else if (e.key === 'ArrowRight') dLng =  MOVE_LNG * 4;
-    else return;
-    e.preventDefault();
-    var item = manualList.find(function(p) { return p.id === selectedId; });
-    if (!item) return;
-    item.lat += dLat; item.lng += dLng;
-    item.corners = item.corners.map(function(c) { return L.latLng(c.lat + dLat, c.lng + dLng); });
-    item.layer.setLatLngs(item.corners);
-    emitResults(0, 0, 0);
-  }
+  areas[id]={
+    id:id, polygon:poly, panelLayer:pLayer,
+    color:color, dark:dark,
+    settings:{azimuth:180,mountType:'triangulos',panelW:1.13,panelH:2.28,powerWp:400,maxPanels:0,panelProjDepth:1.974,rowSpacing:4.132},
+    panels:[], strings:{},
+    gridOffset:{lat:0,lng:0}
+  };
+
+  poly.on('click',function(ev){L.DomEvent.stopPropagation(ev);selectArea(id);});
+  selectArea(id);
+  fillArea(id);
+  emit({type:'areaAdded',id:id,color:color,colorIdx:ci});
 });
 
-// ─── Manual placement ─────────────────────────────────────────────────────────
-map.on('click', function(e) {
-  if (mode !== 'manual' || !polygon) return;
-  var ll = e.latlng;
-  var poly = polygon.getLatLngs()[0];
-  if (!pip([ll.lat, ll.lng], poly.map(function(p) { return [p.lat, p.lng]; }))) return;
-  placeManual(ll.lat, ll.lng);
-  emitResults(0, 0, 0);
+map.on(L.Draw.Event.EDITED,function(){
+  drawnItems.eachLayer(function(l){
+    var k=Object.keys(areas).find(function(k){return areas[k].polygon===l;});
+    if(k){areas[k].gridOffset={lat:0,lng:0};fillArea(k);}
+  });
 });
 
-function placeManual(lat, lng) {
-  var az = cfg.azimuth, azp = (az + 90) % 360;
-  var isC = cfg.mountType === 'coplanar';
-  var fwd = isC ? cfg.panelH : cfg.panelProjDepth;
-  var c0 = dp(lat, lng, az, -fwd / 2);
-  var c1 = dp(c0[0], c0[1], azp, -cfg.panelW / 2);
-  var c2 = dp(c1[0], c1[1], azp, cfg.panelW);
-  var c3 = dp(c0[0], c0[1], az, fwd);
-  var c4 = dp(c3[0], c3[1], azp, -cfg.panelW / 2);
-  var c5 = dp(c4[0], c4[1], azp, cfg.panelW);
-  var corners = [L.latLng(c1), L.latLng(c2), L.latLng(c5), L.latLng(c4)];
-  var fill = isC ? '#3B82F6' : '#1E88E5';
-  var id = nextId++;
-  var layer = L.polygon(corners, { color: '#1565C0', fillColor: fill, fillOpacity: 0.75, weight: 1.5, interactive: true });
-  layer.addTo(manualLayer);
-  layer.on('click', function(ev) { L.DomEvent.stopPropagation(ev); if (mode === 'select') selectPanel(id); });
-  manualList.push({ id: id, corners: corners, layer: layer, lat: lat, lng: lng });
+map.on(L.Draw.Event.DELETED,function(e){
+  e.layers.eachLayer(function(l){
+    var k=Object.keys(areas).find(function(k){return areas[k].polygon===l;});
+    if(k) deleteArea(k);
+  });
+});
+
+// ─── Mode ─────────────────────────────────────────────────────────────────────
+function setMode(m){
+  mode=m;
+  ['auto','manual'].forEach(function(k){document.getElementById('btn-'+k).classList.toggle('active',k===m);});
 }
 
-function selectPanel(id) {
-  deselectAll(); selectedId = id;
-  var it = manualList.find(function(p) { return p.id === id; });
-  if (it) it.layer.setStyle({ color: '#F5A623', weight: 2.5, fillOpacity: 0.9 });
-}
-function deselectAll() {
-  selectedId = null;
-  manualList.forEach(function(p) { p.layer.setStyle({ color: '#1565C0', weight: 1.5, fillOpacity: 0.75 }); });
-}
-function deleteSelected() {
-  if (selectedId === null) return;
-  var idx = manualList.findIndex(function(p) { return p.id === selectedId; });
-  if (idx === -1) return;
-  manualLayer.removeLayer(manualList[idx].layer);
-  manualList.splice(idx, 1); selectedId = null;
-  emitResults(0, 0, 0);
-}
-function clearManual() {
-  manualList.forEach(function(p) { manualLayer.removeLayer(p.layer); });
-  manualList = []; selectedId = null;
-  emitResults(0, 0, 0);
+// Manual click
+map.on('click',function(e){
+  if(mode!=='manual'||!activeId||!areas[activeId]) return;
+  var area=areas[activeId];
+  var ll=e.latlng;
+  var poly=area.polygon.getLatLngs()[0];
+  if(!pip([ll.lat,ll.lng],poly.map(function(p){return[p.lat,p.lng];}))) return;
+  placeManualPanel(activeId,ll.lat,ll.lng);
+  emitAreaUpdate(activeId);
+});
+
+function placeManualPanel(areaId,lat,lng){
+  var area=areas[areaId];
+  var s=area.settings;
+  var az=s.azimuth,azp=(az+90)%360;
+  var isC=s.mountType==='coplanar';
+  var fwd=isC?s.panelH:s.panelProjDepth;
+  var c0=dp(lat,lng,az,-fwd/2);
+  var c1=dp(c0[0],c0[1],azp,-s.panelW/2);
+  var c2=dp(c1[0],c1[1],azp,s.panelW);
+  var c3=dp(c0[0],c0[1],az,fwd);
+  var c4=dp(c3[0],c3[1],azp,-s.panelW/2);
+  var c5=dp(c4[0],c4[1],azp,s.panelW);
+  var corners=[L.latLng(c1),L.latLng(c2),L.latLng(c5),L.latLng(c4)];
+  var id=areaId+'_m'+area.panels.length;
+  var layer=L.polygon(corners,{color:area.dark,fillColor:area.color,fillOpacity:0.72,weight:1,interactive:true});
+  layer.on('click',function(ev){L.DomEvent.stopPropagation(ev);});
+  layer.addTo(area.panelLayer);
+  area.panels.push({id:id,corners:corners,layer:layer,stringId:null,row:9999,col:area.panels.length});
 }
 
-// ─── Auto-fill panels ─────────────────────────────────────────────────────────
-function fillPanels() {
-  if (!polygon) return;
-  panelLayer.clearLayers();
-  var latlngs = polygon.getLatLngs()[0];
-  var bounds = polygon.getBounds();
-  var bc = bounds.getCenter();
-  var ctr = L.latLng(bc.lat + gridOffset.lat, bc.lng + gridOffset.lng);
-  var nw = L.latLng(bounds.getNorth(), bounds.getWest());
-  var ne = L.latLng(bounds.getNorth(), bounds.getEast());
-  var sw = L.latLng(bounds.getSouth(), bounds.getWest());
-  var bW = nw.distanceTo(ne), bH = nw.distanceTo(sw);
-  var az = cfg.azimuth, azp = (az + 90) % 360;
-  var isC = cfg.mountType === 'coplanar';
-  var fwd = isC ? cfg.panelH : cfg.panelProjDepth;
-  var stepA = isC ? (cfg.panelH + 0.02) : cfg.rowSpacing;
-  var stepB = cfg.panelW + 0.05;
-  var nA = Math.ceil(bH * 1.6 / stepA) + 2;
-  var nB = Math.ceil(bW * 1.6 / stepB) + 2;
-  var polyPts = latlngs.map(function(ll) { return [ll.lat, ll.lng]; });
-  var count = 0, panels = [];
+// ─── Area functions ───────────────────────────────────────────────────────────
+function selectArea(id){
+  activeId=id;
+  Object.keys(areas).forEach(function(k){
+    var sel=k===id;
+    areas[k].polygon.setStyle({weight:sel?3:2,opacity:sel?1:0.6});
+  });
+  emit({type:'areaSelected',id:id});
+  updateCompassForActive();
+  updateAreaBadge();
+}
 
-  for (var i = -nA; i < nA; i++) {
-    for (var j = -nB; j < nB; j++) {
-      var tmp = dp(ctr.lat, ctr.lng, az, i * stepA);
-      var pc  = dp(tmp[0], tmp[1], azp, j * stepB);
-      var c0 = dp(pc[0], pc[1], az, -fwd / 2);
-      var c1 = dp(c0[0], c0[1], azp, -cfg.panelW / 2);
-      var c2 = dp(c1[0], c1[1], azp, cfg.panelW);
-      var c3 = dp(c0[0], c0[1], az, fwd);
-      var c4 = dp(c3[0], c3[1], azp, -cfg.panelW / 2);
-      var c5 = dp(c4[0], c4[1], azp, cfg.panelW);
-      var corners = [L.latLng(c1), L.latLng(c2), L.latLng(c5), L.latLng(c4)];
-      if (corners.every(function(pt) { return pip([pt.lat, pt.lng], polyPts); })) {
-        if (cfg.maxPanels > 0 && count >= cfg.maxPanels) continue;
-        panels.push(corners); count++;
+function fillArea(id){
+  var area=areas[id];
+  if(!area) return;
+  area.panelLayer.clearLayers();
+  area.panels=[];
+  area.strings={};
+
+  var s=area.settings;
+  var latlngs=area.polygon.getLatLngs()[0];
+  var bounds=area.polygon.getBounds();
+  var bc=bounds.getCenter();
+  var ctr=L.latLng(bc.lat+area.gridOffset.lat,bc.lng+area.gridOffset.lng);
+  var nw=L.latLng(bounds.getNorth(),bounds.getWest());
+  var ne=L.latLng(bounds.getNorth(),bounds.getEast());
+  var sw=L.latLng(bounds.getSouth(),bounds.getWest());
+  var bW=nw.distanceTo(ne),bH=nw.distanceTo(sw);
+
+  var az=s.azimuth,azp=(az+90)%360;
+  var isC=s.mountType==='coplanar';
+  var fwd=isC?s.panelH:s.panelProjDepth;
+  var stepA=isC?(s.panelH+0.02):s.rowSpacing;
+  var stepB=s.panelW+0.05;
+  var nA=Math.ceil(bH*1.6/stepA)+2;
+  var nB=Math.ceil(bW*1.6/stepB)+2;
+  var polyPts=latlngs.map(function(ll){return[ll.lat,ll.lng];});
+  var count=0;
+
+  for(var i=-nA;i<nA;i++){
+    for(var j=-nB;j<nB;j++){
+      if(s.maxPanels>0&&count>=s.maxPanels) continue;
+      var tmp=dp(ctr.lat,ctr.lng,az,i*stepA);
+      var pc=dp(tmp[0],tmp[1],azp,j*stepB);
+      var c0=dp(pc[0],pc[1],az,-fwd/2);
+      var c1=dp(c0[0],c0[1],azp,-s.panelW/2);
+      var c2=dp(c1[0],c1[1],azp,s.panelW);
+      var c3=dp(c0[0],c0[1],az,fwd);
+      var c4=dp(c3[0],c3[1],azp,-s.panelW/2);
+      var c5=dp(c4[0],c4[1],azp,s.panelW);
+      var corners=[L.latLng(c1),L.latLng(c2),L.latLng(c5),L.latLng(c4)];
+      if(corners.every(function(pt){return pip([pt.lat,pt.lng],polyPts);})){
+        var layer=L.polygon(corners,{color:area.dark,fillColor:area.color,fillOpacity:isC?0.5:0.62,weight:1,interactive:false});
+        layer.addTo(area.panelLayer);
+        area.panels.push({id:id+'_p'+count,corners:corners,layer:layer,stringId:null,row:i,col:j});
+        count++;
       }
     }
   }
 
-  var fill = isC ? '#3B82F6' : '#1E88E5';
-  var stroke = isC ? '#1D4ED8' : '#1565C0';
-  panels.forEach(function(c) {
-    L.polygon(c, { color: stroke, fillColor: fill, fillOpacity: isC ? 0.55 : 0.65, weight: 1, interactive: false }).addTo(panelLayer);
+  emitAreaUpdate(id,bW,bH);
+  emitSummary();
+  updateInfoBar();
+  if(id===activeId) updateCompassForActive();
+}
+
+function emitAreaUpdate(id,bW,bH){
+  var area=areas[id];
+  if(!area) return;
+  var s=area.settings;
+  var count=area.panels.length;
+  var tkwp=count*s.powerWp/1000;
+  var az=s.azimuth;
+  var dev=Math.min(Math.abs(az-180),360-Math.abs(az-180));
+  var devText=dev<2?'Sul · ideal':azLabel(az)+' · '+Math.round(dev)+'° de Sul';
+  emit({type:'areaUpdated',id:id,panelCount:count,totalKwp:tkwp,
+        roofArea:Math.round((bW||0)*(bH||0)),azimuth:az,mountType:s.mountType,
+        orientationLabel:devText});
+}
+
+function deleteArea(id){
+  var area=areas[id];
+  if(!area) return;
+  try{drawnItems.removeLayer(area.polygon);}catch(_){}
+  try{map.removeLayer(area.panelLayer);}catch(_){}
+  delete areas[id];
+  if(activeId===id){
+    activeId=null;
+    var rem=Object.keys(areas);
+    if(rem.length>0) selectArea(rem[rem.length-1]);
+  }
+  emitSummary();
+  emit({type:'areaDeleted',id:id});
+  updateInfoBar();
+  updateAreaBadge();
+}
+
+function autoString(areaId,count){
+  var area=areas[areaId];
+  if(!area||area.panels.length===0||count<=0) return;
+  var isC=area.settings.mountType==='coplanar';
+  area.panels.forEach(function(p){
+    p.layer.setStyle({fillColor:area.color,fillOpacity:isC?0.5:0.62});
+    p.stringId=null;
   });
+  area.strings={};
+  var sorted=area.panels.slice().sort(function(a,b){return a.row!==b.row?a.row-b.row:a.col-b.col;});
+  var perStr=Math.ceil(sorted.length/count);
+  var result=[];
+  for(var i=0;i<count;i++){
+    var strId=areaId+'_s'+i;
+    var color=STR_COLORS[i%STR_COLORS.length];
+    var start=i*perStr,end=Math.min(start+perStr,sorted.length);
+    var strPanels=sorted.slice(start,end);
+    if(!strPanels.length) break;
+    strPanels.forEach(function(p){p.layer.setStyle({fillColor:color,fillOpacity:0.85});p.stringId=strId;});
+    area.strings[strId]={id:strId,color:color,panelCount:strPanels.length};
+    result.push({id:strId,color:color,panelCount:strPanels.length,label:'String '+(i+1)});
+  }
+  emit({type:'stringsUpdated',areaId:areaId,strings:result});
+}
 
-  emitResults(count, bW, bH);
+function clearStrings(areaId){
+  var area=areas[areaId];
+  if(!area) return;
+  var isC=area.settings.mountType==='coplanar';
+  area.panels.forEach(function(p){p.layer.setStyle({fillColor:area.color,fillOpacity:isC?0.5:0.62});p.stringId=null;});
+  area.strings={};
+  emit({type:'stringsUpdated',areaId:areaId,strings:[]});
+}
 
-  // Map screenshot (best-effort)
-  if (typeof html2canvas !== 'undefined' && panels.length > 0) {
-    setTimeout(function() {
-      try {
-        html2canvas(document.getElementById('map'), {
-          useCORS: true, allowTaint: false, scale: 0.6,
-          logging: false, imageTimeout: 8000, backgroundColor: '#0D2B45'
-        }).then(function(c) {
-          emit({ type: 'mapCapture', imageDataUrl: c.toDataURL('image/jpeg', 0.8) });
-        }).catch(function(){});
-      } catch(_) {}
-    }, 2500);
+// ─── Nudge (active area) ──────────────────────────────────────────────────────
+function nudgeActive(d){
+  if(!activeId||!areas[activeId]) return;
+  areas[activeId].settings.azimuth=((areas[activeId].settings.azimuth+d)%360+360)%360;
+  fillArea(activeId);
+  emit({type:'areaAzimuthChanged',id:activeId,azimuth:areas[activeId].settings.azimuth});
+}
+function moveGridActive(dlat,dlng){
+  if(!activeId||!areas[activeId]) return;
+  areas[activeId].gridOffset.lat+=dlat;
+  areas[activeId].gridOffset.lng+=dlng;
+  fillArea(activeId);
+}
+function resetGridActive(){
+  if(!activeId||!areas[activeId]) return;
+  areas[activeId].gridOffset={lat:0,lng:0};
+  fillArea(activeId);
+}
+
+// ─── Visual helpers ───────────────────────────────────────────────────────────
+function updateCompassForActive(){
+  if(!activeId||!areas[activeId]) return;
+  var s=areas[activeId].settings;
+  updateCompass(s.azimuth);
+  var badge=document.getElementById('mountBadge');
+  if(s.mountType==='coplanar'){badge.textContent='▬ Coplanar';badge.style.color='#60A5FA';}
+  else{badge.textContent='▲ Triângulos';badge.style.color='#F5A623';}
+}
+function updateCompass(az){
+  var d=Math.min(Math.abs(az-180),360-Math.abs(az-180));
+  document.getElementById('compassArrow').setAttribute('transform','rotate('+(az-180)+',25,25)');
+  document.getElementById('compassLabel').textContent=d<2?'Sul · ideal':azLabel(az)+' · '+Math.round(d)+'° de Sul';
+}
+function updateAreaBadge(){
+  var el=document.getElementById('areaBadge');
+  if(!activeId||!areas[activeId]){el.style.display='none';return;}
+  var a=areas[activeId];
+  var k=Object.keys(areas).indexOf(activeId)+1;
+  el.style.display='block';
+  el.style.borderColor=a.color;
+  el.style.color=a.color;
+  el.textContent='● Telhado '+k+' activo';
+}
+function updateInfoBar(){
+  var total=0,kwp=0,nc=Object.keys(areas).length;
+  Object.keys(areas).forEach(function(k){
+    var a=areas[k];
+    total+=a.panels.length;
+    kwp+=a.panels.length*a.settings.powerWp/1000;
+  });
+  var txt=nc===0?'📐 Clique em "Área" para desenhar um telhado':
+    nc+(nc===1?' telhado':' telhados')+' · '+total+' painéis · '+kwp.toFixed(2)+' kWp';
+  document.getElementById('info').textContent=txt;
+}
+function emitSummary(){
+  var total=0,kwp=0,aList=[];
+  Object.keys(areas).forEach(function(k){
+    var a=areas[k];
+    var c=a.panels.length,q=c*a.settings.powerWp/1000;
+    total+=c; kwp+=q;
+    aList.push({id:k,panelCount:c,totalKwp:q});
+  });
+  emit({type:'summaryUpdated',totalPanels:total,totalKwp:kwp,areas:aList});
+}
+
+// ─── Satellite toggle ─────────────────────────────────────────────────────────
+function toggleSat(){
+  satOn=!satOn;
+  var btn=document.getElementById('btn-sat');
+  if(satOn){osmLayer.remove();esriSat.addTo(map);esriLbl.addTo(map);btn.classList.add('sat-on');}
+  else{esriSat.remove();esriLbl.remove();osmLayer.addTo(map);btn.classList.remove('sat-on');}
+}
+
+// ─── Layer visibility ─────────────────────────────────────────────────────────
+function setLayerVis(name,visible){
+  if(name==='panels'){
+    layerPanels=visible;
+    Object.keys(areas).forEach(function(k){
+      if(visible) areas[k].panelLayer.addTo(map);
+      else map.removeLayer(areas[k].panelLayer);
+    });
   }
 }
 
-// ─── Emit to React parent ─────────────────────────────────────────────────────
-function emitResults(autoCount, bW, bH) {
-  var mc = manualList.length;
-  var total = autoCount + mc;
-  var az = cfg.azimuth;
-  var dev = Math.min(Math.abs(az - 180), 360 - Math.abs(az - 180));
-  var devText = dev < 2 ? 'Sul · ideal' : azLabel(az) + ' · ' + Math.round(dev) + '° de Sul';
-  var tkwp = (total * cfg.powerWp) / 1000;
-  var factor = orientFactor(az);
-  var typeLabel = cfg.mountType === 'coplanar' ? '▬ Coplan.' : '▲ Triâng.';
-  updateCompass(az);
-  var infoText = typeLabel + ' · ' + total + ' painéis · ' + tkwp.toFixed(2) + ' kWp · ' + devText;
-  if (mc > 0) infoText += ' (' + autoCount + ' auto + ' + mc + ' manual)';
-  document.getElementById('info').textContent = infoText;
-
-  if (!polygon) return;
-  emit({
-    type: 'roofMeasured',
-    roofArea: Math.round((bW || 0) * (bH || 0)),
-    panelCount: total,
-    totalKwp: tkwp,
-    adjKwp: tkwp * factor,
-    azimuth: az,
-    orientationLabel: devText,
-    penaltyPct: Math.round((1 - factor) * 100),
-    panelW: cfg.panelW, panelH: cfg.panelH, powerWp: cfg.powerWp,
-    mountType: cfg.mountType,
-    roofBoundsW: Math.round(bW || 0),
-    roofBoundsH: Math.round(bH || 0),
-    autoCount: autoCount, manualCount: mc
-  });
-}
-
-function emit(obj) {
-  try { window.parent.postMessage(JSON.stringify(obj), '*'); } catch(_) {}
-}
+// ─── Message handler ──────────────────────────────────────────────────────────
+window.addEventListener('message',function(e){
+  var d; try{d=JSON.parse(e.data);}catch(_){return;}
+  switch(d.type){
+    case'updateArea':
+      if(!areas[d.id]) return;
+      var s=areas[d.id].settings;
+      if(d.azimuth!==undefined) s.azimuth=d.azimuth;
+      if(d.mountType!==undefined) s.mountType=d.mountType;
+      if(d.panelW!==undefined) s.panelW=d.panelW;
+      if(d.panelH!==undefined) s.panelH=d.panelH;
+      if(d.powerWp!==undefined) s.powerWp=d.powerWp;
+      if(d.maxPanels!==undefined) s.maxPanels=d.maxPanels;
+      if(d.panelProjDepth!==undefined) s.panelProjDepth=d.panelProjDepth;
+      if(d.rowSpacing!==undefined) s.rowSpacing=d.rowSpacing;
+      fillArea(d.id);
+      break;
+    case'selectArea': selectArea(d.id); break;
+    case'deleteArea': deleteArea(d.id); break;
+    case'autoString': autoString(d.areaId,d.count); break;
+    case'clearStrings': clearStrings(d.areaId); break;
+    case'setLayer': setLayerVis(d.name,d.visible); break;
+    case'startDraw': startDraw(); break;
+    case'invalidateSize': inv();setTimeout(inv,100);setTimeout(inv,400); break;
+    case'flyTo':
+      if(d.lat!==undefined&&d.lng!==undefined) map.flyTo([d.lat,d.lng],d.zoom||18,{animate:true,duration:1.0});
+      if(d.name){
+        var old=document.getElementById('loc-b');if(old)old.remove();
+        var lb=document.createElement('div');lb.id='loc-b';lb.className='hint-badge loc-badge';
+        lb.textContent='📍 '+d.name;document.body.appendChild(lb);
+        setTimeout(function(){var x=document.getElementById('loc-b');if(x)x.remove();},4000);
+      }
+      break;
+  }
+});
 
 // ─── Nudge pads ───────────────────────────────────────────────────────────────
-var NUDGE = 5;
-function nudge(d) {
-  cfg.azimuth = ((cfg.azimuth + d) % 360 + 360) % 360;
-  updateCompass(cfg.azimuth);
-  if (polygon && mode === 'auto') fillPanels();
-}
-function moveGrid(dlat, dlng) {
-  gridOffset.lat += dlat; gridOffset.lng += dlng;
-  if (polygon && mode === 'auto') fillPanels();
-}
-
-var np = document.createElement('div'); np.className = 'nudge-pad';
-np.innerHTML = [
-  '<div></div>',
-  '<button class="nudge-btn" title="Rodar ←" onclick="nudge(-NUDGE)">↺</button>',
-  '<div></div>',
-  '<button class="nudge-btn" onclick="nudge(-1)">◁</button>',
-  '<button class="nudge-btn nudge-reset" onclick="cfg.azimuth=180;updateCompass(180);if(polygon&&mode===\'auto\')fillPanels()">Sul</button>',
-  '<button class="nudge-btn" onclick="nudge(1)">▷</button>',
-  '<div></div>',
-  '<button class="nudge-btn" title="Rodar →" onclick="nudge(NUDGE)">↻</button>',
-  '<div></div>'
+var np=document.createElement('div');np.className='nudge-pad';
+np.innerHTML=[
+  '<div></div>','<button class="nudge-btn" onclick="nudgeActive(-NUDGE)">↺</button>','<div></div>',
+  '<button class="nudge-btn" onclick="nudgeActive(-1)">◁</button>',
+  '<button class="nudge-btn nudge-reset" onclick="if(activeId&&areas[activeId]){areas[activeId].settings.azimuth=180;fillArea(activeId);updateCompassForActive();emit({type:\'areaAzimuthChanged\',id:activeId,azimuth:180});}">Sul</button>',
+  '<button class="nudge-btn" onclick="nudgeActive(1)">▷</button>',
+  '<div></div>','<button class="nudge-btn" onclick="nudgeActive(NUDGE)">↻</button>','<div></div>'
 ].join('');
 document.body.appendChild(np);
 
-var mp = document.createElement('div'); mp.className = 'move-pad';
-mp.innerHTML = [
-  '<button class="nudge-btn" onclick="moveGrid(MOVE_LAT,-MOVE_LNG)">↖</button>',
-  '<button class="nudge-btn" onclick="moveGrid(MOVE_LAT,0)">↑</button>',
-  '<button class="nudge-btn" onclick="moveGrid(MOVE_LAT,MOVE_LNG)">↗</button>',
-  '<button class="nudge-btn" onclick="moveGrid(0,-MOVE_LNG)">←</button>',
-  '<button class="nudge-btn nudge-reset" onclick="gridOffset={lat:0,lng:0};if(polygon&&mode===\'auto\')fillPanels()">⊙</button>',
-  '<button class="nudge-btn" onclick="moveGrid(0,MOVE_LNG)">→</button>',
-  '<button class="nudge-btn" onclick="moveGrid(-MOVE_LAT,-MOVE_LNG)">↙</button>',
-  '<button class="nudge-btn" onclick="moveGrid(-MOVE_LAT,0)">↓</button>',
-  '<button class="nudge-btn" onclick="moveGrid(-MOVE_LAT,MOVE_LNG)">↘</button>'
+var mp=document.createElement('div');mp.className='move-pad';
+mp.innerHTML=[
+  '<button class="nudge-btn" onclick="moveGridActive(MOVE_LAT,-MOVE_LNG)">↖</button>',
+  '<button class="nudge-btn" onclick="moveGridActive(MOVE_LAT,0)">↑</button>',
+  '<button class="nudge-btn" onclick="moveGridActive(MOVE_LAT,MOVE_LNG)">↗</button>',
+  '<button class="nudge-btn" onclick="moveGridActive(0,-MOVE_LNG)">←</button>',
+  '<button class="nudge-btn nudge-reset" onclick="resetGridActive()">⊙</button>',
+  '<button class="nudge-btn" onclick="moveGridActive(0,MOVE_LNG)">→</button>',
+  '<button class="nudge-btn" onclick="moveGridActive(-MOVE_LAT,-MOVE_LNG)">↙</button>',
+  '<button class="nudge-btn" onclick="moveGridActive(-MOVE_LAT,0)">↓</button>',
+  '<button class="nudge-btn" onclick="moveGridActive(-MOVE_LAT,MOVE_LNG)">↘</button>'
 ].join('');
 document.body.appendChild(mp);
 
-// ─── postMessage listener ─────────────────────────────────────────────────────
-window.addEventListener('message', function(e) {
-  var d;
-  try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch(_) { return; }
-  switch (d.type) {
-    case 'setConfig':
-      if (d.panelW    !== undefined) cfg.panelW    = d.panelW;
-      if (d.panelH    !== undefined) cfg.panelH    = d.panelH;
-      if (d.powerWp   !== undefined) cfg.powerWp   = d.powerWp;
-      if (d.maxPanels !== undefined) cfg.maxPanels = d.maxPanels;
-      if (d.azimuth   !== undefined) { cfg.azimuth = d.azimuth; updateCompass(cfg.azimuth); }
-      if (d.mountType !== undefined) { cfg.mountType = d.mountType; updateMountBadge(); }
-      if (d.panelProjDepth !== undefined) cfg.panelProjDepth = d.panelProjDepth;
-      if (d.rowSpacing !== undefined)    cfg.rowSpacing = d.rowSpacing;
-      if (polygon && mode === 'auto') fillPanels();
-      break;
-    case 'invalidateSize':
-      inv();
-      setTimeout(inv, 100);
-      setTimeout(inv, 400);
-      break;
-    case 'flyTo':
-      if (d.lat !== undefined && d.lng !== undefined) {
-        map.flyTo([d.lat, d.lng], d.zoom || 18, { animate: true, duration: 1.0 });
-        if (d.name) {
-          var old = document.getElementById('loc-badge');
-          if (old) old.remove();
-          var lb = document.createElement('div');
-          lb.id = 'loc-badge'; lb.className = 'loc-badge';
-          lb.textContent = '📍 ' + d.name;
-          document.body.appendChild(lb);
-          setTimeout(function() { var x = document.getElementById('loc-badge'); if (x) x.remove(); }, 4000);
-        }
-      }
-      break;
-    case 'clearManual':
-      clearManual();
-      break;
-  }
-});
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function toR(d) { return d * Math.PI / 180; }
-function toD(r) { return r * 180 / Math.PI; }
-
-function dp(lat, lng, az, dist) {
-  var R = 6371000, la = toR(lat), lo = toR(lng), a = toR(az), d = dist / R;
-  var la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(a));
-  var lo2 = lo + Math.atan2(Math.sin(a) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2));
-  return [toD(la2), toD(lo2)];
+// ─── Math helpers ─────────────────────────────────────────────────────────────
+function emit(o){try{window.parent.postMessage(JSON.stringify(o),'*');}catch(_){}}
+function toR(d){return d*Math.PI/180;}
+function toD(r){return r*180/Math.PI;}
+function dp(lat,lng,az,dist){
+  var R=6371000,la=toR(lat),lo=toR(lng),a=toR(az),d=dist/R;
+  var la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(a));
+  var lo2=lo+Math.atan2(Math.sin(a)*Math.sin(d)*Math.cos(la),Math.cos(d)-Math.sin(la)*Math.sin(la2));
+  return[toD(la2),toD(lo2)];
 }
-
-function pip(pt, poly) {
-  var x = pt[0], y = pt[1], inside = false;
-  for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    var xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
-    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+function pip(pt,poly){
+  var x=pt[0],y=pt[1],inside=false;
+  for(var i=0,j=poly.length-1;i<poly.length;j=i++){
+    var xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
+    if(((yi>y)!=(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))inside=!inside;
   }
   return inside;
 }
-
-function azLabel(az) {
-  if (az >= 337.5 || az < 22.5) return 'N'; if (az < 67.5)  return 'NE';
-  if (az < 112.5) return 'E';               if (az < 157.5) return 'SE';
-  if (az < 202.5) return 'S';               if (az < 247.5) return 'SO';
-  if (az < 292.5) return 'O';               return 'NO';
+function azLabel(az){
+  if(az>=337.5||az<22.5)return'N';if(az<67.5)return'NE';if(az<112.5)return'E';
+  if(az<157.5)return'SE';if(az<202.5)return'S';if(az<247.5)return'SO';
+  if(az<292.5)return'O';return'NO';
 }
-
-function orientFactor(az) {
-  var d = Math.min(Math.abs(az - 180), 360 - Math.abs(az - 180));
-  var pts = [[0,1.00],[45,0.95],[90,0.80],[135,0.63],[180,0.56]];
-  for (var i = 0; i < pts.length - 1; i++) {
-    if (d <= pts[i+1][0]) return pts[i][1] + (pts[i+1][1] - pts[i][1]) * ((d - pts[i][0]) / (pts[i+1][0] - pts[i][0]));
-  }
+function orientFactor(az){
+  var d=Math.min(Math.abs(az-180),360-Math.abs(az-180));
+  var p=[[0,1.00],[45,0.95],[90,0.80],[135,0.63],[180,0.56]];
+  for(var i=0;i<p.length-1;i++){if(d<=p[i+1][0])return p[i][1]+(p[i+1][1]-p[i][1])*((d-p[i][0])/(p[i+1][0]-p[i][0]));}
   return 0.56;
 }
 
-function updateCompass(az) {
-  var d = Math.min(Math.abs(az - 180), 360 - Math.abs(az - 180));
-  document.getElementById('compassArrow').setAttribute('transform', 'rotate(' + (az - 180) + ',25,25)');
-  document.getElementById('compassLabel').textContent = d < 2 ? 'Sul · ideal' : azLabel(az) + ' · ' + Math.round(d) + '° de Sul';
-}
-
-function updateMountBadge() {
-  var el = document.getElementById('mountBadge');
-  if (cfg.mountType === 'coplanar') { el.textContent = '▬ Coplanar'; el.style.color = '#60A5FA'; }
-  else { el.textContent = '▲ Triângulos'; el.style.color = '#F5A623'; }
-}
-
-// Activate auto by default
-setMode('auto');
-
-// Final invalidate after all resources load
-window.addEventListener('load', function() {
-  inv();
-  setTimeout(inv, 200);
-  setTimeout(inv, 700);
-});
+// Init
+updateInfoBar();
+window.addEventListener('load',function(){inv();setTimeout(inv,200);setTimeout(inv,700);});
 </script>
-
-<!-- html2canvas (optional, for map screenshots) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" async></script>
 </body>
 </html>

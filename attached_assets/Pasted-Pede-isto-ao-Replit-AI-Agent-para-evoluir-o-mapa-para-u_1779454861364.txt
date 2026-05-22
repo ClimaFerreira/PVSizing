@@ -1,0 +1,244 @@
+Pede isto ao Replit AI Agent para evoluir o mapa para um verdadeiro editor fotovoltaico profissional:
+
+---
+
+Quero melhorar o módulo “Mapa Satélite” para suportar múltiplos perímetros/telhados e desenho completo do traçado das strings FV.
+
+# 1. Suporte para múltiplos perímetros
+
+Atualmente apenas existe um polígono/telhado.
+
+Quero permitir:
+
+* vários telhados;
+* várias áreas;
+* múltiplos polígonos independentes;
+* múltiplas zonas de instalação.
+
+Cada perímetro deve ter:
+
+* ID único;
+* nome;
+* tipo:
+
+  * coplanar
+  * triângulos
+  * solo;
+* orientação;
+* inclinação;
+* nº painéis;
+* strings associadas;
+* potência associada.
+
+---
+
+# 2. Ferramenta de desenho de perímetros
+
+Adicionar toolbar:
+
+## Ferramentas:
+
+* Desenhar polígono
+* Editar perímetro
+* Mover perímetro
+* Duplicar perímetro
+* Apagar perímetro
+* Dividir área
+* Unir áreas
+
+---
+
+# 3. Gestão independente por área
+
+Cada área deve permitir:
+
+* orientação própria;
+* espaçamento próprio;
+* tipo de estrutura próprio;
+* modelo de painel próprio;
+* strings independentes.
+
+---
+
+# 4. Sistema de layers
+
+Criar layers independentes:
+
+```txt id="8w6hl8"
+Layer: Telhados
+Layer: Painéis
+Layer: Strings
+Layer: Obstáculos
+Layer: Cabos
+Layer: Inversores
+```
+
+Permitir:
+
+* esconder/mostrar;
+* bloquear edição;
+* reorder de layers.
+
+---
+
+# 5. Desenho do traçado das strings
+
+Quero um verdadeiro editor elétrico de strings.
+
+Adicionar ferramenta:
+
+```txt id="l6idk8"
+Modo Strings
+```
+
+O utilizador deve poder:
+
+* clicar nos painéis;
+* criar sequência elétrica;
+* desenhar percurso da string;
+* definir início/fim;
+* ligar strings a inversores.
+
+---
+
+# 6. Visualização das strings
+
+Cada string deve:
+
+* ter cor própria;
+* mostrar número da string;
+* mostrar:
+
+  * tensão;
+  * corrente;
+  * potência;
+  * nº módulos.
+
+Exemplo:
+
+```txt id="33l69j"
+String 1
+12 módulos
+Voc = xxx
+Vmp = xxx
+```
+
+---
+
+# 7. Ligação aos inversores
+
+Adicionar:
+
+* posicionamento de inversores no mapa;
+* ligação visual das strings;
+* cálculo automático:
+
+  * MPPT;
+  * tensão;
+  * corrente;
+  * desequilíbrios.
+
+---
+
+# 8. Ferramenta automática de strings
+
+Adicionar botão:
+
+```txt id="w56nlc"
+Auto String
+```
+
+O sistema deve:
+
+* dividir automaticamente painéis;
+* respeitar:
+
+  * limites do inversor;
+  * MPPT;
+  * tensão máxima;
+  * corrente máxima;
+  * orientação;
+  * áreas separadas.
+
+---
+
+# 9. Sistema visual profissional
+
+Adicionar:
+
+* linhas curvas/suaves;
+* snapping;
+* ligação magnética;
+* highlights;
+* seleção múltipla;
+* caixas de seleção.
+
+---
+
+# 10. Estrutura de dados
+
+Criar:
+
+```ts id="ifmxrl"
+type RoofArea = {
+  id: string
+  polygon: LatLng[]
+  panels: Panel[]
+  strings: PVString[]
+  azimuth: number
+  tilt: number
+}
+```
+
+```ts id="zc21jh"
+type PVString = {
+  id: string
+  panelIds: string[]
+  inverterId?: string
+  mppt?: number
+  cablePath: LatLng[]
+}
+```
+
+---
+
+# 11. Persistência
+
+Guardar:
+
+* múltiplos perímetros;
+* strings;
+* cabos;
+* posições;
+* inversores;
+* obstáculos.
+
+Restaurar automaticamente ao abrir projeto.
+
+---
+
+# 12. Objetivo final
+
+Quero que o editor funcione semelhante a:
+
+* Aurora Solar
+* OpenSolar
+* SolarEdge Designer
+* PVcase
+
+Com:
+
+* desenho completo do sistema;
+* múltiplos telhados;
+* strings visuais;
+* ligação elétrica real;
+* preparação para relatório técnico automático.
+
+---
+
+Além disso:
+
+* manter compatibilidade mobile;
+* garantir performance fluida;
+* evitar redraw completo do mapa;
+* usar renderização otimizada para muitos painéis.
