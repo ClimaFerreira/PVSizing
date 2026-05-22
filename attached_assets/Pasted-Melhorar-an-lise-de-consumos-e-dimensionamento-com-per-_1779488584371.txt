@@ -1,0 +1,86 @@
+Melhorar análise de consumos e dimensionamento com períodos tarifários.
+
+Problemas:
+1. Quando a fatura não tem todos os meses no gráfico, o sistema estima automaticamente, mas não permite completar os meses em falta manualmente.
+2. Não está claro se o cálculo considera Vazio, Cheio e Ponta.
+3. A bateria precisa ser estudada com excedente solar real e consumo noturno.
+
+Implementar:
+
+1. Histórico mensal editável
+Na análise da fatura, mostrar os 12 meses do ano:
+Jan, Fev, Mar, Abr, Mai, Jun, Jul, Ago, Set, Out, Nov, Dez.
+
+Se a IA extrair apenas alguns meses:
+- preencher esses meses;
+- deixar os meses em falta como editáveis;
+- permitir introduzir manualmente kWh por mês;
+- marcar origem do dado:
+  - extraído da fatura;
+  - estimado;
+  - manual.
+
+O consumo anual deve recalcular automaticamente com base nos 12 meses preenchidos.
+
+2. Períodos tarifários editáveis
+Permitir editar:
+- consumo em Vazio;
+- consumo em Cheio;
+- consumo em Ponta.
+
+Usar estes valores no dimensionamento.
+
+Mostrar:
+- percentagem por período;
+- consumo noturno estimado;
+- consumo diurno estimado;
+- horas de maior consumo.
+
+3. Perfil horário de consumo
+Gerar perfil horário estimado com base na tarifa:
+- Vazio = maior consumo noturno;
+- Cheio = consumo intermédio;
+- Ponta = horas críticas/caras.
+
+Isto deve influenciar:
+- autoconsumo;
+- excedente;
+- necessidade de bateria;
+- poupança.
+
+4. Estudo de bateria mais rigoroso
+A bateria deve ser calculada pelo programa, mas editável.
+
+Calcular automaticamente:
+- capacidade recomendada;
+- capacidade útil;
+- excedente solar disponível para carregar;
+- consumo noturno disponível para descarregar;
+- ciclos/ano;
+- autonomia;
+- taxa média de utilização;
+- risco de sobredimensionamento.
+
+Se o utilizador editar a bateria manualmente, mostrar alertas:
+- bateria demasiado grande para o excedente solar;
+- bateria pode não carregar totalmente;
+- consumo noturno insuficiente para descarregar;
+- payback da bateria pode ser fraco;
+- potência de carga/descarga insuficiente;
+- capacidade recomendada diferente da escolhida.
+
+5. Alertas inteligentes
+Exemplos:
+“Faltam 3 meses no histórico — estimativa com confiança média.”
+“Consumo em Vazio elevado — bateria pode ter menos utilidade para autoconsumo.”
+“Consumo em Ponta elevado — bateria pode melhorar poupança se descarregar nesse período.”
+“Bateria editada manualmente acima do recomendado — verificar se existe excedente suficiente para carregar.”
+
+6. Confiança do estudo
+Mostrar nível de confiança:
+- Alto: 12 meses reais + períodos tarifários completos;
+- Médio: alguns meses reais + estimativa;
+- Baixo: apenas consumo anual manual.
+
+Objetivo:
+O dimensionamento deve considerar sazonalidade, horários de consumo e períodos tarifários para maximizar a rentabilidade do cliente, especialmente no estudo de bateria.

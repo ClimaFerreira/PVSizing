@@ -2031,6 +2031,9 @@ export default function Wizard() {
                           activeCenario={activeCenario ?? null}
                           precoKwh={consumoData.precoKwh ?? 0.18}
                           perfilDiurnoPct={perfilDiurnoPct}
+                          percVazio={consumoData.percVazio}
+                          percCheio={consumoData.percCheio}
+                          percPonta={consumoData.percPonta}
                         />
                       </Suspense>
                     </div>

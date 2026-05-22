@@ -23,6 +23,55 @@ export function consumoFracs(perfilDiurnoPct: number): readonly number[] {
   );
 }
 
+// ── Tariff period hour map (Portugal bi/tri-horário, integer hour buckets) ────
+// Vazio: 22–7 (10h, mostly night)
+// Ponta: 10–11 + 19–21 (5h, peak morning + evening)
+// Cheio: 8–9 + 12–18 (9h, intermediate)
+export type Periodo = "vazio" | "cheio" | "ponta";
+export const TARIFF_HOURS: readonly Periodo[] = (() => {
+  const arr: Periodo[] = Array(24).fill("cheio");
+  for (const h of [22, 23, 0, 1, 2, 3, 4, 5, 6, 7]) arr[h] = "vazio";
+  for (const h of [10, 11, 19, 20, 21]) arr[h] = "ponta";
+  return arr;
+})();
+
+/** Build 24-h consumption fraction distribution from tariff period %s. */
+export function tariffHourlyProfile(
+  percVazio: number,
+  percCheio: number,
+  percPonta: number,
+): readonly number[] {
+  const total = Math.max(1, percVazio + percCheio + percPonta);
+  const hoursByPer: Record<Periodo, number[]> = { vazio: [], cheio: [], ponta: [] };
+  TARIFF_HOURS.forEach((p, h) => hoursByPer[p].push(h));
+  const pcts: Record<Periodo, number> = {
+    vazio: percVazio / total,
+    cheio: percCheio / total,
+    ponta: percPonta / total,
+  };
+  const fracs = new Array<number>(24).fill(0);
+  (["vazio", "cheio", "ponta"] as Periodo[]).forEach(p => {
+    const hrs = hoursByPer[p];
+    if (!hrs.length) return;
+    const per = pcts[p] / hrs.length;
+    for (const h of hrs) fracs[h] = per;
+  });
+  return fracs;
+}
+
+/** Derive day (7–22) vs night (22–7) split from tariff distribution. */
+export function dayNightFromTariff(
+  percVazio: number,
+  percCheio: number,
+  percPonta: number,
+): { diurnoPct: number; noturnoPct: number } {
+  const fr = tariffHourlyProfile(percVazio, percCheio, percPonta);
+  let day = 0;
+  for (let h = 0; h < 24; h++) if (h >= 7 && h < 22) day += fr[h];
+  const diurnoPct = Math.round(day * 100);
+  return { diurnoPct, noturnoPct: 100 - diurnoPct };
+}
+
 // ── Monthly simulation ────────────────────────────────────────────────────────
 
 export interface MesSimResult {

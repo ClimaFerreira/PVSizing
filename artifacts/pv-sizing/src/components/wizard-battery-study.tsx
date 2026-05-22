@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { SOLAR_FRACS, consumoFracs, DIAS_MES } from "@/lib/energy-simulation";
+import { SOLAR_FRACS, consumoFracs, tariffHourlyProfile, dayNightFromTariff, DIAS_MES } from "@/lib/energy-simulation";
+import BatteryWarnings, { deriveBatteryWarnings } from "@/components/battery-warnings";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,10 @@ interface Props {
   activeCenario: CenarioLike | null;
   precoKwh: number;
   perfilDiurnoPct: number;
+  /** Optional tariff distribution — when present, takes precedence over perfilDiurnoPct. */
+  percVazio?: number;
+  percCheio?: number;
+  percPonta?: number;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -71,8 +76,21 @@ function calcSystem(units: BatteryUnit[], bats: BatCat[]) {
   return { totalCap, utilCap, dodPct, potCarga, potDesc, tensao, lines, totalUnits };
 }
 
-function calcStudy(sys: NonNullable<ReturnType<typeof calcSystem>>, cenario: CenarioLike, perfilDiurnoPct: number, precoKwh: number) {
-  const cFracs = consumoFracs(perfilDiurnoPct);
+function calcStudy(
+  sys: NonNullable<ReturnType<typeof calcSystem>>,
+  cenario: CenarioLike,
+  perfilDiurnoPct: number,
+  precoKwh: number,
+  tariff?: { percVazio: number; percCheio: number; percPonta: number },
+) {
+  // Prefer tariff-based hourly profile when available (rigorous); fall back to day/night split.
+  const cFracs = tariff
+    ? tariffHourlyProfile(tariff.percVazio, tariff.percCheio, tariff.percPonta)
+    : consumoFracs(perfilDiurnoPct);
+  // Effective diurnal % for night-consumption cap (used in ganhoMensal calc)
+  const diurnoPctEff = tariff
+    ? dayNightFromTariff(tariff.percVazio, tariff.percCheio, tariff.percPonta).diurnoPct
+    : perfilDiurnoPct;
 
   // Fallback charger / inverter limits when not specified in the battery datasheet
   const maxCarga = sys.potCarga > 0 ? sys.potCarga : sys.totalCap / 2;
@@ -124,7 +142,7 @@ function calcStudy(sys: NonNullable<ReturnType<typeof calcSystem>>, cenario: Cen
     entregueAnual   += entregouDia   * DIAS_MES[m];
 
     // Monthly gain capped by nocturnal demand
-    const consumoNoturnoMes = cenario.consumoMensal[m] * (1 - perfilDiurnoPct / 100);
+    const consumoNoturnoMes = cenario.consumoMensal[m] * (1 - diurnoPctEff / 100);
     ganhoMensal.push(Math.round(Math.min(entregouDia * DIAS_MES[m], consumoNoturnoMes)));
   }
 
@@ -210,17 +228,58 @@ function StatusChip({ status }: { status: "subdimensionada" | "equilibrada" | "s
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function WizardBatteryStudy({ batteries, batteryUnits, onUnitsChange, activeCenario, precoKwh, perfilDiurnoPct }: Props) {
+export default function WizardBatteryStudy({ batteries, batteryUnits, onUnitsChange, activeCenario, precoKwh, perfilDiurnoPct, percVazio, percCheio, percPonta }: Props) {
   const [addBatId, setAddBatId] = useState<number | null>(batteries[0]?.id ?? null);
   const [precoBateriaStr, setPrecoBateriaStr] = useState("");
   const precoBateria = precoBateriaStr !== "" ? parseFloat(precoBateriaStr.replace(",", ".")) : null;
   const precoBateriaValido = precoBateria !== null && precoBateria > 0 && !isNaN(precoBateria);
 
+  const tariff = (percVazio != null && percCheio != null && percPonta != null && (percVazio + percCheio + percPonta) > 0)
+    ? { percVazio, percCheio, percPonta } : undefined;
+
   const sys = useMemo(() => calcSystem(batteryUnits, batteries), [batteryUnits, batteries]);
   const study = useMemo(() => {
     if (!sys || !activeCenario) return null;
-    return calcStudy(sys, activeCenario, perfilDiurnoPct, precoKwh);
-  }, [sys, activeCenario, perfilDiurnoPct, precoKwh]);
+    return calcStudy(sys, activeCenario, perfilDiurnoPct, precoKwh, tariff);
+  }, [sys, activeCenario, perfilDiurnoPct, precoKwh, tariff?.percVazio, tariff?.percCheio, tariff?.percPonta]);
+
+  // Derive night consumption per day for warnings (kWh/dia)
+  const consumoNoturnoDiario = useMemo(() => {
+    if (!activeCenario) return 0;
+    const annual = activeCenario.consumoMensal.reduce((s, m) => s + m, 0);
+    const { noturnoPct } = tariff
+      ? dayNightFromTariff(tariff.percVazio, tariff.percCheio, tariff.percPonta)
+      : { noturnoPct: 100 - perfilDiurnoPct };
+    return (annual * (noturnoPct / 100)) / 365;
+  }, [activeCenario, perfilDiurnoPct, tariff?.percVazio, tariff?.percCheio, tariff?.percPonta]);
+
+  // Recommended capacity range (kWh úteis) — based on excedente médio diário
+  const recommendedRange = useMemo(() => {
+    if (!study) return null;
+    const e = study.excessoMedioDiario;
+    if (e <= 0) return null;
+    return { min: e * 1.0, max: e * 1.8 };
+  }, [study]);
+
+  // Battery warnings
+  const warnings = useMemo(() => {
+    if (!study || !sys) return [];
+    const payback = precoBateriaValido && precoBateria !== null && study.poupancaAdicional > 0
+      ? precoBateria / study.poupancaAdicional
+      : null;
+    return deriveBatteryWarnings({
+      utilCap: sys.utilCap,
+      recommendedUtilMin: recommendedRange?.min ?? null,
+      recommendedUtilMax: recommendedRange?.max ?? null,
+      excessoMedioDiario: study.excessoMedioDiario,
+      consumoNoturnoDiario,
+      percCargaDiaria: study.percCargaDiaria,
+      ciclosAnuais: study.ciclosAnuais,
+      potCarga: sys.potCarga,
+      potDesc: sys.potDesc,
+      payback,
+    });
+  }, [study, sys, recommendedRange, consumoNoturnoDiario, precoBateriaValido, precoBateria]);
 
   // Auto-suggestions based on recommended capacity
   const suggestions = useMemo(() => {
@@ -477,6 +536,11 @@ export default function WizardBatteryStudy({ batteries, batteryUnits, onUnitsCha
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── Battery warnings ────────────────────────────────────────────────── */}
+      {study && sys && sys.utilCap > 0 && (
+        <BatteryWarnings warnings={warnings} />
       )}
 
       {/* ── Comparison with/without battery ─────────────────────────────────── */}

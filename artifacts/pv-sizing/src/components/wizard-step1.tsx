@@ -15,6 +15,9 @@ import {
   Zap, Car, Thermometer, Wind, Waves, Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import MonthlyHistoryGrid, { type MesOrigem } from "@/components/monthly-history-grid";
+import TariffPeriodEditor from "@/components/tariff-period-editor";
+import ConfidenceIndicator, { calcConfidence } from "@/components/confidence-indicator";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -67,6 +70,8 @@ export interface ConsumoData {
   precoKwh: number;
   /** 12 monthly values (Jan–Dez) in kWh — populated from invoice charts or manual entry */
   historicoMensal?: (number | null)[];
+  /** 12 origin tags aligned with `historicoMensal`: "fatura" | "estimado" | "manual" | null */
+  mesesOrigem?: MesOrigem[];
 }
 
 export const DEFAULT_CONSUMO_DATA: ConsumoData = {
@@ -117,6 +122,7 @@ interface ConsolidatedData {
   potenciaContratada?: number;
   precoKwh?: number;
   monthlyKwh: (number | null)[];
+  monthlyOrigins: MesOrigem[];
   sazonalidade?: string;
   fonteEstimativa: FonteEstimativa;
   mesesNoGrafico: number;
@@ -134,6 +140,7 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
   const potencias: number[] = [];
   const precos: number[] = [];
   const monthlyKwh: (number | null)[] = Array(12).fill(null);
+  const monthlyOrigins: MesOrigem[] = Array(12).fill(null);
 
   // Collect chart-based monthly history across all invoices
   const graficoMeses: LeituraMensal[] = [];
@@ -178,6 +185,7 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
       const idx = parseMesIndex(l.mes);
       if (idx >= 0 && idx < 12) {
         monthlyKwh[idx] = (monthlyKwh[idx] ?? 0) + l.consumo;
+        monthlyOrigins[idx] = "fatura";
       }
     }
 
@@ -262,6 +270,7 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
     potenciaContratada:  potencias[0],
     precoKwh:            precos.length ? precos.reduce((a,b)=>a+b,0)/precos.length : undefined,
     monthlyKwh,
+    monthlyOrigins,
     sazonalidade,
     fonteEstimativa,
     mesesNoGrafico: mesesNoGraficoFinal,
@@ -306,8 +315,11 @@ export default function WizardStep1({ data, onChange }: Props) {
       patch.percPonta = c.percPonta!;
     }
     if (c.precoKwh) patch.precoKwh = c.precoKwh;
-    // Carry monthly chart history into ConsumoData
-    if (c.monthlyKwh.some(v => v != null)) patch.historicoMensal = c.monthlyKwh;
+    // Carry monthly chart history + origins into ConsumoData
+    if (c.monthlyKwh.some(v => v != null)) {
+      patch.historicoMensal = c.monthlyKwh;
+      patch.mesesOrigem = c.monthlyOrigins;
+    }
     onChangeRef.current({ ...dataRef.current, ...patch });
     setAutoApplied(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -370,7 +382,36 @@ export default function WizardStep1({ data, onChange }: Props) {
 
   const consolidated = consolidateInvoices(invoices);
   const doneInvoices = invoices.filter(i => i.status === "done");
-  const maxMonthly = Math.max(...consolidated?.monthlyKwh.filter((v): v is number => v != null) ?? [0], 1);
+
+  // Merge consolidated origins with any user manual edits (stored in data.mesesOrigem)
+  const effectiveOrigins: MesOrigem[] = Array.from({ length: 12 }, (_, i) =>
+    data.mesesOrigem?.[i] ?? consolidated?.monthlyOrigins[i] ?? null,
+  );
+  const effectiveMonthly: (number | null)[] = Array.from({ length: 12 }, (_, i) =>
+    data.historicoMensal?.[i] ?? consolidated?.monthlyKwh[i] ?? null,
+  );
+
+  const tarifaCompleta =
+    (data.percVazio + data.percCheio + data.percPonta) >= 99 &&
+    !(data.percVazio === 40 && data.percCheio === 35 && data.percPonta === 25);
+
+  const handleMonthlyGridChange = (vals: (number | null)[], origs: MesOrigem[]) => {
+    const filled = vals.filter((v): v is number => v != null && v > 0);
+    const newAnnual = filled.length === 12
+      ? filled.reduce((s, v) => s + v, 0)
+      : filled.length > 0
+        ? Math.round((filled.reduce((s, v) => s + v, 0) / filled.length) * 12)
+        : data.consumoAnual;
+    set({
+      historicoMensal: vals,
+      mesesOrigem: origs,
+      consumoAnual: newAnnual > 0 ? newAnnual : data.consumoAnual,
+    });
+  };
+
+  const handleTariffChange = (next: { percVazio: number; percCheio: number; percPonta: number; consumoAnual: number }) => {
+    set(next);
+  };
 
   return (
     <div className="space-y-5">
@@ -508,69 +549,34 @@ export default function WizardStep1({ data, onChange }: Props) {
                   )}
                 </div>
 
-                {/* Monthly consumption chart */}
-                {consolidated.monthlyKwh.some(v => v != null) && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        {consolidated.mesesNoGrafico > 0
-                          ? `Histórico do gráfico da fatura (${consolidated.mesesNoGrafico} ${consolidated.mesesNoGrafico === 1 ? "mês" : "meses"})`
-                          : "Sazonalidade mensal"}
-                      </p>
-                      {consolidated.fonteEstimativa === "grafico_12m" && (
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                          Soma real: {consolidated.consumoAnualEstimado.toLocaleString("pt-PT")} kWh/ano
-                        </span>
-                      )}
-                      {consolidated.fonteEstimativa === "grafico_parcial" && (
-                        <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
-                          Média × 12: {consolidated.consumoAnualEstimado.toLocaleString("pt-PT")} kWh/ano
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-end gap-1 h-20">
-                      {consolidated.monthlyKwh.map((v, i) => (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                          {v != null && (
-                            <span className="text-[8px] text-muted-foreground leading-none mb-0.5 tabular-nums">{v}</span>
-                          )}
-                          <div
-                            className={cn("w-full rounded-t-sm transition-all", v != null ? "bg-primary/70" : "bg-muted/40 border border-dashed border-muted-foreground/20")}
-                            style={{ height: v != null ? `${Math.max(6, (v / maxMonthly) * 56)}px` : "6px" }}
-                            title={v != null ? `${MES_LABELS[i]}: ${v} kWh` : `${MES_LABELS[i]}: sem dados`}
-                          />
-                          <span className="text-[9px] text-muted-foreground leading-none">{MES_LABELS[i].slice(0,1)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Confidence */}
+                <ConfidenceIndicator result={calcConfidence({ origins: effectiveOrigins, tarifaCompleta })} />
 
-                {/* Tariff periods */}
-                {consolidated.percVazio != null && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1.5">Distribuição tarifária</p>
-                    <div className="flex rounded-full overflow-hidden h-4 border border-border text-[10px]">
-                      <div className="bg-blue-400 flex items-center justify-center text-white font-medium transition-all" style={{ width: `${consolidated.percVazio}%` }}>
-                        {consolidated.percVazio! >= 15 && `V ${consolidated.percVazio}%`}
-                      </div>
-                      <div className="bg-amber-400 flex items-center justify-center text-white font-medium transition-all" style={{ width: `${consolidated.percCheio}%` }}>
-                        {consolidated.percCheio! >= 12 && `C ${consolidated.percCheio}%`}
-                      </div>
-                      <div className="bg-red-400 flex items-center justify-center text-white font-medium transition-all" style={{ width: `${consolidated.percPonta}%` }}>
-                        {consolidated.percPonta! >= 10 && `P ${consolidated.percPonta}%`}
-                      </div>
-                    </div>
-                    <div className="flex gap-4 mt-1.5">
-                      {[{label:"Vazio", val: consolidated.percVazio, cls:"bg-blue-400"}, {label:"Cheio", val: consolidated.percCheio!, cls:"bg-amber-400"}, {label:"Ponta", val: consolidated.percPonta!, cls:"bg-red-400"}].map(t => (
-                        <div key={t.label} className="flex items-center gap-1">
-                          <div className={cn("w-2 h-2 rounded-full", t.cls)} />
-                          <span className="text-xs text-muted-foreground">{t.label}: <strong>{t.val}%</strong></span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Editable monthly history (12 months with origin tracking) */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Histórico mensal de consumo — edite ou complete os meses em falta
+                  </p>
+                  <MonthlyHistoryGrid
+                    values={effectiveMonthly}
+                    origins={effectiveOrigins}
+                    onChange={handleMonthlyGridChange}
+                  />
+                </div>
+
+                {/* Tariff period editor (absolute kWh per period + day/night split) */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Distribuição por períodos tarifários — edite os kWh por período
+                  </p>
+                  <TariffPeriodEditor
+                    percVazio={data.percVazio}
+                    percCheio={data.percCheio}
+                    percPonta={data.percPonta}
+                    consumoAnual={data.consumoAnual}
+                    onChange={handleTariffChange}
+                  />
+                </div>
 
                 {/* Alerts */}
                 {consolidated.alertas.map(a => (
@@ -614,115 +620,20 @@ export default function WizardStep1({ data, onChange }: Props) {
           )}
 
           {/* ── MENSAL mode ──────────────────────────────────────────── */}
-          {manualSubMode === "mensal" && (() => {
-            const vals = monthlyInputs.map(v => { const n = parseFloat(v); return isNaN(n) || n < 0 ? null : Math.round(n); });
-            const filled = vals.filter((v): v is number => v != null && v > 0);
-            const totalFilled = filled.reduce((s, v) => s + v, 0);
-            const annualFromMonthly = filled.length === 12
-              ? totalFilled
-              : filled.length > 0 ? Math.round((totalFilled / filled.length) * 12) : 0;
-            const maxVal = Math.max(...filled, 1);
-
-            const updateMonth = (i: number, raw: string) => {
-              const next = monthlyInputs.map((v, idx) => idx === i ? raw : v);
-              setMonthlyInputs(next);
-              const nextVals = next.map(v => { const n = parseFloat(v); return isNaN(n) || n < 0 ? null : Math.round(n); });
-              const nextFilled = nextVals.filter((v): v is number => v != null && v > 0);
-              const nextTotal = nextFilled.length === 12
-                ? nextFilled.reduce((s, v) => s + v, 0)
-                : nextFilled.length > 0 ? Math.round((nextFilled.reduce((s, v) => s + v, 0) / nextFilled.length) * 12) : data.consumoAnual;
-              if (nextTotal > 0) set({ consumoAnual: nextTotal, historicoMensal: nextVals });
-            };
-
-            const applyMonthlyAvg = (avgStr: string) => {
-              const avg = parseFloat(avgStr);
-              if (isNaN(avg) || avg <= 0) return;
-              const filled12 = Array(12).fill(String(Math.round(avg)));
-              setMonthlyInputs(filled12);
-              set({ consumoAnual: Math.round(avg) * 12, historicoMensal: Array(12).fill(Math.round(avg)) });
-            };
-
-            return (
-              <div className="space-y-4">
-                {/* Quick monthly average */}
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Consumo Mensal Médio (kWh)</label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number" step="10" min={10} placeholder="ex: 280"
-                      defaultValue={filled.length > 0 ? Math.round(totalFilled / filled.length) : ""}
-                      key={`avg-${filled.length}`}
-                      onBlur={e => applyMonthlyAvg(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && applyMonthlyAvg((e.target as HTMLInputElement).value)}
-                      className="flex-1"
-                    />
-                    <span className="flex items-center text-sm text-muted-foreground shrink-0">kWh/mês</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Preenche todos os meses com o mesmo valor · ou edite mês a mês abaixo</p>
-                </div>
-
-                {/* Toggle monthly grid */}
-                <button
-                  className="flex items-center gap-2 text-sm text-primary font-medium"
-                  onClick={() => setShowMonthlyGrid(g => !g)}
-                >
-                  {showMonthlyGrid ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  {showMonthlyGrid ? "Ocultar grelha mensal" : "Introduzir valores por mês"}
-                </button>
-
-                {/* Monthly grid */}
-                {showMonthlyGrid && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-6 gap-2">
-                      {MES_LABELS.map((mes, i) => (
-                        <div key={mes} className="space-y-1">
-                          <label className="text-[11px] font-medium text-muted-foreground text-center block">{mes}</label>
-                          <Input
-                            type="number" step="10" min={0}
-                            value={monthlyInputs[i]}
-                            placeholder="—"
-                            className="h-8 text-xs text-center px-1 tabular-nums"
-                            onChange={e => updateMonth(i, e.target.value)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    {/* Mini bar chart */}
-                    {filled.length > 0 && (
-                      <div className="flex items-end gap-1 h-16 pt-1">
-                        {vals.map((v, i) => (
-                          <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                            <div
-                              className={cn("w-full rounded-t-sm transition-all", v != null && v > 0 ? "bg-primary/70" : "bg-muted/30 border border-dashed border-muted-foreground/20")}
-                              style={{ height: v != null && v > 0 ? `${Math.max(4, (v / maxVal) * 48)}px` : "4px" }}
-                              title={v != null ? `${MES_LABELS[i]}: ${v} kWh` : `${MES_LABELS[i]}: sem dados`}
-                            />
-                            <span className="text-[9px] text-muted-foreground leading-none">{MES_LABELS[i].slice(0, 1)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Summary */}
-                {annualFromMonthly > 0 && (
-                  <div className="rounded-lg bg-primary/5 border border-primary/20 px-4 py-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-muted-foreground">
-                        {filled.length === 12 ? "Soma real dos 12 meses" : filled.length > 0 ? `Média de ${filled.length} meses × 12` : ""}
-                      </p>
-                      <p className="text-lg font-bold text-primary">{annualFromMonthly.toLocaleString("pt-PT")} kWh/ano</p>
-                    </div>
-                    <div className="text-right text-xs text-muted-foreground">
-                      <p>{Math.round(annualFromMonthly / 12).toLocaleString("pt-PT")} kWh/mês</p>
-                      <p>{(annualFromMonthly / 365).toFixed(1)} kWh/dia</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+          {manualSubMode === "mensal" && (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Introduza o consumo de cada mês (kWh). Os valores serão marcados como <strong>manuais</strong>.
+                O consumo anual é recalculado automaticamente.
+              </p>
+              <MonthlyHistoryGrid
+                values={effectiveMonthly}
+                origins={effectiveOrigins}
+                onChange={handleMonthlyGridChange}
+              />
+              <ConfidenceIndicator result={calcConfidence({ origins: effectiveOrigins, tarifaCompleta })} />
+            </div>
+          )}
 
           {manualSubMode === "avancado" && (
             <div className="space-y-1">
@@ -755,43 +666,18 @@ export default function WizardStep1({ data, onChange }: Props) {
               </div>
 
               {/* Tariff periods */}
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div>
                   <p className="text-sm font-medium">Distribuição por Períodos Tarifários</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Disponível em faturas bi/tri-horárias</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Edite os kWh por período — disponível em faturas bi/tri-horárias</p>
                 </div>
-                {/* Visual bar */}
-                <div className="flex rounded-full overflow-hidden h-4 border border-border text-[10px]">
-                  <div className="bg-blue-400 flex items-center justify-center text-white font-medium" style={{ width: `${data.percVazio}%` }}>
-                    {data.percVazio >= 15 && `V ${data.percVazio}%`}
-                  </div>
-                  <div className="bg-amber-400 flex items-center justify-center text-white font-medium" style={{ width: `${data.percCheio}%` }}>
-                    {data.percCheio >= 12 && `C ${data.percCheio}%`}
-                  </div>
-                  <div className="bg-red-400 flex items-center justify-center text-white font-medium" style={{ width: `${data.percPonta}%` }}>
-                    {data.percPonta >= 10 && `P ${data.percPonta}%`}
-                  </div>
-                </div>
-                {[
-                  { field: "percVazio" as const, label: "Vazio (fora de ponta)", hint: "22h–8h", color: "blue" },
-                  { field: "percCheio" as const, label: "Cheio",                hint: "8h–9h30, 12h–18h30, 22h–24h", color: "amber" },
-                ].map(({ field, label, hint, color }) => (
-                  <div key={field} className="flex items-center gap-3">
-                    <div className={cn("w-2 h-2 rounded-full shrink-0", `bg-${color}-400`)} />
-                    <div className="flex-1">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="font-medium">{label} <span className="text-muted-foreground font-normal">({hint})</span></span>
-                        <span className="font-bold">{data[field]}%</span>
-                      </div>
-                      <Slider min={0} max={80} step={5} value={[data[field]]} onValueChange={([v]) => setTarifa(field, v)} />
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
-                  <span className="text-muted-foreground">Ponta (9h30–12h, 18h30–22h)</span>
-                  <span className="ml-auto font-bold text-xs">{data.percPonta}%</span>
-                </div>
+                <TariffPeriodEditor
+                  percVazio={data.percVazio}
+                  percCheio={data.percCheio}
+                  percPonta={data.percPonta}
+                  consumoAnual={data.consumoAnual}
+                  onChange={handleTariffChange}
+                />
               </div>
 
               {/* Future appliances */}
