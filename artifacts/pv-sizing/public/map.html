@@ -10,56 +10,68 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{width:100%;height:100%;overflow:hidden;background:#0D2B45;}
 #map{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;z-index:1;}
-/* Toolbar */
-#toolbar{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:3px;z-index:1001;background:rgba(13,43,69,0.95);border:1px solid rgba(245,166,35,0.4);border-radius:10px;padding:3px;box-shadow:0 4px 20px rgba(0,0,0,0.5);}
-.tb-btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:7px;border:none;cursor:pointer;font-size:11px;font-family:-apple-system,sans-serif;font-weight:600;color:#94A3B8;background:transparent;transition:all .15s;white-space:nowrap;}
+/* ── Toolbar ── */
+#toolbar{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:3px;z-index:1001;background:rgba(13,43,69,0.96);border:1px solid rgba(245,166,35,0.4);border-radius:10px;padding:3px;box-shadow:0 4px 20px rgba(0,0,0,0.5);flex-wrap:nowrap;}
+.tb-btn{display:flex;align-items:center;gap:5px;padding:5px 9px;border-radius:7px;border:none;cursor:pointer;font-size:11px;font-family:-apple-system,sans-serif;font-weight:600;color:#94A3B8;background:transparent;transition:all .15s;white-space:nowrap;}
 .tb-btn:hover{background:rgba(255,255,255,0.1);color:#fff;}
 .tb-btn.active{background:rgba(30,136,229,0.85);color:#fff;}
+.tb-btn.active-green{background:rgba(67,160,71,0.85);color:#fff;}
+.tb-btn.active-red{background:rgba(229,57,53,0.75);color:#fff;}
 .tb-btn.sat-on{background:rgba(245,166,35,0.25);color:#F5A623;}
-.tb-btn.warn:hover{background:rgba(239,68,68,0.3);color:#FCA5A5;}
 .tb-sep{width:1px;background:rgba(255,255,255,0.12);margin:3px 1px;}
-/* Info bar */
+/* ── Info bar ── */
 #info{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(13,43,69,0.92);color:#fff;padding:5px 14px;border-radius:14px;font-family:-apple-system,sans-serif;font-size:11px;z-index:1000;pointer-events:none;white-space:nowrap;max-width:92%;border:1px solid rgba(245,166,35,0.35);overflow:hidden;text-overflow:ellipsis;}
-/* Mount badge */
+/* ── Mount badge ── */
 #mountBadge{position:absolute;bottom:36px;left:50%;transform:translateX(-50%);background:rgba(13,43,69,0.88);color:#F5A623;padding:3px 10px;border-radius:10px;font-family:-apple-system,sans-serif;font-size:10px;z-index:1000;pointer-events:none;border:1px solid rgba(245,166,35,0.3);}
-/* Area badge (top-right) */
+/* ── Active area badge ── */
 #areaBadge{position:absolute;top:48px;right:8px;z-index:1001;background:rgba(13,43,69,0.95);border:2px solid #F5A623;border-radius:8px;padding:4px 10px;font-size:10px;font-family:-apple-system,sans-serif;color:#F5A623;pointer-events:none;display:none;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-/* Nudge pads */
+/* ── Selection hint ── */
+#selHint{position:absolute;top:48px;left:50%;transform:translateX(-50%);z-index:1001;background:rgba(67,160,71,0.15);border:1px solid rgba(67,160,71,0.6);border-radius:8px;padding:5px 12px;font-size:10px;font-family:-apple-system,sans-serif;color:#A5D6A7;pointer-events:none;display:none;white-space:nowrap;}
+/* ── Nudge pads ── */
 .nudge-pad,.move-pad{position:absolute;z-index:1001;display:grid;grid-template-columns:repeat(3,28px);grid-template-rows:repeat(3,28px);gap:2px;}
-.nudge-pad{bottom:64px;left:8px;}
-.move-pad{bottom:64px;left:100px;}
+.nudge-pad{bottom:64px;left:8px;}.move-pad{bottom:64px;left:100px;}
 .nudge-btn{background:rgba(13,43,69,0.88);color:#F5A623;border:1px solid rgba(245,166,35,0.5);border-radius:5px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;font-family:-apple-system,sans-serif;user-select:none;touch-action:manipulation;}
 .nudge-btn:hover,.nudge-btn:active{background:rgba(30,136,229,0.7);}
 .nudge-reset{font-size:9px;color:#fff;}
-/* Compass */
+/* ── Compass ── */
 #compassBox{position:absolute;right:8px;bottom:108px;z-index:1001;text-align:center;pointer-events:none;}
 #compassLabel{display:block;background:rgba(13,43,69,0.93);color:#F5A623;font-size:9px;font-family:-apple-system,sans-serif;border-radius:5px;padding:2px 6px;margin-top:2px;border:1px solid rgba(245,166,35,0.45);white-space:nowrap;}
-/* Floating badges */
-.hint-badge{position:absolute;z-index:1001;pointer-events:none;font-family:-apple-system,sans-serif;border-radius:8px;font-size:11px;padding:5px 12px;white-space:nowrap;}
-.loc-badge{top:48px;left:50%;transform:translateX(-50%);background:rgba(13,43,69,0.9);border:1px solid rgba(30,136,229,0.5);color:#60A5FA;font-size:10px;}
+/* ── Float badges ── */
+.loc-badge{position:absolute;top:48px;left:50%;transform:translateX(-50%);z-index:1001;pointer-events:none;font-family:-apple-system,sans-serif;border-radius:8px;font-size:10px;padding:5px 12px;white-space:nowrap;background:rgba(13,43,69,0.9);border:1px solid rgba(30,136,229,0.5);color:#60A5FA;}
 </style>
 </head>
 <body>
 <div id="map"></div>
+
+<!-- Toolbar -->
 <div id="toolbar">
   <button class="tb-btn" id="btn-draw" title="Desenhar novo telhado" onclick="startDraw()">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg> Área
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg> Área
   </button>
   <div class="tb-sep"></div>
   <button class="tb-btn active" id="btn-auto" title="Preencher automaticamente" onclick="setMode('auto')">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Auto
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Auto
   </button>
   <button class="tb-btn" id="btn-manual" title="Colocar painéis manualmente" onclick="setMode('manual')">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Manual
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Manual
+  </button>
+  <button class="tb-btn" id="btn-select" title="Selecionar e ajustar painéis" onclick="setMode('select')">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4l6 18 3-7 7-3L4 4z"/></svg> Selecionar
+  </button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="btn-obstacle" title="Desenhar obstáculo (sombra/chaminé)" onclick="startObstacle()">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Obstáculo
   </button>
   <div class="tb-sep"></div>
   <button class="tb-btn sat-on" id="btn-sat" title="Satélite / mapa base" onclick="toggleSat()">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Satélite
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Satélite
   </button>
 </div>
-<div id="info">📐 Clique em "Área" para desenhar um telhado</div>
+
+<div id="info">📐 Clique em "Área" para desenhar o primeiro telhado</div>
 <div id="mountBadge">▲ Triângulos</div>
 <div id="areaBadge"></div>
+<div id="selHint">↑↓←→ mover · Delete apagar · Clique outro painel para trocar</div>
 
 <div id="compassBox">
   <svg width="50" height="50" viewBox="0 0 50 50">
@@ -80,100 +92,70 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0D2B45;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <script>
 // ─── Constants ────────────────────────────────────────────────────────────────
-var AREA_COLORS = ['#F5A623','#1E88E5','#43A047','#E53935','#8E24AA','#00ACC1','#FB8C00','#3949AB'];
-var AREA_DARKS  = ['#B8791A','#1456B0','#2E7D32','#B71C1C','#6A1B9A','#00838F','#C96800','#283593'];
-var STR_COLORS  = ['#FF5722','#2196F3','#4CAF50','#FF9800','#9C27B0','#00BCD4','#FFEB3B','#F44336','#009688','#3F51B5'];
+var AREA_COLORS=['#F5A623','#1E88E5','#43A047','#E53935','#8E24AA','#00ACC1','#FB8C00','#3949AB'];
+var AREA_DARKS =['#B8791A','#1456B0','#2E7D32','#B71C1C','#6A1B9A','#00838F','#C96800','#283593'];
+var STR_COLORS =['#FF5722','#2196F3','#4CAF50','#FF9800','#9C27B0','#00BCD4','#FFEB3B','#F44336','#009688','#3F51B5'];
 var MOVE_LAT=0.4/111000, MOVE_LNG=0.4/80000, NUDGE=5;
 
 // ─── State ────────────────────────────────────────────────────────────────────
-var areas   = {};   // id -> AreaData
-var activeId= null;
-var areaIdx = 0;
-var mode    = 'auto';
-var layerPanels = true;
-var satOn   = true;
+var areas={}, activeId=null, areaIdx=0;
+var mode='auto';
+var drawingObstacle=false;
+var obstacles={}, obstacleLayer=null;
+var selectedPanel=null; // {areaId, panelId}
+var satOn=true;
+var layerVis={roofs:true,panels:true,strings:true,obstacles:true};
 
 // ─── Map ──────────────────────────────────────────────────────────────────────
-var map = L.map('map',{
-  zoomControl:true, maxZoom:24, minZoom:2,
-  zoomSnap:0.25, zoomDelta:0.5, wheelPxPerZoomLevel:80, preferCanvas:true
-}).setView([39.5,-8.0],7);
+var map=L.map('map',{zoomControl:true,maxZoom:24,minZoom:2,zoomSnap:0.25,zoomDelta:0.5,wheelPxPerZoomLevel:80,preferCanvas:true}).setView([39.5,-8.0],7);
+var esriSat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:24,maxNativeZoom:19});
+var esriLbl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:24,maxNativeZoom:19,opacity:0.85});
+var osmLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM',maxZoom:24,maxNativeZoom:19,subdomains:['a','b','c']});
+esriSat.addTo(map);esriLbl.addTo(map);
 
-var esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-  {attribution:'Esri',maxZoom:24,maxNativeZoom:19});
-var esriLbl = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-  {attribution:'Esri',maxZoom:24,maxNativeZoom:19,opacity:0.85});
-var osmLayer= L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {attribution:'© OSM',maxZoom:24,maxNativeZoom:19,subdomains:['a','b','c']});
-
-esriSat.addTo(map); esriLbl.addTo(map);
+obstacleLayer=new L.FeatureGroup().addTo(map);
 
 function inv(){map.invalidateSize({animate:false});}
-inv(); setTimeout(inv,50); setTimeout(inv,200); setTimeout(inv,600); setTimeout(inv,1500);
+inv();setTimeout(inv,50);setTimeout(inv,200);setTimeout(inv,600);setTimeout(inv,1500);
 if(typeof ResizeObserver!=='undefined') new ResizeObserver(inv).observe(document.getElementById('map'));
 
-// ─── Draw control ─────────────────────────────────────────────────────────────
-var drawnItems = new L.FeatureGroup().addTo(map);
-var drawCtrl = new L.Control.Draw({
-  edit:{featureGroup:drawnItems},
-  draw:{
-    polygon:{shapeOptions:{color:'rgba(245,166,35,0.8)',fillColor:'rgba(245,166,35,0.08)',fillOpacity:1,weight:2,dashArray:'6 4'}},
-    polyline:false,rectangle:false,circle:false,circlemarker:false,marker:false
-  }
-}).addTo(map);
-
-// Hide leaflet.draw toolbar (we use our own buttons)
+// ─── Draw control (hidden, use custom buttons) ─────────────────────────────
+var drawnItems=new L.FeatureGroup().addTo(map);
+new L.Control.Draw({edit:{featureGroup:drawnItems},draw:{polyline:false,rectangle:false,circle:false,circlemarker:false,marker:false}}).addTo(map);
 setTimeout(function(){
-  var ct=document.querySelector('.leaflet-draw-toolbar');
-  if(ct) ct.style.display='none';
-  var et=document.querySelector('.leaflet-draw-edit-toolbar');
-  if(et) et.style.display='none';
-},200);
+  var ct=document.querySelector('.leaflet-draw-toolbar');if(ct)ct.style.display='none';
+  var et=document.querySelector('.leaflet-draw-edit-toolbar');if(et)et.style.display='none';
+},300);
 
-var drawHandler=null;
+var activeDrawHandler=null;
 function startDraw(){
-  if(drawHandler&&drawHandler._enabled){drawHandler.disable();drawHandler=null;document.getElementById('btn-draw').classList.remove('active');return;}
-  drawHandler=new L.Draw.Polygon(map,{
-    shapeOptions:{color:'rgba(245,166,35,0.9)',fillColor:'rgba(245,166,35,0.08)',fillOpacity:1,weight:2,dashArray:'6 4'}
-  });
-  drawHandler.enable();
+  drawingObstacle=false;
+  if(activeDrawHandler&&activeDrawHandler._enabled){activeDrawHandler.disable();activeDrawHandler=null;document.getElementById('btn-draw').classList.remove('active');return;}
+  activeDrawHandler=new L.Draw.Polygon(map,{shapeOptions:{color:'rgba(245,166,35,0.9)',fillColor:'rgba(245,166,35,0.08)',fillOpacity:1,weight:2,dashArray:'6 4'}});
+  activeDrawHandler.enable();
   document.getElementById('btn-draw').classList.add('active');
+}
+function startObstacle(){
+  drawingObstacle=true;
+  if(activeDrawHandler&&activeDrawHandler._enabled){activeDrawHandler.disable();activeDrawHandler=null;document.getElementById('btn-obstacle').classList.remove('active-red');return;}
+  activeDrawHandler=new L.Draw.Polygon(map,{shapeOptions:{color:'#EF4444',fillColor:'#EF4444',fillOpacity:0.2,weight:2,dashArray:'4 3'}});
+  activeDrawHandler.enable();
+  document.getElementById('btn-obstacle').classList.add('active-red');
 }
 
 map.on(L.Draw.Event.CREATED,function(e){
   document.getElementById('btn-draw').classList.remove('active');
-  drawHandler=null;
-  var ci=areaIdx%AREA_COLORS.length; areaIdx++;
-  var color=AREA_COLORS[ci], dark=AREA_DARKS[ci];
-  var id='a'+Date.now();
-  var poly=e.layer;
-  poly.setStyle({color:color,fillColor:color,fillOpacity:0.07,weight:2.5});
-  drawnItems.addLayer(poly);
-
-  var pLayer=new L.FeatureGroup();
-  if(layerPanels) pLayer.addTo(map);
-
-  areas[id]={
-    id:id, polygon:poly, panelLayer:pLayer,
-    color:color, dark:dark,
-    settings:{azimuth:180,mountType:'triangulos',panelW:1.13,panelH:2.28,powerWp:400,maxPanels:0,panelProjDepth:1.974,rowSpacing:4.132},
-    panels:[], strings:{},
-    gridOffset:{lat:0,lng:0}
-  };
-
-  poly.on('click',function(ev){L.DomEvent.stopPropagation(ev);selectArea(id);});
-  selectArea(id);
-  fillArea(id);
-  emit({type:'areaAdded',id:id,color:color,colorIdx:ci});
+  document.getElementById('btn-obstacle').classList.remove('active-red');
+  activeDrawHandler=null;
+  if(drawingObstacle){createObstacle(e.layer);drawingObstacle=false;return;}
+  createArea(e.layer);
 });
-
 map.on(L.Draw.Event.EDITED,function(){
   drawnItems.eachLayer(function(l){
     var k=Object.keys(areas).find(function(k){return areas[k].polygon===l;});
     if(k){areas[k].gridOffset={lat:0,lng:0};fillArea(k);}
   });
 });
-
 map.on(L.Draw.Event.DELETED,function(e){
   e.layers.eachLayer(function(l){
     var k=Object.keys(areas).find(function(k){return areas[k].polygon===l;});
@@ -184,41 +166,50 @@ map.on(L.Draw.Event.DELETED,function(e){
 // ─── Mode ─────────────────────────────────────────────────────────────────────
 function setMode(m){
   mode=m;
-  ['auto','manual'].forEach(function(k){document.getElementById('btn-'+k).classList.toggle('active',k===m);});
+  if(m!=='select') deselectPanel();
+  var classes={auto:'active',manual:'active',select:'active-green'};
+  ['auto','manual','select'].forEach(function(k){
+    var btn=document.getElementById('btn-'+k);
+    if(btn){btn.classList.remove('active','active-green');if(k===m)btn.classList.add(classes[m]||'active');}
+  });
+  document.getElementById('selHint').style.display=(m==='select')?'block':'none';
+  emit({type:'modeChanged',mode:m});
 }
 
-// Manual click
+// Map click: manual placement or deselect
 map.on('click',function(e){
-  if(mode!=='manual'||!activeId||!areas[activeId]) return;
-  var area=areas[activeId];
-  var ll=e.latlng;
-  var poly=area.polygon.getLatLngs()[0];
-  if(!pip([ll.lat,ll.lng],poly.map(function(p){return[p.lat,p.lng];}))) return;
-  placeManualPanel(activeId,ll.lat,ll.lng);
-  emitAreaUpdate(activeId);
+  if(mode==='manual'&&activeId&&areas[activeId]){
+    var area=areas[activeId];
+    var ll=e.latlng;
+    var poly=area.polygon.getLatLngs()[0];
+    if(!pip([ll.lat,ll.lng],poly.map(function(p){return[p.lat,p.lng];}))) return;
+    placeManualPanel(activeId,ll.lat,ll.lng);
+    emitAreaUpdate(activeId);
+    emitSummary();
+    updateInfoBar();
+  }else if(mode==='select'){
+    deselectPanel();
+  }
 });
 
-function placeManualPanel(areaId,lat,lng){
-  var area=areas[areaId];
-  var s=area.settings;
-  var az=s.azimuth,azp=(az+90)%360;
-  var isC=s.mountType==='coplanar';
-  var fwd=isC?s.panelH:s.panelProjDepth;
-  var c0=dp(lat,lng,az,-fwd/2);
-  var c1=dp(c0[0],c0[1],azp,-s.panelW/2);
-  var c2=dp(c1[0],c1[1],azp,s.panelW);
-  var c3=dp(c0[0],c0[1],az,fwd);
-  var c4=dp(c3[0],c3[1],azp,-s.panelW/2);
-  var c5=dp(c4[0],c4[1],azp,s.panelW);
-  var corners=[L.latLng(c1),L.latLng(c2),L.latLng(c5),L.latLng(c4)];
-  var id=areaId+'_m'+area.panels.length;
-  var layer=L.polygon(corners,{color:area.dark,fillColor:area.color,fillOpacity:0.72,weight:1,interactive:true});
-  layer.on('click',function(ev){L.DomEvent.stopPropagation(ev);});
-  layer.addTo(area.panelLayer);
-  area.panels.push({id:id,corners:corners,layer:layer,stringId:null,row:9999,col:area.panels.length});
+// ─── Area management ──────────────────────────────────────────────────────────
+function createArea(poly){
+  var ci=areaIdx%AREA_COLORS.length;areaIdx++;
+  var color=AREA_COLORS[ci],dark=AREA_DARKS[ci];
+  var id='a'+Date.now();
+  poly.setStyle({color:color,fillColor:color,fillOpacity:0.07,weight:2.5});
+  drawnItems.addLayer(poly);
+  var pLayer=new L.FeatureGroup();
+  if(layerVis.panels) pLayer.addTo(map);
+  areas[id]={id:id,polygon:poly,panelLayer:pLayer,color:color,dark:dark,
+    settings:{azimuth:180,mountType:'triangulos',panelW:1.13,panelH:2.28,powerWp:400,maxPanels:0,panelProjDepth:1.974,rowSpacing:4.132},
+    panels:[],strings:{},gridOffset:{lat:0,lng:0}};
+  poly.on('click',function(ev){L.DomEvent.stopPropagation(ev);selectArea(id);});
+  selectArea(id);
+  fillArea(id);
+  emit({type:'areaAdded',id:id,color:color,colorIdx:ci});
 }
 
-// ─── Area functions ───────────────────────────────────────────────────────────
 function selectArea(id){
   activeId=id;
   Object.keys(areas).forEach(function(k){
@@ -230,11 +221,24 @@ function selectArea(id){
   updateAreaBadge();
 }
 
+function deleteArea(id){
+  var area=areas[id];if(!area)return;
+  try{drawnItems.removeLayer(area.polygon);}catch(_){}
+  try{map.removeLayer(area.panelLayer);}catch(_){}
+  if(selectedPanel&&selectedPanel.areaId===id) selectedPanel=null;
+  delete areas[id];
+  if(activeId===id){activeId=null;var rem=Object.keys(areas);if(rem.length>0)selectArea(rem[rem.length-1]);}
+  emitSummary();emit({type:'areaDeleted',id:id});updateInfoBar();updateAreaBadge();
+}
+
+// ─── Fill area with auto panels ───────────────────────────────────────────────
 function fillArea(id){
-  var area=areas[id];
-  if(!area) return;
-  area.panelLayer.clearLayers();
-  area.panels=[];
+  var area=areas[id];if(!area)return;
+  // Preserve manual panels; clear auto ones
+  var manualPanels=area.panels.filter(function(p){return p.manual;});
+  var autoLayers=area.panels.filter(function(p){return!p.manual;}).map(function(p){return p.layer;});
+  autoLayers.forEach(function(l){area.panelLayer.removeLayer(l);});
+  area.panels=manualPanels;
   area.strings={};
 
   var s=area.settings;
@@ -242,18 +246,13 @@ function fillArea(id){
   var bounds=area.polygon.getBounds();
   var bc=bounds.getCenter();
   var ctr=L.latLng(bc.lat+area.gridOffset.lat,bc.lng+area.gridOffset.lng);
-  var nw=L.latLng(bounds.getNorth(),bounds.getWest());
-  var ne=L.latLng(bounds.getNorth(),bounds.getEast());
-  var sw=L.latLng(bounds.getSouth(),bounds.getWest());
+  var nw=L.latLng(bounds.getNorth(),bounds.getWest()),ne=L.latLng(bounds.getNorth(),bounds.getEast()),sw=L.latLng(bounds.getSouth(),bounds.getWest());
   var bW=nw.distanceTo(ne),bH=nw.distanceTo(sw);
-
   var az=s.azimuth,azp=(az+90)%360;
   var isC=s.mountType==='coplanar';
   var fwd=isC?s.panelH:s.panelProjDepth;
-  var stepA=isC?(s.panelH+0.02):s.rowSpacing;
-  var stepB=s.panelW+0.05;
-  var nA=Math.ceil(bH*1.6/stepA)+2;
-  var nB=Math.ceil(bW*1.6/stepB)+2;
+  var stepA=isC?(s.panelH+0.02):s.rowSpacing,stepB=s.panelW+0.05;
+  var nA=Math.ceil(bH*1.6/stepA)+2,nB=Math.ceil(bW*1.6/stepB)+2;
   var polyPts=latlngs.map(function(ll){return[ll.lat,ll.lng];});
   var count=0;
 
@@ -263,116 +262,220 @@ function fillArea(id){
       var tmp=dp(ctr.lat,ctr.lng,az,i*stepA);
       var pc=dp(tmp[0],tmp[1],azp,j*stepB);
       var c0=dp(pc[0],pc[1],az,-fwd/2);
-      var c1=dp(c0[0],c0[1],azp,-s.panelW/2);
-      var c2=dp(c1[0],c1[1],azp,s.panelW);
+      var c1=dp(c0[0],c0[1],azp,-s.panelW/2);var c2=dp(c1[0],c1[1],azp,s.panelW);
       var c3=dp(c0[0],c0[1],az,fwd);
-      var c4=dp(c3[0],c3[1],azp,-s.panelW/2);
-      var c5=dp(c4[0],c4[1],azp,s.panelW);
+      var c4=dp(c3[0],c3[1],azp,-s.panelW/2);var c5=dp(c4[0],c4[1],azp,s.panelW);
       var corners=[L.latLng(c1),L.latLng(c2),L.latLng(c5),L.latLng(c4)];
-      if(corners.every(function(pt){return pip([pt.lat,pt.lng],polyPts);})){
+      if(corners.every(function(pt){return pip([pt.lat,pt.lng],polyPts);})&&!isBlockedByObstacle(corners)){
         var layer=L.polygon(corners,{color:area.dark,fillColor:area.color,fillOpacity:isC?0.5:0.62,weight:1,interactive:false});
         layer.addTo(area.panelLayer);
-        area.panels.push({id:id+'_p'+count,corners:corners,layer:layer,stringId:null,row:i,col:j});
+        area.panels.push({id:id+'_p'+count,corners:corners,layer:layer,stringId:null,row:i,col:j,manual:false});
         count++;
       }
     }
   }
-
-  emitAreaUpdate(id,bW,bH);
-  emitSummary();
-  updateInfoBar();
-  if(id===activeId) updateCompassForActive();
+  emitAreaUpdate(id,bW,bH);emitSummary();updateInfoBar();
+  if(id===activeId)updateCompassForActive();
 }
 
-function emitAreaUpdate(id,bW,bH){
-  var area=areas[id];
-  if(!area) return;
+// ─── Manual panel placement ───────────────────────────────────────────────────
+function placeManualPanel(areaId,lat,lng){
+  var area=areas[areaId];if(!area)return;
   var s=area.settings;
-  var count=area.panels.length;
-  var tkwp=count*s.powerWp/1000;
-  var az=s.azimuth;
-  var dev=Math.min(Math.abs(az-180),360-Math.abs(az-180));
-  var devText=dev<2?'Sul · ideal':azLabel(az)+' · '+Math.round(dev)+'° de Sul';
-  emit({type:'areaUpdated',id:id,panelCount:count,totalKwp:tkwp,
-        roofArea:Math.round((bW||0)*(bH||0)),azimuth:az,mountType:s.mountType,
-        orientationLabel:devText});
+  var az=s.azimuth,azp=(az+90)%360;
+  var isC=s.mountType==='coplanar';
+  var fwd=isC?s.panelH:s.panelProjDepth;
+  var corners=buildPanelCorners(lat,lng,az,azp,fwd,s.panelW);
+  var pid=areaId+'_m'+Date.now();
+  var layer=L.polygon(corners,{color:area.dark,fillColor:area.color,fillOpacity:0.75,weight:1.5,interactive:true});
+  (function(id,aId){
+    layer.on('click',function(ev){L.DomEvent.stopPropagation(ev);if(mode==='select')selectPanelById(aId,id);});
+  })(pid,areaId);
+  layer.addTo(area.panelLayer);
+  area.panels.push({id:pid,corners:corners,layer:layer,stringId:null,row:9999,col:area.panels.length,manual:true,lat:lat,lng:lng});
+}
+function buildPanelCorners(lat,lng,az,azp,fwd,pw){
+  var c0=dp(lat,lng,az,-fwd/2);
+  var c1=dp(c0[0],c0[1],azp,-pw/2);var c2=dp(c1[0],c1[1],azp,pw);
+  var c3=dp(c0[0],c0[1],az,fwd);
+  var c4=dp(c3[0],c3[1],azp,-pw/2);var c5=dp(c4[0],c4[1],azp,pw);
+  return[L.latLng(c1),L.latLng(c2),L.latLng(c5),L.latLng(c4)];
+}
+function rebuildManualPanel(panel,area){
+  var s=area.settings;
+  var az=s.azimuth,azp=(az+90)%360;
+  var isC=s.mountType==='coplanar';
+  var fwd=isC?s.panelH:s.panelProjDepth;
+  panel.corners=buildPanelCorners(panel.lat,panel.lng,az,azp,fwd,s.panelW);
+  panel.layer.setLatLngs(panel.corners);
 }
 
-function deleteArea(id){
-  var area=areas[id];
-  if(!area) return;
-  try{drawnItems.removeLayer(area.polygon);}catch(_){}
-  try{map.removeLayer(area.panelLayer);}catch(_){}
-  delete areas[id];
-  if(activeId===id){
-    activeId=null;
-    var rem=Object.keys(areas);
-    if(rem.length>0) selectArea(rem[rem.length-1]);
+// ─── Panel selection ──────────────────────────────────────────────────────────
+function selectPanelById(areaId,panelId){
+  deselectPanel();
+  var area=areas[areaId];if(!area)return;
+  var panel=area.panels.find(function(p){return p.id===panelId;});
+  if(!panel||!panel.manual)return;
+  selectedPanel={areaId:areaId,panelId:panelId};
+  panel.layer.setStyle({color:'#F5A623',weight:3,fillColor:'#F5A623',fillOpacity:0.85});
+  emit({type:'panelSelected',areaId:areaId,panelId:panelId});
+}
+function deselectPanel(){
+  if(!selectedPanel)return;
+  var area=areas[selectedPanel.areaId];
+  if(area){
+    var p=area.panels.find(function(x){return x.id===selectedPanel.panelId;});
+    if(p){
+      var isC=area.settings.mountType==='coplanar';
+      p.layer.setStyle({color:area.dark,weight:1.5,fillColor:area.color,fillOpacity:0.75});
+    }
   }
-  emitSummary();
-  emit({type:'areaDeleted',id:id});
-  updateInfoBar();
-  updateAreaBadge();
+  selectedPanel=null;
+  emit({type:'panelDeselected'});
+}
+function deleteSelectedPanel(){
+  if(!selectedPanel)return;
+  var aId=selectedPanel.areaId;
+  var area=areas[aId];if(!area)return;
+  var idx=area.panels.findIndex(function(p){return p.id===selectedPanel.panelId;});
+  if(idx===-1)return;
+  area.panelLayer.removeLayer(area.panels[idx].layer);
+  area.panels.splice(idx,1);
+  selectedPanel=null;
+  emit({type:'panelDeselected'});
+  emitAreaUpdate(aId);emitSummary();updateInfoBar();
+}
+function moveSelectedPanel(dlat,dlng){
+  if(!selectedPanel)return;
+  var area=areas[selectedPanel.areaId];if(!area)return;
+  var panel=area.panels.find(function(p){return p.id===selectedPanel.panelId;});
+  if(!panel||!panel.manual)return;
+  panel.lat+=dlat;panel.lng+=dlng;
+  rebuildManualPanel(panel,area);
 }
 
-function autoString(areaId,count){
-  var area=areas[areaId];
-  if(!area||area.panels.length===0||count<=0) return;
-  var isC=area.settings.mountType==='coplanar';
-  area.panels.forEach(function(p){
-    p.layer.setStyle({fillColor:area.color,fillOpacity:isC?0.5:0.62});
-    p.stringId=null;
+// ─── Keyboard ─────────────────────────────────────────────────────────────────
+document.addEventListener('keydown',function(e){
+  if(mode==='select'&&selectedPanel){
+    var area=areas[selectedPanel.areaId];if(!area)return;
+    var s=area.settings;
+    var dLat=(s.panelH||2.28)/2/111000;
+    var dLng=(s.panelW||1.13)/2/80000;
+    switch(e.key){
+      case'ArrowUp':e.preventDefault();moveSelectedPanel(dLat,0);break;
+      case'ArrowDown':e.preventDefault();moveSelectedPanel(-dLat,0);break;
+      case'ArrowLeft':e.preventDefault();moveSelectedPanel(0,-dLng);break;
+      case'ArrowRight':e.preventDefault();moveSelectedPanel(0,dLng);break;
+      case'Delete':case'Backspace':e.preventDefault();deleteSelectedPanel();break;
+    }
+  }
+});
+
+// ─── Obstacles ────────────────────────────────────────────────────────────────
+function createObstacle(poly){
+  var id='ob'+Date.now();
+  poly.setStyle({color:'#EF4444',fillColor:'#EF4444',fillOpacity:0.22,weight:2,dashArray:'5 3'});
+  if(layerVis.obstacles)poly.addTo(obstacleLayer);
+  var latlngs=poly.getLatLngs()[0];
+  obstacles[id]={id:id,polygon:poly,latLngs:latlngs};
+  // Click to delete obstacle
+  (function(oid){poly.on('click',function(){removeObstacle(oid);});})(id);
+  Object.keys(areas).forEach(function(k){fillArea(k);});
+  emit({type:'obstacleAdded',id:id});
+}
+function removeObstacle(id){
+  var ob=obstacles[id];if(!ob)return;
+  try{obstacleLayer.removeLayer(ob.polygon);}catch(_){}
+  delete obstacles[id];
+  Object.keys(areas).forEach(function(k){fillArea(k);});
+  emit({type:'obstacleRemoved',id:id});
+}
+function isBlockedByObstacle(corners){
+  var ids=Object.keys(obstacles);if(!ids.length)return false;
+  var cLat=(corners[0].lat+corners[2].lat)/2;
+  var cLng=(corners[0].lng+corners[2].lng)/2;
+  return ids.some(function(id){
+    var pts=obstacles[id].latLngs.map(function(ll){return[ll.lat,ll.lng];});
+    return pip([cLat,cLng],pts);
   });
+}
+
+// ─── String management ────────────────────────────────────────────────────────
+function autoString(areaId,count){
+  var area=areas[areaId];if(!area||!area.panels.length||count<=0)return;
+  var isC=area.settings.mountType==='coplanar';
+  area.panels.forEach(function(p){p.layer.setStyle({fillColor:area.color,fillOpacity:isC?0.5:0.65});p.stringId=null;});
   area.strings={};
-  var sorted=area.panels.slice().sort(function(a,b){return a.row!==b.row?a.row-b.row:a.col-b.col;});
-  var perStr=Math.ceil(sorted.length/count);
-  var result=[];
+  var sorted=area.panels.filter(function(p){return!p.manual;}).slice().sort(function(a,b){return a.row!==b.row?a.row-b.row:a.col-b.col;});
+  var manuals=area.panels.filter(function(p){return p.manual;});
+  var all=sorted.concat(manuals);
+  var perStr=Math.ceil(all.length/count),result=[];
   for(var i=0;i<count;i++){
-    var strId=areaId+'_s'+i;
-    var color=STR_COLORS[i%STR_COLORS.length];
-    var start=i*perStr,end=Math.min(start+perStr,sorted.length);
-    var strPanels=sorted.slice(start,end);
-    if(!strPanels.length) break;
+    var strId=areaId+'_s'+i,color=STR_COLORS[i%STR_COLORS.length];
+    var start=i*perStr,end=Math.min(start+perStr,all.length);
+    var strPanels=all.slice(start,end);if(!strPanels.length)break;
     strPanels.forEach(function(p){p.layer.setStyle({fillColor:color,fillOpacity:0.85});p.stringId=strId;});
     area.strings[strId]={id:strId,color:color,panelCount:strPanels.length};
     result.push({id:strId,color:color,panelCount:strPanels.length,label:'String '+(i+1)});
   }
   emit({type:'stringsUpdated',areaId:areaId,strings:result});
 }
-
 function clearStrings(areaId){
-  var area=areas[areaId];
-  if(!area) return;
+  var area=areas[areaId];if(!area)return;
   var isC=area.settings.mountType==='coplanar';
-  area.panels.forEach(function(p){p.layer.setStyle({fillColor:area.color,fillOpacity:isC?0.5:0.62});p.stringId=null;});
+  area.panels.forEach(function(p){p.layer.setStyle({fillColor:area.color,fillOpacity:p.manual?0.75:isC?0.5:0.62});p.stringId=null;});
   area.strings={};
   emit({type:'stringsUpdated',areaId:areaId,strings:[]});
 }
 
-// ─── Nudge (active area) ──────────────────────────────────────────────────────
+// ─── Active area nudge ────────────────────────────────────────────────────────
 function nudgeActive(d){
-  if(!activeId||!areas[activeId]) return;
+  if(!activeId||!areas[activeId])return;
   areas[activeId].settings.azimuth=((areas[activeId].settings.azimuth+d)%360+360)%360;
-  fillArea(activeId);
-  emit({type:'areaAzimuthChanged',id:activeId,azimuth:areas[activeId].settings.azimuth});
+  fillArea(activeId);emit({type:'areaAzimuthChanged',id:activeId,azimuth:areas[activeId].settings.azimuth});
 }
 function moveGridActive(dlat,dlng){
-  if(!activeId||!areas[activeId]) return;
-  areas[activeId].gridOffset.lat+=dlat;
-  areas[activeId].gridOffset.lng+=dlng;
-  fillArea(activeId);
+  if(!activeId||!areas[activeId])return;
+  areas[activeId].gridOffset.lat+=dlat;areas[activeId].gridOffset.lng+=dlng;fillArea(activeId);
 }
 function resetGridActive(){
-  if(!activeId||!areas[activeId]) return;
-  areas[activeId].gridOffset={lat:0,lng:0};
-  fillArea(activeId);
+  if(!activeId||!areas[activeId])return;
+  areas[activeId].gridOffset={lat:0,lng:0};fillArea(activeId);
+}
+
+// ─── Layers ───────────────────────────────────────────────────────────────────
+function setLayerVis(name,visible){
+  layerVis[name]=visible;
+  switch(name){
+    case'roofs':
+      Object.keys(areas).forEach(function(k){
+        if(visible)areas[k].polygon.setStyle({opacity:1,fillOpacity:0.07});
+        else areas[k].polygon.setStyle({opacity:0,fillOpacity:0});
+      });break;
+    case'panels':
+      Object.keys(areas).forEach(function(k){
+        if(visible)areas[k].panelLayer.addTo(map);else map.removeLayer(areas[k].panelLayer);
+      });break;
+    case'obstacles':
+      if(visible)obstacleLayer.addTo(map);else map.removeLayer(obstacleLayer);break;
+    case'strings':
+      // Strings are shown via panel fill colors; just re-render
+      break;
+  }
+}
+
+// ─── Satellite ────────────────────────────────────────────────────────────────
+function toggleSat(){
+  satOn=!satOn;
+  var btn=document.getElementById('btn-sat');
+  if(satOn){osmLayer.remove();esriSat.addTo(map);esriLbl.addTo(map);btn.classList.add('sat-on');}
+  else{esriSat.remove();esriLbl.remove();osmLayer.addTo(map);btn.classList.remove('sat-on');}
 }
 
 // ─── Visual helpers ───────────────────────────────────────────────────────────
 function updateCompassForActive(){
-  if(!activeId||!areas[activeId]) return;
-  var s=areas[activeId].settings;
-  updateCompass(s.azimuth);
+  if(!activeId||!areas[activeId])return;
+  var s=areas[activeId].settings;updateCompass(s.azimuth);
   var badge=document.getElementById('mountBadge');
   if(s.mountType==='coplanar'){badge.textContent='▬ Coplanar';badge.style.color='#60A5FA';}
   else{badge.textContent='▲ Triângulos';badge.style.color='#F5A623';}
@@ -385,104 +488,77 @@ function updateCompass(az){
 function updateAreaBadge(){
   var el=document.getElementById('areaBadge');
   if(!activeId||!areas[activeId]){el.style.display='none';return;}
-  var a=areas[activeId];
-  var k=Object.keys(areas).indexOf(activeId)+1;
-  el.style.display='block';
-  el.style.borderColor=a.color;
-  el.style.color=a.color;
+  var a=areas[activeId];var k=Object.keys(areas).indexOf(activeId)+1;
+  el.style.display='block';el.style.borderColor=a.color;el.style.color=a.color;
   el.textContent='● Telhado '+k+' activo';
 }
 function updateInfoBar(){
   var total=0,kwp=0,nc=Object.keys(areas).length;
-  Object.keys(areas).forEach(function(k){
-    var a=areas[k];
-    total+=a.panels.length;
-    kwp+=a.panels.length*a.settings.powerWp/1000;
-  });
-  var txt=nc===0?'📐 Clique em "Área" para desenhar um telhado':
-    nc+(nc===1?' telhado':' telhados')+' · '+total+' painéis · '+kwp.toFixed(2)+' kWp';
+  Object.keys(areas).forEach(function(k){var a=areas[k];total+=a.panels.length;kwp+=a.panels.length*a.settings.powerWp/1000;});
+  var txt=nc===0?'📐 Clique em "Área" para desenhar um telhado':nc+(nc===1?' telhado':' telhados')+' · '+total+' painéis · '+kwp.toFixed(2)+' kWp';
   document.getElementById('info').textContent=txt;
+}
+function emitAreaUpdate(id,bW,bH){
+  var area=areas[id];if(!area)return;
+  var s=area.settings;var count=area.panels.length;var tkwp=count*s.powerWp/1000;
+  var az=s.azimuth;var dev=Math.min(Math.abs(az-180),360-Math.abs(az-180));
+  var devText=dev<2?'Sul · ideal':azLabel(az)+' · '+Math.round(dev)+'° de Sul';
+  emit({type:'areaUpdated',id:id,panelCount:count,totalKwp:tkwp,roofArea:Math.round((bW||0)*(bH||0)),azimuth:az,mountType:s.mountType,orientationLabel:devText});
 }
 function emitSummary(){
   var total=0,kwp=0,aList=[];
-  Object.keys(areas).forEach(function(k){
-    var a=areas[k];
-    var c=a.panels.length,q=c*a.settings.powerWp/1000;
-    total+=c; kwp+=q;
-    aList.push({id:k,panelCount:c,totalKwp:q});
-  });
+  Object.keys(areas).forEach(function(k){var a=areas[k];var c=a.panels.length,q=c*a.settings.powerWp/1000;total+=c;kwp+=q;aList.push({id:k,panelCount:c,totalKwp:q});});
   emit({type:'summaryUpdated',totalPanels:total,totalKwp:kwp,areas:aList});
 }
 
-// ─── Satellite toggle ─────────────────────────────────────────────────────────
-function toggleSat(){
-  satOn=!satOn;
-  var btn=document.getElementById('btn-sat');
-  if(satOn){osmLayer.remove();esriSat.addTo(map);esriLbl.addTo(map);btn.classList.add('sat-on');}
-  else{esriSat.remove();esriLbl.remove();osmLayer.addTo(map);btn.classList.remove('sat-on');}
-}
-
-// ─── Layer visibility ─────────────────────────────────────────────────────────
-function setLayerVis(name,visible){
-  if(name==='panels'){
-    layerPanels=visible;
-    Object.keys(areas).forEach(function(k){
-      if(visible) areas[k].panelLayer.addTo(map);
-      else map.removeLayer(areas[k].panelLayer);
-    });
-  }
-}
-
-// ─── Message handler ──────────────────────────────────────────────────────────
+// ─── postMessage handler ──────────────────────────────────────────────────────
 window.addEventListener('message',function(e){
-  var d; try{d=JSON.parse(e.data);}catch(_){return;}
+  var d;try{d=JSON.parse(e.data);}catch(_){return;}
   switch(d.type){
     case'updateArea':
-      if(!areas[d.id]) return;
+      if(!areas[d.id])return;
       var s=areas[d.id].settings;
-      if(d.azimuth!==undefined) s.azimuth=d.azimuth;
-      if(d.mountType!==undefined) s.mountType=d.mountType;
-      if(d.panelW!==undefined) s.panelW=d.panelW;
-      if(d.panelH!==undefined) s.panelH=d.panelH;
-      if(d.powerWp!==undefined) s.powerWp=d.powerWp;
-      if(d.maxPanels!==undefined) s.maxPanels=d.maxPanels;
-      if(d.panelProjDepth!==undefined) s.panelProjDepth=d.panelProjDepth;
-      if(d.rowSpacing!==undefined) s.rowSpacing=d.rowSpacing;
-      fillArea(d.id);
-      break;
-    case'selectArea': selectArea(d.id); break;
-    case'deleteArea': deleteArea(d.id); break;
-    case'autoString': autoString(d.areaId,d.count); break;
-    case'clearStrings': clearStrings(d.areaId); break;
-    case'setLayer': setLayerVis(d.name,d.visible); break;
-    case'startDraw': startDraw(); break;
-    case'invalidateSize': inv();setTimeout(inv,100);setTimeout(inv,400); break;
+      ['azimuth','mountType','panelW','panelH','powerWp','maxPanels','panelProjDepth','rowSpacing'].forEach(function(k){if(d[k]!==undefined)s[k]=d[k];});
+      fillArea(d.id);break;
+    case'selectArea':selectArea(d.id);break;
+    case'deleteArea':deleteArea(d.id);break;
+    case'autoString':autoString(d.areaId,d.count);break;
+    case'clearStrings':clearStrings(d.areaId);break;
+    case'deleteSelectedPanel':deleteSelectedPanel();break;
+    case'nudgePanel':
+      if(selectedPanel){
+        var area2=areas[selectedPanel.areaId];
+        if(area2){
+          var s2=area2.settings;
+          var dLat2=(s2.panelH||2.28)/4/111000;
+          var dLng2=(s2.panelW||1.13)/4/80000;
+          moveSelectedPanel((d.dlat||0)*dLat2,(d.dlng||0)*dLng2);
+        }
+      }break;
+    case'setMode':setMode(d.mode);break;
+    case'setLayer':setLayerVis(d.name,d.visible);break;
+    case'startDraw':startDraw();break;
+    case'invalidateSize':inv();setTimeout(inv,100);setTimeout(inv,400);break;
     case'flyTo':
-      if(d.lat!==undefined&&d.lng!==undefined) map.flyTo([d.lat,d.lng],d.zoom||18,{animate:true,duration:1.0});
-      if(d.name){
-        var old=document.getElementById('loc-b');if(old)old.remove();
-        var lb=document.createElement('div');lb.id='loc-b';lb.className='hint-badge loc-badge';
+      if(d.lat!==undefined&&d.lng!==undefined)map.flyTo([d.lat,d.lng],d.zoom||18,{animate:true,duration:1.0});
+      if(d.name){var old=document.getElementById('loc-b');if(old)old.remove();
+        var lb=document.createElement('div');lb.id='loc-b';lb.className='loc-badge';
         lb.textContent='📍 '+d.name;document.body.appendChild(lb);
-        setTimeout(function(){var x=document.getElementById('loc-b');if(x)x.remove();},4000);
-      }
+        setTimeout(function(){var x=document.getElementById('loc-b');if(x)x.remove();},4000);}
       break;
   }
 });
 
 // ─── Nudge pads ───────────────────────────────────────────────────────────────
 var np=document.createElement('div');np.className='nudge-pad';
-np.innerHTML=[
-  '<div></div>','<button class="nudge-btn" onclick="nudgeActive(-NUDGE)">↺</button>','<div></div>',
+np.innerHTML=['<div></div>','<button class="nudge-btn" onclick="nudgeActive(-NUDGE)">↺</button>','<div></div>',
   '<button class="nudge-btn" onclick="nudgeActive(-1)">◁</button>',
   '<button class="nudge-btn nudge-reset" onclick="if(activeId&&areas[activeId]){areas[activeId].settings.azimuth=180;fillArea(activeId);updateCompassForActive();emit({type:\'areaAzimuthChanged\',id:activeId,azimuth:180});}">Sul</button>',
   '<button class="nudge-btn" onclick="nudgeActive(1)">▷</button>',
-  '<div></div>','<button class="nudge-btn" onclick="nudgeActive(NUDGE)">↻</button>','<div></div>'
-].join('');
+  '<div></div>','<button class="nudge-btn" onclick="nudgeActive(NUDGE)">↻</button>','<div></div>'].join('');
 document.body.appendChild(np);
-
 var mp=document.createElement('div');mp.className='move-pad';
-mp.innerHTML=[
-  '<button class="nudge-btn" onclick="moveGridActive(MOVE_LAT,-MOVE_LNG)">↖</button>',
+mp.innerHTML=['<button class="nudge-btn" onclick="moveGridActive(MOVE_LAT,-MOVE_LNG)">↖</button>',
   '<button class="nudge-btn" onclick="moveGridActive(MOVE_LAT,0)">↑</button>',
   '<button class="nudge-btn" onclick="moveGridActive(MOVE_LAT,MOVE_LNG)">↗</button>',
   '<button class="nudge-btn" onclick="moveGridActive(0,-MOVE_LNG)">←</button>',
@@ -490,14 +566,12 @@ mp.innerHTML=[
   '<button class="nudge-btn" onclick="moveGridActive(0,MOVE_LNG)">→</button>',
   '<button class="nudge-btn" onclick="moveGridActive(-MOVE_LAT,-MOVE_LNG)">↙</button>',
   '<button class="nudge-btn" onclick="moveGridActive(-MOVE_LAT,0)">↓</button>',
-  '<button class="nudge-btn" onclick="moveGridActive(-MOVE_LAT,MOVE_LNG)">↘</button>'
-].join('');
+  '<button class="nudge-btn" onclick="moveGridActive(-MOVE_LAT,MOVE_LNG)">↘</button>'].join('');
 document.body.appendChild(mp);
 
 // ─── Math helpers ─────────────────────────────────────────────────────────────
 function emit(o){try{window.parent.postMessage(JSON.stringify(o),'*');}catch(_){}}
-function toR(d){return d*Math.PI/180;}
-function toD(r){return r*180/Math.PI;}
+function toR(d){return d*Math.PI/180;}function toD(r){return r*180/Math.PI;}
 function dp(lat,lng,az,dist){
   var R=6371000,la=toR(lat),lo=toR(lng),a=toR(az),d=dist/R;
   var la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(a));
@@ -516,12 +590,6 @@ function azLabel(az){
   if(az>=337.5||az<22.5)return'N';if(az<67.5)return'NE';if(az<112.5)return'E';
   if(az<157.5)return'SE';if(az<202.5)return'S';if(az<247.5)return'SO';
   if(az<292.5)return'O';return'NO';
-}
-function orientFactor(az){
-  var d=Math.min(Math.abs(az-180),360-Math.abs(az-180));
-  var p=[[0,1.00],[45,0.95],[90,0.80],[135,0.63],[180,0.56]];
-  for(var i=0;i<p.length-1;i++){if(d<=p[i+1][0])return p[i][1]+(p[i+1][1]-p[i][1])*((d-p[i][0])/(p[i+1][0]-p[i][0]));}
-  return 0.56;
 }
 
 // Init

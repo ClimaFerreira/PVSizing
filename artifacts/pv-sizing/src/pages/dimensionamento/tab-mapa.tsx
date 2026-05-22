@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import {
   Maximize2, Minimize2, Trash2, RotateCcw, Navigation,
   Plus, ChevronDown, ChevronRight, Layers, Zap, Eye, EyeOff,
+  MousePointer2, Grid2x2, PencilLine, AlertTriangle, Home,
+  Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +19,6 @@ interface StringState {
   panelCount: number;
   label: string;
 }
-
 interface AreaState {
   id: string;
   name: string;
@@ -28,46 +29,36 @@ interface AreaState {
   panelW: number;
   panelH: number;
   powerWp: number;
-  /* results from iframe */
   panelCount: number;
   totalKwp: number;
   roofArea: number;
   orientationLabel: string;
   strings: StringState[];
 }
-
-interface TabMapaProps {
-  isActive?: boolean;
+type MapMode = "auto" | "manual" | "select" | "obstacle";
+interface LayerState {
+  roofs: boolean;
+  panels: boolean;
+  strings: boolean;
+  obstacles: boolean;
 }
+interface TabMapaProps { isActive?: boolean; }
 
-/* ─── Helpers ────────────────────────────────────────────────────────────── */
-const AREA_COLORS = [
-  "#F5A623","#1E88E5","#43A047","#E53935",
-  "#8E24AA","#00ACC1","#FB8C00","#3949AB",
+/* ─── Layer definitions ─────────────────────────────────────────────────── */
+const LAYER_DEFS: { key: keyof LayerState; label: string; icon: React.ReactNode; color: string }[] = [
+  { key: "roofs",     label: "Telhados",   icon: <Home size={11} />,          color: "#0D2B45" },
+  { key: "panels",    label: "Painéis",    icon: <Grid2x2 size={11} />,       color: "#1E88E5" },
+  { key: "strings",   label: "Strings",    icon: <Zap size={11} />,           color: "#F5A623" },
+  { key: "obstacles", label: "Obstáculos", icon: <AlertTriangle size={11} />, color: "#EF4444" },
 ];
 
-function makeDefaultArea(
-  id: string,
-  idx: number,
-  color: string,
-  azimuth: number,
-  mountType: string,
-  panelW: number,
-  panelH: number,
-  powerWp: number,
-  panelProjDepth: number,
-  rowSpacing: number,
-): AreaState {
-  return {
-    id, color,
-    name: `Telhado ${idx + 1}`,
-    azimuth,
-    mountType: (mountType === "coplanar" ? "coplanar" : "triangulos"),
-    maxPanels: 0,
-    panelW, panelH, powerWp,
-    panelCount: 0, totalKwp: 0, roofArea: 0, orientationLabel: "", strings: [],
-  };
-}
+/* ─── Mode definitions ─────────────────────────────────────────────────── */
+const MODE_DEFS: { key: MapMode; label: string; icon: React.ReactNode; cls: string }[] = [
+  { key: "auto",     label: "Auto",       icon: <Grid2x2 size={10} />,       cls: "bg-[#0D2B45] text-white" },
+  { key: "manual",   label: "Manual",     icon: <PencilLine size={10} />,    cls: "bg-[#1E88E5] text-white" },
+  { key: "select",   label: "Selecionar", icon: <MousePointer2 size={10} />, cls: "bg-[#43A047] text-white" },
+  { key: "obstacle", label: "Obstáculo",  icon: <AlertTriangle size={10} />, cls: "bg-[#EF4444] text-white" },
+];
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 export default function TabMapa({ isActive = false }: TabMapaProps) {
@@ -77,8 +68,7 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  /* ui state */
-  const [sidebarWidth, setSidebarWidth] = useState(296);
+  const [sidebarWidth, setSidebarWidth] = useState(300);
   const [isDragging, setIsDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [iframeReady, setIframeReady] = useState(false);
@@ -95,12 +85,17 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
   const [totalPanels, setTotalPanels] = useState(0);
   const [totalKwp, setTotalKwp] = useState(0);
 
-  /* layer */
-  const [layerPanels, setLayerPanels] = useState(true);
+  /* layers */
+  const [layers, setLayers] = useState<LayerState>({ roofs: true, panels: true, strings: true, obstacles: true });
 
-  /* location sync */
+  /* mode */
+  const [mapMode, setMapMode] = useState<MapMode>("auto");
+
+  /* selected panel */
+  const [panelSelected, setPanelSelected] = useState(false);
+  const [selectedPanelAreaId, setSelectedPanelAreaId] = useState<string | null>(null);
+
   const prevLocRef = useRef("");
-
   const activeArea = areas.find(a => a.id === activeAreaId) ?? null;
 
   /* ── postMessage helper ── */
@@ -128,7 +123,7 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
     setTimeout(() => post({ type: "invalidateSize" }), 100);
   }, [post]);
 
-  /* ── When tab becomes active ── */
+  /* ── Tab activation ── */
   useEffect(() => {
     if (!isActive || !iframeReady) return;
     post({ type: "invalidateSize" });
@@ -137,7 +132,7 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [isActive, iframeReady, post]);
 
-  /* ── Fly to location when it changes ── */
+  /* ── Fly to location ── */
   useEffect(() => {
     if (!iframeReady) return;
     const lat = solarParams.latitude, lng = solarParams.longitude;
@@ -150,18 +145,38 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
     post({ type: "flyTo", lat: latN, lng: lngN, zoom: 18, name: solarParams.locationName || undefined });
   }, [iframeReady, solarParams.latitude, solarParams.longitude, solarParams.locationName, post]);
 
-  /* ── Re-sync rowSpacing/panelProjDepth on solarResults change ── */
+  /* ── Re-sync rowSpacing on results change ── */
   useEffect(() => {
     if (!iframeReady) return;
     areas.forEach(a => post({ type: "updateArea", ...areaPayload(a) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iframeReady, solarResults.rowSpacing, solarResults.panelProjectedDepth]);
 
-  /* ── Layer visibility ── */
-  useEffect(() => {
-    if (!iframeReady) return;
-    post({ type: "setLayer", name: "panels", visible: layerPanels });
-  }, [iframeReady, layerPanels, post]);
+  /* ── Layer visibility → iframe ── */
+  const toggleLayer = useCallback((key: keyof LayerState) => {
+    setLayers(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      post({ type: "setLayer", name: key, visible: next[key] });
+      return next;
+    });
+  }, [post]);
+
+  /* ── Mode change → iframe ── */
+  const changeMode = useCallback((m: MapMode) => {
+    setMapMode(m);
+    post({ type: "setMode", mode: m });
+    if (m !== "select") { setPanelSelected(false); setSelectedPanelAreaId(null); }
+  }, [post]);
+
+  /* ── Update area + post to map ── */
+  const updateArea = useCallback((id: string, patch: Partial<AreaState>) => {
+    setAreas(prev => {
+      const next = prev.map(a => a.id === id ? { ...a, ...patch } : a);
+      const updated = next.find(a => a.id === id);
+      if (updated) post({ type: "updateArea", ...areaPayload(updated), ...patch });
+      return next;
+    });
+  }, [areaPayload, post]);
 
   /* ── Receive messages from iframe ── */
   useEffect(() => {
@@ -172,26 +187,24 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
 
       switch (data.type) {
         case "areaAdded": {
-          const aIdx = areas.length; // capture before setState
-          const newArea = makeDefaultArea(
-            data.id as string,
-            aIdx,
-            data.color as string,
-            parseInt(panel.azimuth) || 180,
-            solarParams.mountType || "triangulos",
-            parseFloat(panel.panelWidth) || 1.13,
-            parseFloat(panel.panelHeight) || 2.28,
-            parseFloat(panel.panelPower) || 400,
-            solarResults.panelProjectedDepth,
-            solarResults.rowSpacing,
-          );
+          const newArea: AreaState = {
+            id: data.id as string,
+            color: data.color as string,
+            name: "",  // will be set in setAreas via callback
+            azimuth: parseInt(panel.azimuth) || 180,
+            mountType: (solarParams.mountType === "coplanar" ? "coplanar" : "triangulos"),
+            maxPanels: 0,
+            panelW: parseFloat(panel.panelWidth) || 1.13,
+            panelH: parseFloat(panel.panelHeight) || 2.28,
+            powerWp: parseFloat(panel.panelPower) || 400,
+            panelCount: 0, totalKwp: 0, roofArea: 0, orientationLabel: "", strings: [],
+          };
           setAreas(prev => {
-            const updated = [...prev, { ...newArea, name: `Telhado ${prev.length + 1}` }];
-            return updated;
+            const named = { ...newArea, name: `Telhado ${prev.length + 1}` };
+            return [...prev, named];
           });
           setActiveAreaId(data.id as string);
           setExpandedAreaId(data.id as string);
-          // Push current settings to iframe
           setTimeout(() => post({
             type: "updateArea", id: data.id,
             azimuth: parseInt(panel.azimuth) || 180,
@@ -212,23 +225,20 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
         case "areaUpdated":
           setAreas(prev => prev.map(a => a.id === data.id ? {
             ...a,
-            panelCount: data.panelCount as number ?? 0,
-            totalKwp: data.totalKwp as number ?? 0,
-            roofArea: data.roofArea as number ?? 0,
-            orientationLabel: data.orientationLabel as string ?? "",
+            panelCount: (data.panelCount as number) ?? 0,
+            totalKwp: (data.totalKwp as number) ?? 0,
+            roofArea: (data.roofArea as number) ?? 0,
+            orientationLabel: (data.orientationLabel as string) ?? "",
+            ...(typeof data.azimuth === "number" ? { azimuth: data.azimuth as number } : {}),
           } : a));
-          // Update azimuth from map if it was returned
-          if (typeof data.azimuth === "number") {
-            setAreas(prev => prev.map(a => a.id === data.id ? { ...a, azimuth: data.azimuth as number } : a));
-          }
           break;
         case "areaDeleted":
           setAreas(prev => prev.filter(a => a.id !== data.id));
           setActiveAreaId(prev => prev === data.id ? null : prev);
           break;
         case "summaryUpdated":
-          setTotalPanels(data.totalPanels as number ?? 0);
-          setTotalKwp(data.totalKwp as number ?? 0);
+          setTotalPanels((data.totalPanels as number) ?? 0);
+          setTotalKwp((data.totalKwp as number) ?? 0);
           setMapData(prev => ({
             ...(prev ?? {}),
             panelCount: data.totalPanels as number,
@@ -248,6 +258,17 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
             setPanel(p => ({ ...p, azimuth: String(data.azimuth) }));
           }
           break;
+        case "panelSelected":
+          setPanelSelected(true);
+          setSelectedPanelAreaId(data.areaId as string);
+          break;
+        case "panelDeselected":
+          setPanelSelected(false);
+          setSelectedPanelAreaId(null);
+          break;
+        case "modeChanged":
+          setMapMode(data.mode as MapMode);
+          break;
       }
     };
     window.addEventListener("message", handle);
@@ -255,22 +276,12 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [areas.length, panel, solarParams.mountType, solarResults, post, setMapData, setPanel]);
 
-  /* ── Update an area's settings in React + post to map ── */
-  const updateArea = useCallback((id: string, patch: Partial<AreaState>) => {
-    setAreas(prev => {
-      const next = prev.map(a => a.id === id ? { ...a, ...patch } : a);
-      const updated = next.find(a => a.id === id);
-      if (updated) post({ type: "updateArea", ...areaPayload(updated), ...patch });
-      return next;
-    });
-  }, [areaPayload, post]);
-
   /* ── Resizable divider ── */
   const onDividerMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
     const startX = e.clientX, startW = sidebarWidth;
-    const onMove = (ev: MouseEvent) => setSidebarWidth(Math.max(220, Math.min(460, startW + ev.clientX - startX)));
+    const onMove = (ev: MouseEvent) => setSidebarWidth(Math.max(220, Math.min(480, startW + ev.clientX - startX)));
     const onUp = () => {
       setIsDragging(false);
       post({ type: "invalidateSize" });
@@ -283,9 +294,7 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
 
   /* ── Fullscreen ── */
   const toggleFullscreen = () => {
-    document.fullscreenElement
-      ? document.exitFullscreen?.()
-      : containerRef.current?.requestFullscreen?.();
+    document.fullscreenElement ? document.exitFullscreen?.() : containerRef.current?.requestFullscreen?.();
   };
   useEffect(() => {
     const h = () => { setIsFullscreen(!!document.fullscreenElement); setTimeout(() => post({ type: "invalidateSize" }), 150); };
@@ -294,6 +303,9 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
   }, [post]);
 
   const mapUrl = `${import.meta.env.BASE_URL}map.html`.replace("//", "/");
+
+  /* ─── Selected panel controls ─── */
+  const selectedPanelArea = selectedPanelAreaId ? areas.find(a => a.id === selectedPanelAreaId) : null;
 
   return (
     <div ref={containerRef} className="flex overflow-hidden bg-[#0D2B45]" style={{ height: "calc(100vh - 112px)" }}>
@@ -321,74 +333,200 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto min-h-0">
 
+          {/* ── SECTION: Modo ── */}
+          <div className="border-b px-3 py-2.5 bg-slate-50">
+            <Label className="text-[10px] font-bold text-[#0D2B45] uppercase tracking-wider block mb-1.5">Modo</Label>
+            <div className="grid grid-cols-4 gap-1">
+              {MODE_DEFS.map(m => (
+                <button key={m.key} type="button"
+                  onClick={() => changeMode(m.key)}
+                  title={m.label}
+                  className={cn(
+                    "flex flex-col items-center gap-0.5 py-1.5 px-1 rounded-lg border text-[9px] font-bold transition-all",
+                    mapMode === m.key
+                      ? m.cls + " border-transparent shadow-sm scale-105"
+                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                  )}>
+                  {m.icon}
+                  <span>{m.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Mode hints */}
+            {mapMode === "manual" && (
+              <div className="mt-1.5 text-[9px] text-[#1E88E5] bg-blue-50 rounded px-2 py-1 border border-blue-100">
+                Clique dentro de um telhado para colocar painéis individualmente
+              </div>
+            )}
+            {mapMode === "select" && !panelSelected && (
+              <div className="mt-1.5 text-[9px] text-[#43A047] bg-green-50 rounded px-2 py-1 border border-green-100">
+                Clique num painel manual (↑↓←→ para mover · Del para apagar)
+              </div>
+            )}
+            {mapMode === "obstacle" && (
+              <div className="mt-1.5 text-[9px] text-red-600 bg-red-50 rounded px-2 py-1 border border-red-100">
+                Desenhe obstáculos (sombras, chaminés). Clique no obstáculo para apagar.
+              </div>
+            )}
+
+            {/* Selected panel controls */}
+            {mapMode === "select" && panelSelected && (
+              <div className="mt-2 rounded-lg border border-green-200 bg-green-50 p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-[#43A047] flex items-center gap-1">
+                    <Move size={10} /> Painel selecionado
+                    {selectedPanelArea && <span className="font-normal text-slate-500 ml-1">· {selectedPanelArea.name}</span>}
+                  </span>
+                  <button
+                    onClick={() => { post({ type: "deleteSelectedPanel" }); setPanelSelected(false); }}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-500 text-white text-[9px] font-bold hover:bg-red-600 transition-colors"
+                  >
+                    <Trash2 size={9} /> Apagar
+                  </button>
+                </div>
+                {/* Nudge arrows */}
+                <div className="grid grid-cols-3 gap-1 w-24 mx-auto">
+                  <div />
+                  <button onClick={() => post({ type: "nudgePanel", dlat: 1 })}
+                    onMouseDown={() => {
+                      const iv = setInterval(() => post({ type: "nudgePanel", dlat: 1 }), 80);
+                      const up = () => { clearInterval(iv); window.removeEventListener("mouseup", up); };
+                      window.addEventListener("mouseup", up);
+                    }}
+                    className="flex items-center justify-center w-8 h-8 rounded bg-white border border-green-300 text-green-700 hover:bg-green-100 active:bg-green-200">
+                    <ArrowUp size={12} />
+                  </button>
+                  <div />
+                  <button onClick={() => post({ type: "nudgePanel", dlng: -1 })}
+                    onMouseDown={() => {
+                      const iv = setInterval(() => post({ type: "nudgePanel", dlng: -1 }), 80);
+                      const up = () => { clearInterval(iv); window.removeEventListener("mouseup", up); };
+                      window.addEventListener("mouseup", up);
+                    }}
+                    className="flex items-center justify-center w-8 h-8 rounded bg-white border border-green-300 text-green-700 hover:bg-green-100 active:bg-green-200">
+                    <ArrowLeft size={12} />
+                  </button>
+                  <div className="flex items-center justify-center w-8 h-8 rounded bg-green-100 border border-green-200">
+                    <Move size={10} className="text-green-600" />
+                  </div>
+                  <button onClick={() => post({ type: "nudgePanel", dlng: 1 })}
+                    onMouseDown={() => {
+                      const iv = setInterval(() => post({ type: "nudgePanel", dlng: 1 }), 80);
+                      const up = () => { clearInterval(iv); window.removeEventListener("mouseup", up); };
+                      window.addEventListener("mouseup", up);
+                    }}
+                    className="flex items-center justify-center w-8 h-8 rounded bg-white border border-green-300 text-green-700 hover:bg-green-100 active:bg-green-200">
+                    <ArrowRight size={12} />
+                  </button>
+                  <div />
+                  <button onClick={() => post({ type: "nudgePanel", dlat: -1 })}
+                    onMouseDown={() => {
+                      const iv = setInterval(() => post({ type: "nudgePanel", dlat: -1 }), 80);
+                      const up = () => { clearInterval(iv); window.removeEventListener("mouseup", up); };
+                      window.addEventListener("mouseup", up);
+                    }}
+                    className="flex items-center justify-center w-8 h-8 rounded bg-white border border-green-300 text-green-700 hover:bg-green-100 active:bg-green-200">
+                    <ArrowDown size={12} />
+                  </button>
+                  <div />
+                </div>
+                <p className="text-[9px] text-slate-400 text-center">Ou use ↑↓←→ no teclado</p>
+              </div>
+            )}
+          </div>
+
+          {/* ── SECTION: Layers ── */}
+          <div className="border-b">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50">
+              <span className="text-[10px] font-bold text-[#0D2B45] uppercase tracking-wider flex items-center gap-1.5">
+                <Layers size={11} className="text-[#1E88E5]" /> Camadas
+              </span>
+            </div>
+            <div className="px-3 py-2 grid grid-cols-2 gap-1.5">
+              {LAYER_DEFS.map(ld => (
+                <button key={ld.key} type="button" onClick={() => toggleLayer(ld.key)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-[10px] font-semibold transition-colors",
+                    layers[ld.key]
+                      ? "border-transparent text-white"
+                      : "bg-white border-slate-200 text-slate-400"
+                  )}
+                  style={layers[ld.key] ? { backgroundColor: ld.color } : undefined}
+                >
+                  {layers[ld.key] ? <Eye size={10} /> : <EyeOff size={10} />}
+                  <span style={{ color: layers[ld.key] ? undefined : ld.color }}>{ld.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* ── SECTION: Telhados ── */}
           <div className="border-b">
             <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50">
               <span className="text-[10px] font-bold text-[#0D2B45] uppercase tracking-wider flex items-center gap-1.5">
-                <Layers size={11} className="text-[#1E88E5]" /> Telhados ({areas.length})
+                <Home size={11} className="text-[#1E88E5]" /> Telhados ({areas.length})
               </span>
-              <button
-                onClick={() => post({ type: "startDraw" })}
-                className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-[#0D2B45] text-white hover:bg-[#1565C0] transition-colors"
-                title="Desenhar novo telhado"
-              >
+              <button onClick={() => post({ type: "startDraw" })}
+                className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-[#0D2B45] text-white hover:bg-[#1565C0] transition-colors">
                 <Plus size={10} /> Novo
               </button>
             </div>
 
             {areas.length === 0 && (
               <div className="px-4 py-5 text-center">
-                <div className="text-2xl mb-2">🏠</div>
-                <p className="text-xs text-muted-foreground">Clique em <strong>Novo</strong> ou no botão <strong>Área</strong> no mapa para desenhar o primeiro telhado.</p>
+                <div className="text-2xl mb-1.5">🏠</div>
+                <p className="text-xs text-muted-foreground">Clique em <strong>Novo</strong> ou em <strong>Área</strong> no mapa para desenhar o primeiro telhado.</p>
               </div>
             )}
 
             <div className="divide-y">
-              {areas.map((area, idx) => {
+              {areas.map((area) => {
                 const isSelected = area.id === activeAreaId;
                 const isExpanded = area.id === expandedAreaId;
                 return (
-                  <div key={area.id} className={cn("transition-colors", isSelected && "bg-blue-50/50")}>
-                    {/* Area header row */}
+                  <div key={area.id} className={cn("transition-colors", isSelected && "bg-blue-50/40")}>
+                    {/* Area row */}
                     <div
                       className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-slate-50"
                       onClick={() => { post({ type: "selectArea", id: area.id }); setExpandedAreaId(isExpanded ? null : area.id); }}
                     >
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: area.color }} />
+                      <span className="w-3 h-3 rounded-full shrink-0 ring-2 ring-offset-1"
+                        style={{ backgroundColor: area.color, "--tw-ring-color": area.color } as React.CSSProperties} />
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-[#0D2B45] truncate">{area.name}</div>
                         <div className="text-[10px] text-muted-foreground">
-                          {area.panelCount > 0 ? `${area.panelCount} painéis · ${area.totalKwp.toFixed(2)} kWp` : "0 painéis"}
+                          {area.panelCount > 0
+                            ? `${area.panelCount} painéis · ${area.totalKwp.toFixed(2)} kWp`
+                            : "Sem painéis"}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="text-[9px] text-slate-400">{area.azimuth}°</span>
                         {isExpanded ? <ChevronDown size={11} className="text-slate-400" /> : <ChevronRight size={11} className="text-slate-400" />}
                         <button
-                          onClick={e => { e.stopPropagation(); post({ type: "deleteArea", id: area.id }); setAreas(p => p.filter(a => a.id !== area.id)); }}
-                          className="p-0.5 rounded hover:bg-red-100 text-slate-400 hover:text-red-500 transition-colors"
-                          title="Apagar telhado"
-                        >
+                          onClick={e => {
+                            e.stopPropagation();
+                            post({ type: "deleteArea", id: area.id });
+                            setAreas(p => p.filter(a => a.id !== area.id));
+                          }}
+                          className="p-0.5 rounded hover:bg-red-100 text-slate-400 hover:text-red-500 transition-colors">
                           <Trash2 size={11} />
                         </button>
                       </div>
                     </div>
 
-                    {/* Expanded area settings */}
+                    {/* Expanded settings */}
                     {isExpanded && (
-                      <div className="px-3 pb-3 bg-slate-50/80 border-t border-slate-100 space-y-2.5">
-
-                        {/* Name edit */}
-                        <div className="pt-2">
+                      <div className="px-3 pb-3 pt-1 bg-slate-50/80 border-t border-slate-100 space-y-2.5">
+                        {/* Name */}
+                        <div>
                           <Label className="text-[10px] text-muted-foreground">Nome</Label>
-                          <Input
-                            value={area.name}
+                          <Input value={area.name}
                             onChange={e => setAreas(prev => prev.map(a => a.id === area.id ? { ...a, name: e.target.value } : a))}
-                            className="h-7 text-xs mt-0.5"
-                          />
+                            className="h-7 text-xs mt-0.5" />
                         </div>
-
-                        {/* Azimuth + mount type */}
+                        {/* Azimuth + mount */}
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <Label className="text-[10px] text-muted-foreground">Azimute (°)</Label>
@@ -399,27 +537,26 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
                           </div>
                           <div>
                             <Label className="text-[10px] text-muted-foreground">Estrutura</Label>
-                            <div className="flex mt-0.5 rounded border border-slate-200 overflow-hidden text-[9px] font-semibold">
+                            <div className="flex mt-0.5 rounded border border-slate-200 overflow-hidden text-[9px] font-bold">
                               {(["triangulos", "coplanar"] as const).map(mt => (
                                 <button key={mt} type="button" onClick={() => updateArea(area.id, { mountType: mt })}
-                                  className={cn("flex-1 py-1 text-center border-r last:border-r-0 transition-colors",
+                                  className={cn("flex-1 py-1.5 text-center border-r last:border-r-0 transition-colors",
                                     area.mountType === mt ? "bg-[#0D2B45] text-white" : "bg-white text-slate-600 hover:bg-slate-50")}>
-                                  {mt === "triangulos" ? "▲" : "▬"}
+                                  {mt === "triangulos" ? "▲ Tri." : "▬ Cop."}
                                 </button>
                               ))}
                             </div>
                           </div>
                         </div>
-
                         {/* Panel dims */}
                         <div className="grid grid-cols-3 gap-1.5">
-                          {[
-                            { label: "L (m)", key: "panelW" as const, step: "0.01" },
-                            { label: "A (m)", key: "panelH" as const, step: "0.01" },
-                            { label: "Wp",    key: "powerWp" as const, step: "1" },
-                          ].map(f => (
+                          {([
+                            { label: "Larg (m)", key: "panelW" as const, step: "0.01" },
+                            { label: "Alt (m)",  key: "panelH" as const, step: "0.01" },
+                            { label: "Potência", key: "powerWp" as const, step: "1"    },
+                          ]).map(f => (
                             <div key={f.key}>
-                              <Label className="text-[9px] text-muted-foreground">{f.label}</Label>
+                              <Label className="text-[9px] text-muted-foreground leading-tight">{f.label}</Label>
                               <Input type="number" step={f.step}
                                 value={area[f.key]}
                                 onChange={e => updateArea(area.id, { [f.key]: parseFloat(e.target.value) || 0 })}
@@ -427,59 +564,51 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
                             </div>
                           ))}
                         </div>
-
                         {/* Max panels */}
                         <div>
                           <Label className="text-[10px] text-muted-foreground">Máx painéis (0 = ∞)</Label>
-                          <Input type="number" min="0"
-                            value={area.maxPanels}
+                          <Input type="number" min="0" value={area.maxPanels}
                             onChange={e => updateArea(area.id, { maxPanels: parseInt(e.target.value) || 0 })}
                             className="h-7 text-xs mt-0.5" />
                         </div>
-
-                        {/* Area result chip */}
+                        {/* Result chip */}
                         {area.panelCount > 0 && (
-                          <div className="flex items-center gap-2 rounded-lg px-2.5 py-2" style={{ backgroundColor: area.color + "18", border: `1px solid ${area.color}40` }}>
-                            <span className="text-base font-bold" style={{ color: area.color }}>{area.panelCount}</span>
+                          <div className="flex items-center gap-2 rounded-lg px-2.5 py-2"
+                            style={{ backgroundColor: area.color + "18", border: `1px solid ${area.color}40` }}>
+                            <span className="text-xl font-extrabold" style={{ color: area.color }}>{area.panelCount}</span>
                             <div className="text-[10px]">
-                              <div className="font-semibold text-[#0D2B45]">{area.totalKwp.toFixed(2)} kWp</div>
+                              <div className="font-bold text-[#0D2B45]">{area.totalKwp.toFixed(2)} kWp</div>
                               <div className="text-muted-foreground truncate">{area.orientationLabel}</div>
                             </div>
                           </div>
                         )}
 
-                        {/* ── Strings for this area ── */}
+                        {/* ── Strings ── */}
                         <div className="border-t border-slate-200 pt-2 space-y-1.5">
                           <Label className="text-[10px] font-bold text-[#0D2B45] uppercase tracking-wider flex items-center gap-1">
                             <Zap size={10} className="text-[#F5A623]" /> Strings
                           </Label>
                           <div className="flex items-center gap-1.5">
-                            <Input type="number" min="1" max="20"
-                              value={stringCount}
+                            <Input type="number" min="1" max="20" value={stringCount}
                               onChange={e => setStringCount(parseInt(e.target.value) || 1)}
-                              className="h-7 text-xs w-16 shrink-0" />
-                            <button
-                              onClick={() => post({ type: "autoString", areaId: area.id, count: stringCount })}
-                              className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded bg-[#0D2B45] text-white text-[10px] font-bold hover:bg-[#1565C0] transition-colors"
-                            >
+                              className="h-7 text-xs w-14 shrink-0" />
+                            <button onClick={() => post({ type: "autoString", areaId: area.id, count: stringCount })}
+                              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded bg-[#0D2B45] text-white text-[10px] font-bold hover:bg-[#1565C0] transition-colors">
                               <Zap size={9} /> Auto String
                             </button>
-                            <button
-                              onClick={() => post({ type: "clearStrings", areaId: area.id })}
+                            <button onClick={() => post({ type: "clearStrings", areaId: area.id })}
                               className="p-1.5 rounded border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
-                              title="Limpar strings"
-                            >
+                              title="Limpar strings">
                               <RotateCcw size={10} />
                             </button>
                           </div>
-
                           {area.strings.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
+                            <div className="flex flex-wrap gap-1 pt-0.5">
                               {area.strings.map((s, si) => (
-                                <div key={s.id} className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold text-white"
+                                <span key={s.id} className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[9px] font-bold text-white"
                                   style={{ backgroundColor: s.color }}>
-                                  S{si + 1} · {s.panelCount}
-                                </div>
+                                  S{si + 1} · {s.panelCount}p
+                                </span>
                               ))}
                             </div>
                           )}
@@ -492,46 +621,29 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
             </div>
           </div>
 
-          {/* ── SECTION: Layers ── */}
-          <div className="border-b">
-            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50">
-              <span className="text-[10px] font-bold text-[#0D2B45] uppercase tracking-wider">Camadas</span>
-            </div>
-            <div className="px-4 py-2 space-y-1">
-              <button
-                onClick={() => setLayerPanels(p => !p)}
-                className={cn(
-                  "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors",
-                  layerPanels ? "border-[#1E88E5]/30 bg-[#EBF5FF] text-[#0D2B45]" : "border-slate-200 bg-white text-slate-400"
-                )}
-              >
-                {layerPanels ? <Eye size={12} className="text-[#1E88E5]" /> : <EyeOff size={12} />}
-                Painéis
-              </button>
-            </div>
-          </div>
-
           {/* ── SECTION: Totals ── */}
           {areas.length > 0 && (
             <div className="px-4 py-4 space-y-2">
-              <Label className="text-[10px] font-bold text-[#0D2B45] uppercase tracking-wider">Resumo total</Label>
+              <Label className="text-[10px] font-bold text-[#0D2B45] uppercase tracking-wider">Total do projeto</Label>
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-[#0D2B45] rounded-xl px-3 py-3 text-center">
-                  <div className="text-2xl font-extrabold text-white">{totalPanels}</div>
-                  <div className="text-[9px] text-blue-300 mt-0.5 font-semibold uppercase tracking-wider">Painéis</div>
+                  <div className="text-2xl font-extrabold text-white tabular-nums">{totalPanels}</div>
+                  <div className="text-[9px] text-blue-300 font-semibold uppercase tracking-wider mt-0.5">Painéis</div>
                 </div>
                 <div className="bg-[#F5A623] rounded-xl px-3 py-3 text-center">
-                  <div className="text-xl font-extrabold text-[#0D2B45]">{totalKwp.toFixed(1)}</div>
-                  <div className="text-[9px] text-[#7C4D00] mt-0.5 font-semibold uppercase tracking-wider">kWp</div>
+                  <div className="text-xl font-extrabold text-[#0D2B45] tabular-nums">{totalKwp.toFixed(1)}</div>
+                  <div className="text-[9px] text-[#7C4D00] font-semibold uppercase tracking-wider mt-0.5">kWp</div>
                 </div>
               </div>
               {areas.length > 1 && (
                 <div className="space-y-1 mt-1">
                   {areas.map(a => (
-                    <div key={a.id} className="flex items-center gap-2 text-[10px]">
+                    <div key={a.id} className="flex items-center gap-2 text-[10px] py-0.5">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: a.color }} />
                       <span className="text-muted-foreground flex-1 truncate">{a.name}</span>
-                      <span className="font-semibold text-[#0D2B45] shrink-0">{a.panelCount} · {a.totalKwp.toFixed(1)} kWp</span>
+                      <span className="font-semibold text-[#0D2B45] shrink-0 tabular-nums">
+                        {a.panelCount} · {a.totalKwp.toFixed(1)} kWp
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -542,17 +654,17 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
           {/* ── Location pin ── */}
           {solarParams.latitude && solarParams.longitude && (
             <div className="px-4 pb-4">
-              <button
-                type="button"
+              <button type="button"
                 onClick={() => post({ type: "flyTo", lat: parseFloat(solarParams.latitude), lng: parseFloat(solarParams.longitude), zoom: 18, name: solarParams.locationName })}
-                className="w-full flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-left hover:bg-slate-100 transition-colors"
-              >
+                className="w-full flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-left hover:bg-slate-100 transition-colors">
                 <Navigation size={12} className="text-[#1E88E5] shrink-0" />
                 <div className="min-w-0">
                   <div className="text-[10px] font-semibold text-[#0D2B45] truncate">
                     {solarParams.locationName || "Centrar no projeto"}
                   </div>
-                  <div className="text-[9px] text-muted-foreground">{solarParams.latitude}°, {solarParams.longitude}°</div>
+                  <div className="text-[9px] text-muted-foreground">
+                    {solarParams.latitude}°, {solarParams.longitude}°
+                  </div>
                 </div>
               </button>
             </div>
@@ -561,22 +673,15 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
       </aside>
 
       {/* ── Resizable divider ── */}
-      <div
-        onMouseDown={onDividerMouseDown}
+      <div onMouseDown={onDividerMouseDown}
         className={cn("w-1.5 shrink-0 cursor-col-resize transition-colors hover:bg-[#1E88E5]",
-          isDragging ? "bg-[#1E88E5]" : "bg-slate-200/40")}
-      />
+          isDragging ? "bg-[#1E88E5]" : "bg-slate-200/40")} />
 
       {/* ── Map iframe ── */}
       <div className="flex-1 relative overflow-hidden min-w-0 bg-[#0D2B45]">
-        <iframe
-          ref={iframeRef}
-          src={mapUrl}
-          onLoad={onIframeLoad}
+        <iframe ref={iframeRef} src={mapUrl} onLoad={onIframeLoad}
           className="absolute inset-0 w-full h-full border-none block"
-          title="Mapa Satélite"
-          allow="fullscreen"
-        />
+          title="Mapa Satélite" allow="fullscreen" />
       </div>
     </div>
   );
