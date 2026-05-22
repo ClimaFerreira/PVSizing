@@ -1,0 +1,274 @@
+Pede isto ao Replit AI Agent exatamente desta forma:
+
+---
+
+O mapa deixou de aparecer na aba “Mapa Satélite”. Além disso, quero sincronização total entre:
+
+* Dados FV
+* Espaçamento / Sombras
+* Mapa Satélite
+
+Atualmente os módulos estão isolados. Quero um único estado global partilhado.
+
+# 1. Corrigir mapa que não aparece
+
+Problema atual:
+
+* O container do Leaflet/OpenLayers aparece vazio.
+* Apenas fundo azul é renderizado.
+* Os tiles do mapa não carregam.
+
+Verificar e corrigir:
+
+## Leaflet
+
+Garantir:
+
+```js
+import 'leaflet/dist/leaflet.css'
+```
+
+Depois:
+
+```js
+map.invalidateSize()
+```
+
+Executar:
+
+* após resize;
+* após mudança de tab;
+* após fullscreen;
+* após render inicial.
+
+Adicionar:
+
+```js
+setTimeout(() => {
+  map.invalidateSize();
+}, 300);
+```
+
+---
+
+Verificar também:
+
+* z-index;
+* height do container;
+* width do container;
+* overflow hidden;
+* tiles layer;
+* API key;
+* provider do mapa;
+* CORS;
+* renderização após tab invisível.
+
+O container do mapa deve ter:
+
+```css
+height: 100%;
+width: 100%;
+min-height: 600px;
+```
+
+---
+
+# 2. Sincronização global entre módulos
+
+Quero criar um estado global centralizado.
+
+## Criar:
+
+```txt
+SolarProjectContext
+```
+
+Ou:
+
+```txt
+Zustand store / Redux store
+```
+
+---
+
+# 3. Dados partilhados entre páginas
+
+Os seguintes dados devem ser sincronizados automaticamente:
+
+## Localização
+
+* morada
+* latitude
+* longitude
+* coordenadas
+
+## Dados FV
+
+* potência
+* nº painéis
+* inclinação
+* orientação
+* estrutura
+* dimensões painel
+
+## Espaçamento
+
+* distância entre filas
+* sombras
+* azimute
+* altura solar
+
+## Mapa
+
+* área desenhada
+* polígonos
+* painéis colocados
+* layout manual
+* obstáculos
+
+---
+
+# 4. Sincronização automática do mapa com morada
+
+Quero que:
+
+* ao escrever a morada em “Dimensionamento FV”;
+* o mapa abra automaticamente nessa localização.
+
+Fluxo:
+
+1. Utilizador escreve morada.
+2. Sistema faz geocoding.
+3. Obtém:
+
+   * latitude
+   * longitude.
+4. Atualiza store global.
+5. Mapa centra automaticamente na localização.
+6. Espaçamento usa automaticamente a latitude.
+
+---
+
+# 5. Implementar geocoding automático
+
+Usar:
+
+* Nominatim
+  OU
+* Google Geocoding
+  OU
+* OpenCage.
+
+Exemplo:
+
+```js
+async function geocodeAddress(address) {
+  // obter coordenadas
+}
+```
+
+Depois:
+
+```js
+map.flyTo([lat, lng], 20)
+```
+
+---
+
+# 6. Fluxo integrado desejado
+
+## Página Dimensionamento FV
+
+Quando preencher:
+
+* morada;
+* potência;
+* inclinação;
+* orientação;
+
+O sistema deve:
+
+* atualizar mapa;
+* atualizar cálculos de sombras;
+* atualizar layout.
+
+---
+
+# 7. Modo mapa inteligente
+
+Quando abrir “Mapa Satélite”:
+
+* abrir automaticamente na localização do projeto;
+* desenhar área automaticamente se existir;
+* restaurar painéis colocados;
+* manter zoom e posição.
+
+---
+
+# 8. Persistência
+
+Guardar automaticamente:
+
+```txt
+localStorage
+```
+
+Ou:
+
+```txt
+database
+```
+
+Salvar:
+
+* viewport do mapa;
+* polígonos;
+* painéis;
+* coordenadas;
+* layouts.
+
+---
+
+# 9. Arquitetura correta
+
+Criar:
+
+```txt
+/context
+  SolarProjectContext
+  MapContext
+  LayoutContext
+```
+
+OU:
+
+```txt
+/stores
+  useSolarStore.ts
+```
+
+---
+
+# 10. Objetivo final
+
+Quero comportamento semelhante a:
+
+* OpenSolar
+* Aurora Solar
+* PVsyst
+
+Onde:
+
+* tudo está sincronizado;
+* mapa reage automaticamente;
+* cálculos atualizam em tempo real;
+* mudar dados numa página atualiza todas as outras.
+
+---
+
+Além disso:
+
+* corrigir definitivamente o problema do mapa invisível;
+* eliminar renderizações duplicadas;
+* garantir compatibilidade desktop/mobile;
+* manter performance fluida.

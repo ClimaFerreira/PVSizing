@@ -6,6 +6,8 @@ export interface SolarParams {
   width: string;
   angle: string;
   latitude: string;
+  longitude: string;
+  locationName: string;
   rows: string;
   cols: string;
   panelPower: string;
@@ -33,6 +35,7 @@ interface SolarContextType {
   params: SolarParams;
   setParams: React.Dispatch<React.SetStateAction<SolarParams>>;
   results: SolarResult;
+  setLocation: (lat: string, lng: string, name: string) => void;
 }
 
 const SolarContext = createContext<SolarContextType | undefined>(undefined);
@@ -80,6 +83,8 @@ function computeSolar(params: SolarParams): SolarResult {
 
 const DEFAULT_LOCAL = {
   latitude: "38.7",
+  longitude: "-8.0",
+  locationName: "",
   rows: "4",
   cols: "5",
   mountType: "triangulos",
@@ -117,6 +122,8 @@ export function SolarProvider({ children }: { children: React.ReactNode }) {
     }));
     setLocalParams({
       latitude: next.latitude,
+      longitude: next.longitude,
+      locationName: next.locationName,
       rows: next.rows,
       cols: next.cols,
       mountType: next.mountType,
@@ -125,14 +132,20 @@ export function SolarProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const setLocation = (lat: string, lng: string, name: string) => {
+    setLocalParams(prev => ({ ...prev, latitude: lat, longitude: lng, locationName: name }));
+    setPanel(p => ({ ...p, azimuth: p.azimuth }));
+  };
+
   const results = useMemo(
     () => computeSolar(params),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [panel.panelHeight, panel.panelWidth, panel.inclination, panel.panelPower,
      localParams.latitude, localParams.rows, localParams.cols],
   );
 
   return (
-    <SolarContext.Provider value={{ params, setParams, results }}>
+    <SolarContext.Provider value={{ params, setParams, results, setLocation }}>
       {children}
     </SolarContext.Provider>
   );

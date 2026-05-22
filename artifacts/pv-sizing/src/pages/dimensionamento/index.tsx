@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wand2, Ruler, Map } from "lucide-react";
@@ -22,6 +22,8 @@ function LoadingSkeleton() {
 }
 
 export default function DimensionamentoPage() {
+  const [activeTab, setActiveTab] = useState("dados-fv");
+
   return (
     <div className="space-y-0">
       <div className="mb-6">
@@ -29,7 +31,7 @@ export default function DimensionamentoPage() {
         <p className="text-muted-foreground mt-1">Simulação de consumo, espaçamento de painéis e mapeamento de telhado.</p>
       </div>
 
-      <Tabs defaultValue="dados-fv" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-6 h-auto p-1 bg-slate-100 rounded-xl w-full sm:w-auto overflow-x-auto flex gap-1">
           <TabsTrigger
             value="dados-fv"
@@ -64,10 +66,13 @@ export default function DimensionamentoPage() {
           <TabEspacamento />
         </TabsContent>
 
-        <TabsContent value="mapa" className="mt-0 -mx-4 md:-mx-8">
-          <Suspense fallback={<LoadingSkeleton />}>
-            <TabMapa />
-          </Suspense>
+        {/* Keep mapa mounted always after first activation to avoid re-init */}
+        <TabsContent value="mapa" className="mt-0" forceMount>
+          <div className={activeTab === "mapa" ? "block" : "hidden"}>
+            <Suspense fallback={<LoadingSkeleton />}>
+              <TabMapa isActive={activeTab === "mapa"} />
+            </Suspense>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

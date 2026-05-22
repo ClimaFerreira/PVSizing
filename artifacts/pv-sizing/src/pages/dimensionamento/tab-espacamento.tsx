@@ -51,7 +51,12 @@ export default function TabEspacamento() {
   const selectLocation = (r: GeoResult) => {
     const shortName = r.display_name.split(",")[0].trim();
     setLocQuery(shortName);
-    setParams(prev => ({ ...prev, latitude: parseFloat(r.lat).toFixed(4) }));
+    setParams(prev => ({
+      ...prev,
+      latitude: parseFloat(r.lat).toFixed(4),
+      longitude: parseFloat(r.lon).toFixed(4),
+      locationName: shortName,
+    }));
     setShowDropdown(false);
   };
 
