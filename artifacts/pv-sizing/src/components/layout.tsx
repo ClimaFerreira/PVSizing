@@ -2,16 +2,10 @@ import { Link, useLocation } from "wouter";
 import {
   Sun,
   Users,
-  Battery,
-  Zap,
-  BoxSelect,
   LayoutDashboard,
   Menu,
-  GitBranch,
-  Wand2,
-  FileText,
+  Layers,
   FolderKanban,
-  Map as MapIcon,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -31,13 +25,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/painel", label: "Painel Principal", icon: LayoutDashboard },
     { href: "/clientes", label: "Clientes", icon: Users },
-    { href: "/sistemas", label: "Sistemas PV", icon: Sun },
-    { href: "/equipamentos/paineis", label: "Painéis Solares", icon: BoxSelect },
-    { href: "/equipamentos/inversores", label: "Inversores", icon: Zap },
-    { href: "/equipamentos/baterias", label: "Baterias", icon: Battery },
-    { href: "/calculadora-strings", label: "Calculadora Strings", icon: GitBranch },
-    { href: "/wizard", label: "Wizard Dimensionamento", icon: Wand2 },
-    { href: "/propostas", label: "Propostas Técnicas", icon: FileText },
+    { href: "/dimensionamento", label: "Dimensionamento FV", icon: Layers },
     { href: "/estudos", label: "Estudos / Projetos", icon: FolderKanban },
   ];
 
@@ -61,8 +49,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <div
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors cursor-pointer text-sm font-medium",
-                  isActive 
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm" 
+                  isActive
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
                     : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 )}
               >
@@ -73,12 +61,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           );
         })}
         <div className="pt-3 mt-3 border-t border-sidebar-border">
-          <a href="/fotocalc-web/" onClick={() => setIsMobileOpen(false)}>
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors cursor-pointer text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-              <MapIcon size={18} className="text-sidebar-foreground/50" />
-              Layout / Mapa
-            </div>
-          </a>
           <Link href="/empresa" onClick={() => setIsMobileOpen(false)}>
             <div className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors cursor-pointer text-sm font-medium",
@@ -110,7 +92,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex w-full bg-background">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 flex-col fixed inset-y-0 left-0 z-50 border-r border-sidebar-border shadow-xl">
+      <aside className="hidden md:flex w-60 flex-col fixed inset-y-0 left-0 z-50 border-r border-sidebar-border shadow-xl">
         <SidebarContent />
       </aside>
 
@@ -122,7 +104,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Menu />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-64 border-r-sidebar-border bg-sidebar">
+          <SheetContent side="left" className="p-0 w-60 border-r-sidebar-border bg-sidebar">
             <SidebarContent />
           </SheetContent>
         </Sheet>
@@ -139,7 +121,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 md:pl-64 pt-14 md:pt-0 min-w-0">
+      <main className="flex-1 md:pl-60 pt-14 md:pt-0 min-w-0">
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
           {children}
         </div>

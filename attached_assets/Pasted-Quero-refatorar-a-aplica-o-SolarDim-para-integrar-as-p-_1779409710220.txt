@@ -1,0 +1,62 @@
+Quero refatorar a aplicação SolarDim para integrar as páginas “Espaçamento” e “Mapa Satélite” dentro da página “Dimensionamento FV”, transformando tudo num único fluxo de trabalho.
+Objetivo:
+Eliminar a navegação separada para:
+Espaçamento
+Mapa Satélite
+Integrar essas funcionalidades como separadores (tabs), secções expansíveis ou passos internos dentro de “Dimensionamento FV”.
+Estrutura pretendida:
+Página principal: “Dimensionamento FV”
+Dentro dessa página criar 3 abas:
+Dados FV
+Espaçamento / Sombras
+Mapa Satélite
+Requisitos:
+Manter todos os cálculos atuais.
+Reutilizar os componentes existentes sem duplicar lógica.
+Preservar estados e dados do projeto entre abas.
+Todos os módulos devem usar o mesmo contexto/store/global state.
+A mudança deve funcionar em desktop e mobile.
+Não quebrar rotas existentes até validar a migração.
+Implementação técnica:
+Identificar os componentes usados atualmente em:
+/espacamento
+/mapa-satelite
+Converter essas páginas em componentes reutilizáveis.
+Importar esses componentes para a página:
+/dimensionamento-fv
+Criar navegação interna por tabs.
+Centralizar estados compartilhados:
+localização
+inclinação
+layout
+nº painéis
+coordenadas do mapa
+dados ROI
+Garantir sincronização automática entre:
+mapa
+espaçamento
+dimensionamento
+UX/UI:
+Sidebar deve mostrar apenas:
+Painel Principal
+Clientes
+Dimensionamento FV
+Estudos/Projetos
+Definições
+Dentro de “Dimensionamento FV” usar tabs modernas.
+Em mobile transformar tabs em menu horizontal scrollável.
+Extras importantes:
+O mapa satélite deve atualizar automaticamente parâmetros do dimensionamento.
+O cálculo de sombras deve reagir às alterações do layout.
+Implementar lazy loading para o mapa para melhorar performance.
+Garantir que nada recarrega ao trocar de aba.
+No final:
+Fazer cleanup das rotas antigas.
+Manter redirects temporários para compatibilidade.
+Atualizar navegação e breadcrumbs.
+Validar funcionamento completo no mobile.
+Também quero:
+Código mais modular.
+Componentes reutilizáveis.
+Melhor separação entre UI, lógica e cálculos.
+Preparar estrutura para futuras funcionalidades.

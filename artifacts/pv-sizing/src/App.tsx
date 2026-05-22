@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -23,9 +23,13 @@ import Proposals from "@/pages/proposals";
 import Projects from "@/pages/projects";
 import LoginPage from "@/pages/login";
 import CompanySettingsPage from "@/pages/company-settings";
+import DimensionamentoPage from "@/pages/dimensionamento";
 
 import { AuthProvider, ProtectedRoute } from "@/lib/auth";
 import { BrandingProvider } from "@/components/branding-provider";
+import { PanelProvider } from "@/contexts/PanelContext";
+import { SolarProvider } from "@/contexts/SolarContext";
+import { MapaProvider } from "@/contexts/MapaContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,7 +59,9 @@ function ProtectedApp() {
           <Route path="/sistemas/novo" component={SystemNew} />
           <Route path="/sistemas/:id" component={SystemDetail} />
           <Route path="/calculadora-strings" component={StringSizing} />
-          <Route path="/wizard" component={Wizard} />
+          {/* Legacy redirect — keep for bookmarks */}
+          <Route path="/wizard"><Redirect to="/dimensionamento" /></Route>
+          <Route path="/dimensionamento" component={DimensionamentoPage} />
           <Route path="/propostas" component={Proposals} />
           <Route path="/estudos" component={Projects} />
           <Route path="/empresa" component={CompanySettingsPage} />
@@ -82,9 +88,15 @@ function App() {
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <AuthProvider>
             <BrandingProvider>
-              <ErrorBoundary>
-                <Router />
-              </ErrorBoundary>
+              <PanelProvider>
+                <SolarProvider>
+                  <MapaProvider>
+                    <ErrorBoundary>
+                      <Router />
+                    </ErrorBoundary>
+                  </MapaProvider>
+                </SolarProvider>
+              </PanelProvider>
             </BrandingProvider>
           </AuthProvider>
         </WouterRouter>
