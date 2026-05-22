@@ -30,6 +30,7 @@ router.post("/projects", async (req, res): Promise<void> => {
   const parsed = CreateProjectBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
+  const now = new Date();
   const [row] = await db
     .insert(projectsTable)
     .values({
@@ -47,6 +48,10 @@ router.post("/projects", async (req, res): Promise<void> => {
       layoutCols: d.layoutCols ?? null,
       mountType: d.mountType ?? null,
       notas: d.notas ?? null,
+      status: d.status ?? "rascunho",
+      draftData: (d.draftData ?? null) as Record<string, unknown> | null,
+      currentStep: d.currentStep ?? 1,
+      lastSavedAt: d.draftData ? now : null,
     })
     .returning();
   res.status(201).json(GetProjectResponse.parse(toProjectResponse(row)));
@@ -68,7 +73,8 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   const parsed = UpdateProjectBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
-  const values: Record<string, unknown> = { updatedAt: new Date() };
+  const now = new Date();
+  const values: Record<string, unknown> = { updatedAt: now };
   if (d.nome !== undefined) values.nome = d.nome;
   if (d.customerId !== undefined) values.customerId = d.customerId;
   if (d.morada !== undefined) values.morada = d.morada;
@@ -82,6 +88,12 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   if (d.layoutCols !== undefined) values.layoutCols = d.layoutCols;
   if (d.mountType !== undefined) values.mountType = d.mountType;
   if (d.notas !== undefined) values.notas = d.notas;
+  if (d.status !== undefined) values.status = d.status;
+  if (d.draftData !== undefined) {
+    values.draftData = d.draftData;
+    values.lastSavedAt = now;
+  }
+  if (d.currentStep !== undefined) values.currentStep = d.currentStep;
 
   const [row] = await db
     .update(projectsTable)
@@ -104,12 +116,53 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+// Duplicate an existing project (copies all fields, resets status, appends " (cópia)" to name)
+router.post("/projects/:id/duplicate", async (req, res): Promise<void> => {
+  const cid = getCompanyId(req);
+  const params = GetProjectParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [src] = await db
+    .select()
+    .from(projectsTable)
+    .where(and(eq(projectsTable.id, params.data.id), eq(projectsTable.companyId, cid)));
+  if (!src) { res.status(404).json({ error: "Estudo não encontrado" }); return; }
+
+  const [row] = await db
+    .insert(projectsTable)
+    .values({
+      companyId: cid,
+      nome: `${src.nome} (cópia)`,
+      customerId: src.customerId,
+      morada: src.morada,
+      panelId: src.panelId,
+      numPaineis: src.numPaineis,
+      potenciaKwp: src.potenciaKwp,
+      inclinacao: src.inclinacao,
+      azimute: src.azimute,
+      orientacao: src.orientacao,
+      layoutRows: src.layoutRows,
+      layoutCols: src.layoutCols,
+      mountType: src.mountType,
+      notas: src.notas,
+      status: "rascunho",
+      draftData: src.draftData,
+      currentStep: src.currentStep,
+      lastSavedAt: src.draftData ? new Date() : null,
+    })
+    .returning();
+  res.status(201).json(GetProjectResponse.parse(toProjectResponse(row)));
+});
+
 function toProjectResponse(row: typeof projectsTable.$inferSelect) {
   return {
     ...row,
     potenciaKwp: row.potenciaKwp != null ? Number(row.potenciaKwp) : null,
     inclinacao: row.inclinacao != null ? Number(row.inclinacao) : null,
     azimute: row.azimute != null ? Number(row.azimute) : null,
+    status: row.status,
+    draftData: row.draftData,
+    currentStep: row.currentStep,
+    lastSavedAt: row.lastSavedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

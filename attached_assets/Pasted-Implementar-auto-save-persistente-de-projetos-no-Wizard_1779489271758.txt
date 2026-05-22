@@ -1,0 +1,113 @@
+Implementar auto-save persistente de projetos no Wizard.
+
+Problema:
+Quando estou a navegar pelo programa para adicionar inversores, baterias, painéis ou consultar outras páginas, o estudo/projeto em curso perde-se.
+
+Objetivo:
+Todos os dados inseridos no projeto devem ser guardados automaticamente e recuperados quando o utilizador voltar.
+
+Requisitos:
+
+1. Criar conceito de Projeto/Estudo
+Cada dimensionamento deve ter:
+- nome do projeto;
+- cliente associado;
+- nome do cliente;
+- morada;
+- data de criação;
+- data da última alteração;
+- estado: rascunho / em análise / pronto para proposta / finalizado.
+
+O nome do projeto deve ser obrigatório e ser a referência principal.
+Exemplo:
+"Casa Sr. António — Valongo do Vouga"
+"Ampliação FV Armazém Aveiro"
+
+2. Campo obrigatório no início do Wizard
+No passo Cliente/Localização adicionar:
+- Nome do Projeto *
+- Cliente *
+- Morada da instalação
+
+Sem nome do projeto, mostrar aviso:
+"Introduza um nome para guardar o estudo."
+
+3. Auto-save local imediato
+Guardar automaticamente em localStorage:
+- a cada alteração de campo;
+- ao mudar de passo;
+- antes de sair da página;
+- ao navegar para equipamentos;
+- ao voltar ao wizard.
+
+4. Auto-save na base de dados
+Se o utilizador estiver autenticado:
+- criar/atualizar automaticamente o projeto na base de dados;
+- debounce de 2–5 segundos;
+- mostrar estado:
+  - Guardando...
+  - Guardado
+  - Erro ao guardar
+
+5. Recuperação automática
+Ao abrir o wizard:
+- se existir projeto em progresso, perguntar:
+  "Deseja continuar o projeto [Nome do Projeto]?"
+- opções:
+  - Continuar;
+  - Criar novo;
+  - Ver projetos guardados.
+
+6. Lista de projetos
+Criar página "Estudos / Projetos" com:
+- nome do projeto;
+- cliente;
+- potência FV;
+- estado;
+- última alteração;
+- botão continuar;
+- botão duplicar;
+- botão eliminar.
+
+7. Guardar TODO o estado do estudo
+Persistir:
+- cliente;
+- localização;
+- faturas;
+- consumos;
+- histórico mensal;
+- períodos tarifários;
+- perfil diurno/noturno;
+- cenários;
+- ajuste manual;
+- painéis;
+- inversores;
+- baterias;
+- strings;
+- análise técnica;
+- estudo financeiro;
+- orçamento;
+- observações.
+
+8. Ao adicionar equipamentos
+Se o utilizador sair do wizard para adicionar:
+- painel;
+- inversor;
+- bateria;
+
+ao voltar:
+- o mesmo projeto deve continuar;
+- os dados anteriores devem estar intactos;
+- o novo equipamento deve aparecer disponível para seleção.
+
+9. Segurança multi-utilizador
+Projetos devem estar associados ao utilizador/empresa autenticada.
+Um utilizador não pode ver projetos de outro.
+
+10. Evitar sobrescrever indevidamente
+Se o utilizador abrir outro projeto, não misturar dados.
+Cada projeto deve ter um projectId único.
+
+Resultado esperado:
+O utilizador pode navegar livremente na aplicação sem perder o estudo em curso.
+O nome do projeto passa a ser a referência principal para continuar, editar e gerar proposta.

@@ -5,6 +5,8 @@
  * PV Sizing Tool API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProjectDraftData } from "./projectDraftData";
+import type { ProjectStatus } from "./projectStatus";
 
 export interface Project {
   id: number;
@@ -33,6 +35,10 @@ export interface Project {
   mountType: string | null;
   /** @nullable */
   notas: string | null;
+  status: ProjectStatus;
+  draftData: ProjectDraftData;
+  currentStep: number;
+  lastSavedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

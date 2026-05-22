@@ -9,7 +9,13 @@ import {
   useListBatteries,
   useListLocations,
   useCreateProposal,
+  useGetProject,
+  getGetProjectQueryKey,
+  getListProjectsQueryKey,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import ProjectEntryCard from "@/components/project-entry-card";
+import SaveStatusIndicator, { type SaveStatus } from "@/components/save-status-indicator";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +47,7 @@ import {
 import {
   saveDraft, loadDraft, clearDraft, draftAge,
   syncDraftToDb, loadDraftFromDb, clearDraftFromDb,
+  saveDraftForProject,
   getOrCreateSessionId,
   type WizardDraftData,
 } from "@/lib/wizard-draft";
@@ -194,7 +201,31 @@ const STEP_TITLES = [
   "Orçamento / Proposta PDF",
 ];
 
+function readProjectIdFromUrl(): number | null {
+  if (typeof window === "undefined") return null;
+  const id = new URLSearchParams(window.location.search).get("projectId");
+  const n = id ? Number(id) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export default function Wizard() {
+  // ── Project binding ──────────────────────────────────────────────────────
+  // The wizard always operates on a Project. If no `?projectId=N` is present
+  // in the URL, show the entry card so the user can create or pick one.
+  const [projectId, setProjectId] = useState<number | null>(() => readProjectIdFromUrl());
+  const onProjectReady = useCallback((id: number) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("projectId", String(id));
+    window.history.replaceState({}, "", url.toString());
+    setProjectId(id);
+  }, []);
+  if (projectId == null) {
+    return <ProjectEntryCard onProjectReady={onProjectReady} />;
+  }
+  return <WizardInner projectId={projectId} />;
+}
+
+function WizardInner({ projectId }: { projectId: number }) {
   const [step, setStep]           = useState(1);
   const [consumoData, setConsumoData] = useState<ConsumoData>(DEFAULT_CONSUMO_DATA);
   const [locData, setLocData]     = useState<LocalizacaoForm | null>(null);
@@ -204,9 +235,9 @@ export default function Wizard() {
   const [manual, setManual]       = useState<ManualOverride | null>(null);
   const [selectedCenarioTipo, setSelectedCenarioTipo] = useState<CenarioTipo>("equilibrado");
   const [panelRefId, setPanelRefId] = useState<number | null>(null);
+  // Legacy recovery dialog — kept dormant; project hydration replaces it.
   const [showRecovery, setShowRecovery] = useState(false);
-  const [pendingDraft, setPendingDraft] = useState<WizardDraftData | null>(null);
-  const draftDialogShownRef = useRef(false);
+  const [pendingDraft] = useState<WizardDraftData | null>(null);
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
   const [manualMpptConfig, setManualMpptConfig] = useState<import("@/lib/string-sizing").MpptConfig | null>(null);
   const [inverterUnits, setInverterUnits] = useState<InverterUnit[]>([]);
@@ -216,10 +247,14 @@ export default function Wizard() {
   const [investimentoManual, setInvestimentoManual] = useState<number | null>(null);
   const [orcamentoState, setOrcamentoState] = useState<OrcamentoState | null>(null);
   const [lastSaved, setLastSaved]   = useState<Date | null>(null);
-  const [dbSynced, setDbSynced]     = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const hydratedRef                 = useRef(false);
   const { company } = useAuth();
   const companyId = company?.id ?? null;
   const sessionId = useRef<string>(getOrCreateSessionId(companyId));
+  const qc = useQueryClient();
+  // Load the bound project to hydrate state on first mount.
+  const { data: projectRow } = useGetProject(projectId);
   const saveTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dbSyncTimerRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextManualReset    = useRef(false);
@@ -290,32 +325,29 @@ export default function Wizard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // ── Draft: check on mount (localStorage → DB fallback) ────────────────────
+  // ── Project hydration: restore state from project.draftData on first load ──
   useEffect(() => {
-    // Guard: only show the dialog once per session lifecycle
-    if (draftDialogShownRef.current) return;
-
-    const local = loadDraft(companyId);
-    if (local && (local.step > 1 || local.sizing !== null)) {
-      draftDialogShownRef.current = true;
-      setPendingDraft(local);
-      setShowRecovery(true);
-      return;
-    }
-
-    // No local draft — try remote (async, may resolve late — must be cancellable)
-    let cancelled = false;
-    loadDraftFromDb(sessionId.current).then(remote => {
-      if (cancelled || draftDialogShownRef.current) return;
-      if (remote && (remote.step > 1 || remote.sizing !== null)) {
-        draftDialogShownRef.current = true;
-        setPendingDraft(remote);
-        setShowRecovery(true);
+    if (hydratedRef.current) return;
+    if (!projectRow) return;
+    hydratedRef.current = true;
+    // Step counter from the row, but draftData carries the full snapshot
+    const draft = projectRow.draftData as WizardDraftData | null | undefined;
+    if (draft && (draft.step ?? 1) >= 1) {
+      restoreDraft(draft);
+      // Show a brief toast only when there's real progress to recover
+      if ((draft.step ?? 1) > 1 || draft.sizing) {
+        toast({
+          title: "Estudo retomado",
+          description: `Projeto «${projectRow.nome}» foi recuperado no passo ${draft.step ?? 1}.`,
+        });
       }
-    });
-    return () => { cancelled = true; };
+    } else if (projectRow.currentStep && projectRow.currentStep > 1) {
+      setStep(projectRow.currentStep);
+    }
+    if (projectRow.lastSavedAt) setLastSaved(new Date(projectRow.lastSavedAt));
+    setSaveStatus(projectRow.draftData ? "saved" : "idle");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [projectRow]);
 
   // ── Auto-enable battery when project type is "adicionarBateria" ──────────
   useEffect(() => {
@@ -324,12 +356,16 @@ export default function Wizard() {
     }
   }, [tipoProjeto]);
 
-  // ── Draft: auto-save localStorage (800ms) + DB sync (4s) ─────────────────
+  // ── Auto-save: localStorage cache (800ms) + project PATCH (3s) ───────────
+  // The Project row is the source of truth; localStorage is a fast offline cache.
   useEffect(() => {
+    // Don't auto-save before initial hydration completes — otherwise we'd
+    // overwrite the just-loaded project with empty defaults.
+    if (!hydratedRef.current) return;
     if (saveTimerRef.current)   clearTimeout(saveTimerRef.current);
     if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
 
-    const snapshot = {
+    const snapshot: Omit<WizardDraftData, "version" | "savedAt"> = {
       step,
       consumoData: consumoData as unknown as Record<string, unknown>,
       locData: locData as unknown as Record<string, unknown> | null,
@@ -346,26 +382,47 @@ export default function Wizard() {
       panelRefId,
     };
 
-    // localStorage — fast (800ms)
+    // localStorage — fast offline cache (800ms), keyed per-project
     saveTimerRef.current = setTimeout(() => {
-      saveDraft(companyId, snapshot);
-      setLastSaved(new Date());
+      saveDraftForProject(companyId, projectId, snapshot);
     }, 800);
 
-    // DB — deferred (4s), fire-and-forget
+    // Project PATCH — debounced 3s
     dbSyncTimerRef.current = setTimeout(() => {
-      const saved = loadDraft(companyId);
-      if (saved) {
-        syncDraftToDb(saved, sessionId.current).then(() => setDbSynced(true));
-      }
-    }, 4_000);
+      setSaveStatus("saving");
+      // Derive a status from progress: step 1-3 = rascunho, 4-7 = em_analise, 8 = pronto_proposta
+      const derivedStatus: "rascunho" | "em_analise" | "pronto_proposta" =
+        step >= 8 ? "pronto_proposta" : step >= 4 ? "em_analise" : "rascunho";
+      const draftPayload: WizardDraftData = {
+        ...snapshot,
+        version: 1,
+        savedAt: new Date().toISOString(),
+      };
+      fetch(`${BASE}/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftData: draftPayload as unknown as Record<string, unknown>,
+          currentStep: step,
+          status: derivedStatus,
+        }),
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error(String(r.status));
+          setLastSaved(new Date());
+          setSaveStatus("saved");
+          qc.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+        })
+        .catch(() => setSaveStatus("error"));
+    }, 3_000);
 
     return () => {
       if (saveTimerRef.current)   clearTimeout(saveTimerRef.current);
       if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust, numPaineisStep5, inverterUnits, tipoProjeto, investimentoManual]);
+  }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust, numPaineisStep5, inverterUnits, batteryUnits, tipoProjeto, investimentoManual, panelRefId, projectId]);
 
   // ── Reference panel for step-4 scenarios ─────────────────────────────────
   // Prefer explicitly chosen panelRefId, then step-5 form selection, then first in catalogue.
@@ -648,24 +705,16 @@ export default function Wizard() {
     if (draft.panelRefId != null) setPanelRefId(draft.panelRefId);
     setStep(draft.step);
     setShowRecovery(false);
-    setPendingDraft(null);
     toast({ title: "Estudo retomado", description: "O teu estudo foi recuperado com sucesso." });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locForm, equipForm]);
 
   const discardDraft = useCallback(() => {
-    clearDraft(companyId);
-    clearDraftFromDb(sessionId.current);
-    setDbSynced(false);
     setShowRecovery(false);
-    setPendingDraft(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resetWizard = useCallback(() => {
-    clearDraft(companyId);
-    clearDraftFromDb(sessionId.current);
-    setDbSynced(false);
     setConsumoData(DEFAULT_CONSUMO_DATA);
     setLocData(null);
     setSizing(null);
@@ -848,52 +897,17 @@ export default function Wizard() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto">
 
-      {/* ── Recovery dialog ───────────────────────────────────────────────── */}
-      <AlertDialog open={showRecovery} onOpenChange={setShowRecovery}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <HistoryIcon size={18} className="text-primary" />
-              Estudo em progresso encontrado
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2">
-                <p>
-                  Foi encontrado um estudo guardado automaticamente{" "}
-                  <strong>{pendingDraft ? draftAge(pendingDraft) : ""}</strong>,
-                  no passo <strong>{pendingDraft?.step ?? 1}</strong> de 8.
-                </p>
-                {pendingDraft?.sizing && (
-                  <p className="text-sm text-muted-foreground">
-                    Estudo calculado ·{" "}
-                    {String((pendingDraft.sizing as Record<string, unknown>).potenciaRecomendada ?? "—")} kWp ·{" "}
-                    {String((pendingDraft.sizing as Record<string, unknown>).numPaineis ?? "—")} painéis
-                  </p>
-                )}
-                <p>Deseja continuar ou iniciar um novo estudo?</p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={discardDraft}>Iniciar novo</AlertDialogCancel>
-            <AlertDialogAction onClick={() => pendingDraft && restoreDraft(pendingDraft)}>
-              Continuar estudo
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dimensionamento Automático</h1>
           <p className="text-muted-foreground mt-1">Wizard passo-a-passo para dimensionar o sistema solar.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 pt-1">
-          {lastSaved && (
-            <span className="text-[11px] text-muted-foreground flex items-center gap-1" title={`Guardado localmente às ${lastSaved.toLocaleTimeString("pt-PT")}`}>
-              <Save size={11} />
-              {dbSynced ? "Guardado" : "Guardado localmente"}
-            </span>
+          <SaveStatusIndicator status={saveStatus} lastSavedAt={lastSaved} />
+          {projectRow?.nome && (
+            <Badge variant="outline" className="text-[10px] max-w-[20ch] truncate" title={projectRow.nome}>
+              {projectRow.nome}
+            </Badge>
           )}
           {(step > 1 || sizing) && (
             <Button

@@ -1329,6 +1329,10 @@ export const ListProjectsResponseItem = zod.object({
   layoutCols: zod.number().nullable(),
   mountType: zod.string().nullable(),
   notas: zod.string().nullable(),
+  status: zod.enum(["rascunho", "em_analise", "pronto_proposta", "finalizado"]),
+  draftData: zod.union([zod.record(zod.string(), zod.unknown()), zod.null()]),
+  currentStep: zod.number(),
+  lastSavedAt: zod.union([zod.coerce.date(), zod.null()]),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -1351,6 +1355,20 @@ export const CreateProjectBody = zod.object({
   layoutCols: zod.number().nullish(),
   mountType: zod.string().nullish(),
   notas: zod.string().nullish(),
+  status: zod
+    .enum(["rascunho", "em_analise", "pronto_proposta", "finalizado"])
+    .optional(),
+  draftData: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  currentStep: zod.number().optional(),
+});
+
+/**
+ * @summary Duplicate a project (copies all fields incl. draftData, resets status)
+ */
+export const DuplicateProjectParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
@@ -1375,6 +1393,10 @@ export const GetProjectResponse = zod.object({
   layoutCols: zod.number().nullable(),
   mountType: zod.string().nullable(),
   notas: zod.string().nullable(),
+  status: zod.enum(["rascunho", "em_analise", "pronto_proposta", "finalizado"]),
+  draftData: zod.union([zod.record(zod.string(), zod.unknown()), zod.null()]),
+  currentStep: zod.number(),
+  lastSavedAt: zod.union([zod.coerce.date(), zod.null()]),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -1400,6 +1422,13 @@ export const UpdateProjectBody = zod.object({
   layoutCols: zod.number().nullish(),
   mountType: zod.string().nullish(),
   notas: zod.string().nullish(),
+  status: zod
+    .enum(["rascunho", "em_analise", "pronto_proposta", "finalizado"])
+    .optional(),
+  draftData: zod
+    .union([zod.record(zod.string(), zod.unknown()), zod.null()])
+    .optional(),
+  currentStep: zod.number().optional(),
 });
 
 export const UpdateProjectResponse = zod.object({
@@ -1417,6 +1446,10 @@ export const UpdateProjectResponse = zod.object({
   layoutCols: zod.number().nullable(),
   mountType: zod.string().nullable(),
   notas: zod.string().nullable(),
+  status: zod.enum(["rascunho", "em_analise", "pronto_proposta", "finalizado"]),
+  draftData: zod.union([zod.record(zod.string(), zod.unknown()), zod.null()]),
+  currentStep: zod.number(),
+  lastSavedAt: zod.union([zod.coerce.date(), zod.null()]),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });

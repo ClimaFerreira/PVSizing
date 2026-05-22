@@ -5,6 +5,8 @@
  * PV Sizing Tool API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateProjectBodyDraftData } from "./createProjectBodyDraftData";
+import type { CreateProjectBodyStatus } from "./createProjectBodyStatus";
 
 export interface CreateProjectBody {
   nome: string;
@@ -32,4 +34,7 @@ export interface CreateProjectBody {
   mountType?: string | null;
   /** @nullable */
   notas?: string | null;
+  status?: CreateProjectBodyStatus;
+  draftData?: CreateProjectBodyDraftData;
+  currentStep?: number;
 }

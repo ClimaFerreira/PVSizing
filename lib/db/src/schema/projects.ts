@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { customersTable } from "./customers";
@@ -20,6 +20,13 @@ export const projectsTable = pgTable("projects", {
   layoutCols: integer("layout_cols"),
   mountType: text("mount_type"),
   notas: text("notas"),
+  // Wizard state persistence ----------------------------------------------
+  /** "rascunho" | "em_analise" | "pronto_proposta" | "finalizado" */
+  status: text("status").notNull().default("rascunho"),
+  /** Full wizard state snapshot (ConsumoData, sizing, manual, equipFormValues, etc.) */
+  draftData: jsonb("draft_data"),
+  currentStep: integer("current_step").notNull().default(1),
+  lastSavedAt: timestamp("last_saved_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

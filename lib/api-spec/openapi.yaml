@@ -924,6 +924,25 @@ paths:
         "400":
           description: Validation error
 
+  /projects/{id}/duplicate:
+    post:
+      operationId: duplicateProject
+      tags: [projects]
+      summary: Duplicate a project (copies all fields incl. draftData, resets status)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "201":
+          description: Project duplicated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
   /projects/{id}:
     get:
       operationId: getProject
@@ -2510,6 +2529,21 @@ components:
           type: ["string", "null"]
         notas:
           type: ["string", "null"]
+        status:
+          type: string
+          enum: [rascunho, em_analise, pronto_proposta, finalizado]
+        draftData:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        currentStep:
+          type: integer
+        lastSavedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
         createdAt:
           type: string
           format: date-time
@@ -2531,6 +2565,10 @@ components:
         - layoutCols
         - mountType
         - notas
+        - status
+        - draftData
+        - currentStep
+        - lastSavedAt
         - createdAt
         - updatedAt
 
@@ -2563,6 +2601,16 @@ components:
           type: ["string", "null"]
         notas:
           type: ["string", "null"]
+        status:
+          type: string
+          enum: [rascunho, em_analise, pronto_proposta, finalizado]
+        draftData:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        currentStep:
+          type: integer
       required:
         - nome
 
@@ -2595,3 +2643,13 @@ components:
           type: ["string", "null"]
         notas:
           type: ["string", "null"]
+        status:
+          type: string
+          enum: [rascunho, em_analise, pronto_proposta, finalizado]
+        draftData:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: "null"
+        currentStep:
+          type: integer

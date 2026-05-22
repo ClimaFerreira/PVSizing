@@ -978,6 +978,17 @@ export interface CreateProposalBody {
   alertas?: string[];
 }
 
+export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
+
+export const ProjectStatus = {
+  rascunho: "rascunho",
+  em_analise: "em_analise",
+  pronto_proposta: "pronto_proposta",
+  finalizado: "finalizado",
+} as const;
+
+export type ProjectDraftData = { [key: string]: unknown } | null;
+
 export interface Project {
   id: number;
   nome: string;
@@ -1005,9 +1016,25 @@ export interface Project {
   mountType: string | null;
   /** @nullable */
   notas: string | null;
+  status: ProjectStatus;
+  draftData: ProjectDraftData;
+  currentStep: number;
+  lastSavedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+export type CreateProjectBodyStatus =
+  (typeof CreateProjectBodyStatus)[keyof typeof CreateProjectBodyStatus];
+
+export const CreateProjectBodyStatus = {
+  rascunho: "rascunho",
+  em_analise: "em_analise",
+  pronto_proposta: "pronto_proposta",
+  finalizado: "finalizado",
+} as const;
+
+export type CreateProjectBodyDraftData = { [key: string]: unknown } | null;
 
 export interface CreateProjectBody {
   nome: string;
@@ -1035,7 +1062,22 @@ export interface CreateProjectBody {
   mountType?: string | null;
   /** @nullable */
   notas?: string | null;
+  status?: CreateProjectBodyStatus;
+  draftData?: CreateProjectBodyDraftData;
+  currentStep?: number;
 }
+
+export type UpdateProjectBodyStatus =
+  (typeof UpdateProjectBodyStatus)[keyof typeof UpdateProjectBodyStatus];
+
+export const UpdateProjectBodyStatus = {
+  rascunho: "rascunho",
+  em_analise: "em_analise",
+  pronto_proposta: "pronto_proposta",
+  finalizado: "finalizado",
+} as const;
+
+export type UpdateProjectBodyDraftData = { [key: string]: unknown } | null;
 
 export interface UpdateProjectBody {
   nome?: string;
@@ -1063,6 +1105,9 @@ export interface UpdateProjectBody {
   mountType?: string | null;
   /** @nullable */
   notas?: string | null;
+  status?: UpdateProjectBodyStatus;
+  draftData?: UpdateProjectBodyDraftData;
+  currentStep?: number;
 }
 
 export type GetSystemPvgisParams = {

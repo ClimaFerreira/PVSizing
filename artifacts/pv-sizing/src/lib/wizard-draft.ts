@@ -42,7 +42,52 @@ export function getOrCreateSessionId(companyId: number | null | undefined): stri
   }
 }
 
-// ── localStorage (per-tenant) ────────────────────────────────────────────────
+// ── localStorage per-project cache ──────────────────────────────────────────
+function projectDraftKey(companyId: number | null | undefined, projectId: number): string {
+  const cid = companyId ?? "anon";
+  return `${DRAFT_KEY_PREFIX}:c${cid}:p${projectId}`;
+}
+
+export function saveDraftForProject(
+  companyId: number | null | undefined,
+  projectId: number,
+  data: Omit<WizardDraftData, "version" | "savedAt">,
+): void {
+  try {
+    const draft: WizardDraftData = { ...data, version: 1, savedAt: new Date().toISOString() };
+    localStorage.setItem(projectDraftKey(companyId, projectId), JSON.stringify(draft));
+  } catch {
+    // ignore
+  }
+}
+
+export function loadDraftForProject(
+  companyId: number | null | undefined,
+  projectId: number,
+): WizardDraftData | null {
+  try {
+    const raw = localStorage.getItem(projectDraftKey(companyId, projectId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as WizardDraftData;
+    if (parsed.version !== 1) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearDraftForProject(
+  companyId: number | null | undefined,
+  projectId: number,
+): void {
+  try {
+    localStorage.removeItem(projectDraftKey(companyId, projectId));
+  } catch {
+    // ignore
+  }
+}
+
+// ── Legacy localStorage (per-tenant; kept for backwards compat) ─────────────
 export function saveDraft(
   companyId: number | null | undefined,
   data: Omit<WizardDraftData, "version" | "savedAt">,
