@@ -53,6 +53,8 @@ import {
 } from "@/lib/wizard-draft";
 import { usePanelCtx } from "@/contexts/PanelContext";
 import { useSolar } from "@/contexts/SolarContext";
+import { useMapa } from "@/contexts/MapaContext";
+import type { MapData } from "@/contexts/MapaContext";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { simulateAnual } from "@/lib/energy-simulation";
@@ -272,6 +274,7 @@ function WizardInner({ projectId }: { projectId: number }) {
   /* ── Shared contexts: keep spacing + map tabs in sync with wizard ── */
   const { setPanel: setPanelCtx } = usePanelCtx();
   const { setLocation: setSolarLocation, setParams: setSolarParams } = useSolar();
+  const { mapData: mapaCtxData, setMapData } = useMapa();
 
   const [perfilDiurnoPct, setPerfilDiurnoPct] = useState(60);
 
@@ -340,6 +343,7 @@ function WizardInner({ projectId }: { projectId: number }) {
     const draft = projectRow.draftData as WizardDraftData | null | undefined;
     if (draft && (draft.step ?? 1) >= 1) {
       restoreDraft(draft);
+      if (draft.mapData) setMapData(draft.mapData as unknown as MapData);
       // Show a brief toast only when there's real progress to recover
       if ((draft.step ?? 1) > 1 || draft.sizing) {
         toast({
@@ -386,6 +390,7 @@ function WizardInner({ projectId }: { projectId: number }) {
       tipoProjeto,
       investimentoManual,
       panelRefId,
+      mapData: mapaCtxData as unknown as Record<string, unknown> | null,
     };
 
     // localStorage — fast offline cache (800ms), keyed per-project
@@ -428,7 +433,7 @@ function WizardInner({ projectId }: { projectId: number }) {
       if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust, numPaineisStep5, inverterUnits, batteryUnits, tipoProjeto, investimentoManual, panelRefId, projectId]);
+  }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust, numPaineisStep5, inverterUnits, batteryUnits, tipoProjeto, investimentoManual, panelRefId, mapaCtxData, projectId]);
 
   // ── Reference panel for step-4 scenarios ─────────────────────────────────
   // Prefer explicitly chosen panelRefId, then step-5 form selection, then first in catalogue.

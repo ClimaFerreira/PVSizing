@@ -7,6 +7,7 @@ import {
   useListBatteries,
 } from "@workspace/api-client-react";
 import type { SolarPanel, Inverter, Battery } from "@workspace/api-client-react";
+import type { MapData } from "@/contexts/MapaContext";
 import { useSolar } from "@/contexts/SolarContext";
 import { useMapa } from "@/contexts/MapaContext";
 import { buildCrossSectionSvg, buildLayoutSvg, buildCoplanarLayoutSvg } from "@/lib/svg-utils";
@@ -124,7 +125,7 @@ export default function ReportBuilder({ projectId }: Props) {
     spacingResults,
     spacingCrossSvg,
     spacingLayoutSvg,
-    mapData: mapData ?? null,
+    mapData: mapData ?? (draftData?.mapData as MapData | null) ?? null,
     inverterUnits: inverterUnitsRaw,
     allInverters: allInverters ?? [],
   }), [projectRow, customer, panel, inverters, batteries, sizing, consumoData, locData,

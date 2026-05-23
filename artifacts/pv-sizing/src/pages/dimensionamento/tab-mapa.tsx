@@ -98,6 +98,29 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
   const prevLocRef = useRef("");
   const activeArea = areas.find(a => a.id === activeAreaId) ?? null;
 
+  /* ── Sync areas → MapaContext so the report always has up-to-date data ── */
+  useEffect(() => {
+    if (areas.length === 0) return;
+    const totalPanels = areas.reduce((s, a) => s + a.panelCount, 0);
+    const totalKwp = areas.reduce((s, a) => s + a.totalKwp, 0);
+    const totalRoofArea = areas.reduce((s, a) => s + a.roofArea, 0);
+    const primary = areas[0];
+    setMapData(prev => ({
+      ...(prev ?? {}),
+      panelCount: totalPanels,
+      totalKwp,
+      roofArea: totalRoofArea,
+      ...(primary ? {
+        panelW: primary.panelW,
+        panelH: primary.panelH,
+        powerWp: primary.powerWp,
+        azimuth: primary.azimuth,
+        orientationLabel: primary.orientationLabel,
+        mountType: primary.mountType,
+      } : {}),
+    }));
+  }, [areas, setMapData]);
+
   /* ── postMessage helper ── */
   const post = useCallback((msg: object) => {
     try { iframeRef.current?.contentWindow?.postMessage(JSON.stringify(msg), "*"); }

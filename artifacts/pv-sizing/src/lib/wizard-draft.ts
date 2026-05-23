@@ -25,6 +25,7 @@ export interface WizardDraftData {
   tipoProjeto?: string;
   investimentoManual?: number | null;
   panelRefId?: number | null;
+  mapData?: Record<string, unknown> | null;
 }
 
 // ── Session ID (per-tenant) ──────────────────────────────────────────────────

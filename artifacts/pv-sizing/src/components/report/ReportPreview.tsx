@@ -495,57 +495,66 @@ export default function ReportPreview({ sections, data }: Props) {
       ); })()}
 
       {/* ── MAPA SATÉLITE ──────────────────────────────────────────────────── */}
-      {sections.includes("mapa") && mapData && (() => { const p = pg(); return (
+      {sections.includes("mapa") && (() => { const p = pg(); return (
         <div className="report-page a4-page py-10 px-12 page-break-after flex flex-col">
           <PageHeader projectName={projectName} sectionTitle="Mapa Satélite e Layout" />
           <Section title="Mapa Satélite e Layout FV">
-            {mapData.mapImageDataUrl && (
-              <div className="mb-6">
-                <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Vista Satélite</p>
-                <div className="rounded border overflow-hidden">
-                  <img
-                    src={mapData.mapImageDataUrl}
-                    alt="Mapa Satélite"
-                    className="w-full object-cover max-h-72"
-                  />
-                </div>
-              </div>
-            )}
-            {mapData.panelSvg && (
-              <div className="mb-6">
-                <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Layout Painéis</p>
-                <div className="bg-[#1a2744] rounded border overflow-hidden max-h-64 flex items-center justify-center p-2"
-                  dangerouslySetInnerHTML={{ __html: mapData.panelSvg }} />
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <p className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Telhado / Área</p>
-                <table className="w-full"><tbody>
-                  {mapData.roofArea != null && <KvRow k="Área Telhado" v={fmt(mapData.roofArea, 1, "m²")} />}
-                  {mapData.roofBoundsW != null && <KvRow k="Largura (E-O)" v={fmt(mapData.roofBoundsW, 1, "m")} />}
-                  {mapData.roofBoundsH != null && <KvRow k="Comprimento (N-S)" v={fmt(mapData.roofBoundsH, 1, "m")} />}
-                  {mapData.azimuth != null && <KvRow k="Azimute" v={fmt(mapData.azimuth, 1, "°")} />}
-                  {mapData.orientationLabel && <KvRow k="Orientação" v={mapData.orientationLabel} />}
-                  {mapData.mountType && <KvRow k="Tipo Estrutura" v={mapData.mountType === "coplanar" ? "Coplanar" : "Triângulos"} />}
-                  {mapData.penaltyPct != null && mapData.penaltyPct > 0 && <KvRow k="Penalização Orientação" v={fmt(mapData.penaltyPct, 1, "%")} />}
-                </tbody></table>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Sistema FV</p>
-                <table className="w-full"><tbody>
-                  {mapData.panelCount != null && <KvRow k="Painéis" v={`${mapData.panelCount} un.`} />}
-                  {mapData.panelW != null && mapData.panelH != null && <KvRow k="Dimensões Painel" v={`${mapData.panelW} × ${mapData.panelH} m`} />}
-                  {mapData.powerWp != null && <KvRow k="Potência Painel" v={fmt(mapData.powerWp, 0, "Wp")} />}
-                  {mapData.totalKwp != null && <KvRow k="Potência Total" v={<span className="text-amber-600 font-bold">{fmt(mapData.totalKwp, 2, "kWp")}</span>} />}
-                  {mapData.adjKwp != null && mapData.adjKwp !== mapData.totalKwp && <KvRow k="Potência Ajustada" v={fmt(mapData.adjKwp, 2, "kWp")} />}
-                </tbody></table>
-              </div>
-            </div>
-            {!mapData.mapImageDataUrl && !mapData.panelSvg && (
-              <div className="bg-slate-50 rounded border p-6 text-center text-sm text-gray-400 mt-4">
+            {!mapData ? (
+              <div className="bg-slate-50 rounded border p-8 text-center text-sm text-gray-400">
+                <p className="font-medium mb-1">Dados de Mapa não disponíveis</p>
                 <p>Aceda ao separador "Mapa Satélite", desenhe a área do telhado e os dados serão incluídos automaticamente no relatório.</p>
               </div>
+            ) : (
+              <>
+                {mapData.mapImageDataUrl && (
+                  <div className="mb-6">
+                    <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Vista Satélite</p>
+                    <div className="rounded border overflow-hidden">
+                      <img
+                        src={mapData.mapImageDataUrl}
+                        alt="Mapa Satélite"
+                        className="w-full object-cover max-h-72"
+                      />
+                    </div>
+                  </div>
+                )}
+                {mapData.panelSvg && (
+                  <div className="mb-6">
+                    <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Layout Painéis</p>
+                    <div className="bg-[#1a2744] rounded border overflow-hidden max-h-64 flex items-center justify-center p-2"
+                      dangerouslySetInnerHTML={{ __html: mapData.panelSvg }} />
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Telhado / Área</p>
+                    <table className="w-full"><tbody>
+                      {mapData.roofArea != null && <KvRow k="Área Telhado" v={fmt(mapData.roofArea, 1, "m²")} />}
+                      {mapData.roofBoundsW != null && <KvRow k="Largura (E-O)" v={fmt(mapData.roofBoundsW, 1, "m")} />}
+                      {mapData.roofBoundsH != null && <KvRow k="Comprimento (N-S)" v={fmt(mapData.roofBoundsH, 1, "m")} />}
+                      {mapData.azimuth != null && <KvRow k="Azimute" v={fmt(mapData.azimuth, 1, "°")} />}
+                      {mapData.orientationLabel && <KvRow k="Orientação" v={mapData.orientationLabel} />}
+                      {mapData.mountType && <KvRow k="Tipo Estrutura" v={mapData.mountType === "coplanar" ? "Coplanar" : "Triângulos"} />}
+                      {mapData.penaltyPct != null && mapData.penaltyPct > 0 && <KvRow k="Penalização Orientação" v={fmt(mapData.penaltyPct, 1, "%")} />}
+                    </tbody></table>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Sistema FV</p>
+                    <table className="w-full"><tbody>
+                      {mapData.panelCount != null && <KvRow k="Painéis" v={`${mapData.panelCount} un.`} />}
+                      {mapData.panelW != null && mapData.panelH != null && <KvRow k="Dimensões Painel" v={`${mapData.panelW} × ${mapData.panelH} m`} />}
+                      {mapData.powerWp != null && <KvRow k="Potência Painel" v={fmt(mapData.powerWp, 0, "Wp")} />}
+                      {mapData.totalKwp != null && <KvRow k="Potência Total" v={<span className="text-amber-600 font-bold">{fmt(mapData.totalKwp, 2, "kWp")}</span>} />}
+                      {mapData.adjKwp != null && mapData.adjKwp !== mapData.totalKwp && <KvRow k="Potência Ajustada" v={fmt(mapData.adjKwp, 2, "kWp")} />}
+                    </tbody></table>
+                  </div>
+                </div>
+                {!mapData.mapImageDataUrl && !mapData.panelSvg && (
+                  <div className="bg-slate-50 rounded border p-4 text-center text-sm text-gray-400 mt-4">
+                    <p>Aceda ao separador "Mapa Satélite" e desenhe a área do telhado para incluir a imagem satélite e o layout de painéis.</p>
+                  </div>
+                )}
+              </>
             )}
           </Section>
           <div className="flex-1" />
