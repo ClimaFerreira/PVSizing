@@ -190,7 +190,6 @@
     display: block !important;
   }
 
-  /* More reliable: hide the app shell, show only report */
   nav, header, aside, .sidebar, [data-sidebar], footer,
   [role="navigation"], [role="banner"],
   .print\:hidden {
@@ -210,18 +209,34 @@
     display: block !important;
   }
 
-  .a4-page {
+  /* Cover page — dedicated A4 page, break after */
+  .capa-page {
     width: 21cm;
     min-height: 29.7cm;
+    padding: 4cm 2.5cm;
+    margin: 0 auto;
+    box-shadow: none !important;
+    background: white;
+    break-after: page;
+  }
+
+  /* Body — continuous flow, no forced breaks */
+  .a4-body {
+    width: 21cm;
     padding: 2cm 2.5cm;
     margin: 0 auto;
     box-shadow: none !important;
     background: white;
-    page-break-after: always;
   }
 
-  .page-break-after {
-    page-break-after: always;
+  /* Keep section titles glued to their first content block */
+  .report-section h2 {
+    break-after: avoid;
+  }
+
+  /* Individual blocks that should not split across pages */
+  .no-break {
+    break-inside: avoid;
   }
 
   @page {
@@ -230,10 +245,27 @@
   }
 }
 
-/* Screen: A4-like preview */
-.a4-page {
+/* Screen: A4-like cover page */
+.capa-page {
   width: 21cm;
   min-height: 29.7cm;
+  background: white;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  border-radius: 4px;
+}
+
+/* Screen: continuous body */
+.a4-body {
+  width: 21cm;
+  background: white;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  border-radius: 4px;
+  padding: 2.5cm 2.5cm;
+}
+
+/* Legacy — keep for any remaining uses */
+.a4-page {
+  width: 21cm;
   background: white;
   box-shadow: 0 4px 24px rgba(0,0,0,0.12);
   border-radius: 4px;
