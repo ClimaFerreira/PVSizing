@@ -108,9 +108,9 @@ var layerVis={roofs:true,panels:true,strings:true,obstacles:true};
 
 // ─── Map ──────────────────────────────────────────────────────────────────────
 var map=L.map('map',{zoomControl:true,maxZoom:24,minZoom:2,zoomSnap:0.25,zoomDelta:0.5,wheelPxPerZoomLevel:80,preferCanvas:true}).setView([39.5,-8.0],7);
-var esriSat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:24,maxNativeZoom:19});
-var esriLbl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:24,maxNativeZoom:19,opacity:0.85});
-var osmLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM',maxZoom:24,maxNativeZoom:19,subdomains:['a','b','c']});
+var esriSat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:24,maxNativeZoom:19,crossOrigin:true});
+var esriLbl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:24,maxNativeZoom:19,opacity:0.85,crossOrigin:true});
+var osmLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM',maxZoom:24,maxNativeZoom:19,subdomains:['a','b','c'],crossOrigin:true});
 esriSat.addTo(map);esriLbl.addTo(map);
 
 obstacleLayer=new L.FeatureGroup().addTo(map);
@@ -539,6 +539,26 @@ window.addEventListener('message',function(e){
     case'setLayer':setLayerVis(d.name,d.visible);break;
     case'startDraw':startDraw();break;
     case'invalidateSize':inv();setTimeout(inv,100);setTimeout(inv,400);break;
+    case'requestScreenshot':
+      var _tb=document.getElementById('toolbar'),_in=document.getElementById('info'),_mb=document.getElementById('mountBadge'),_ab=document.getElementById('areaBadge'),_sh=document.getElementById('selHint'),_co=document.getElementById('compassBox');
+      var _np=document.querySelector('.nudge-pad'),_mp2=document.querySelector('.move-pad');
+      var _svgEl=document.querySelector('.leaflet-overlay-pane svg'),_svgStr='';
+      if(_svgEl){try{_svgStr=(new XMLSerializer()).serializeToString(_svgEl);}catch(_e){}}
+      function _hide(el){if(el)el.style.visibility='hidden';}
+      function _show(el){if(el)el.style.visibility='';}
+      function _restore(){[_tb,_in,_mb,_ab,_sh,_co,_np,_mp2].forEach(_show);}
+      [_tb,_in,_mb,_ab,_sh,_co,_np,_mp2].forEach(_hide);
+      if(typeof html2canvas!=='undefined'){
+        setTimeout(function(){
+          html2canvas(document.getElementById('map'),{useCORS:true,allowTaint:false,scale:1,logging:false,backgroundColor:'#0D2B45'})
+            .then(function(c){var du=null;try{du=c.toDataURL('image/jpeg',0.82);}catch(_x){}
+              emit({type:'screenshotReady',dataUrl:du,panelSvg:_svgStr});_restore();})
+            .catch(function(){emit({type:'screenshotReady',dataUrl:null,panelSvg:_svgStr});_restore();});
+        },250);
+      } else {
+        setTimeout(function(){emit({type:'screenshotReady',dataUrl:null,panelSvg:_svgStr});_restore();},100);
+      }
+      break;
     case'flyTo':
       if(d.lat!==undefined&&d.lng!==undefined)map.flyTo([d.lat,d.lng],d.zoom||18,{animate:true,duration:1.0});
       if(d.name){var old=document.getElementById('loc-b');if(old)old.remove();

@@ -9,6 +9,7 @@ import {
   Plus, ChevronDown, ChevronRight, Layers, Zap, Eye, EyeOff,
   MousePointer2, Grid2x2, PencilLine, AlertTriangle, Home,
   Move, ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
+  Camera, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +63,7 @@ const MODE_DEFS: { key: MapMode; label: string; icon: React.ReactNode; cls: stri
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 export default function TabMapa({ isActive = false }: TabMapaProps) {
-  const { setMapData } = useMapa();
+  const { mapData, setMapData } = useMapa();
   const { panel, setPanel } = usePanelCtx();
   const { params: solarParams, results: solarResults } = useSolar();
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -94,6 +95,7 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
   /* selected panel */
   const [panelSelected, setPanelSelected] = useState(false);
   const [selectedPanelAreaId, setSelectedPanelAreaId] = useState<string | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   const prevLocRef = useRef("");
   const activeArea = areas.find(a => a.id === activeAreaId) ?? null;
@@ -105,11 +107,45 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
     const totalKwp = areas.reduce((s, a) => s + a.totalKwp, 0);
     const totalRoofArea = areas.reduce((s, a) => s + a.roofArea, 0);
     const primary = areas[0];
+
+    /* schematic SVG — bird's-eye panel grid for each area */
+    const COLORS = ["#1E88E5","#43A047","#F5A623","#E53935","#8E24AA"];
+    const active = areas.filter(a => a.panelCount > 0);
+    let schematicSvg = "";
+    if (active.length > 0) {
+      const W = 500, H = 300, M = 16, GAP = 8;
+      const areaW = (W - 2 * M - (active.length - 1) * GAP) / active.length;
+      let els = `<rect width="${W}" height="${H}" fill="#1a2744" rx="6"/>`;
+      active.forEach((area, i) => {
+        const color = COLORS[i % COLORS.length];
+        const x = M + i * (areaW + GAP);
+        const cnt = area.panelCount;
+        const ratio = (area.panelW || 1.13) / (area.panelH || 2.28);
+        const cols = Math.max(1, Math.ceil(Math.sqrt(cnt * ratio)));
+        const rows = Math.ceil(cnt / cols);
+        const labelH = 22;
+        const gridH = H - 2 * M - labelH;
+        const cellW = areaW / cols, cellH = gridH / rows, p = 1.2;
+        els += `<rect x="${x}" y="${M}" width="${areaW}" height="${H - 2 * M}" rx="4" fill="${color}1a" stroke="${color}" stroke-width="1.2"/>`;
+        els += `<text x="${x + areaW / 2}" y="${M + 15}" text-anchor="middle" font-size="9.5" fill="${color}" font-weight="700" font-family="system-ui,sans-serif">${area.name}: ${cnt}p · ${area.totalKwp.toFixed(1)} kWp</text>`;
+        let n = 0;
+        for (let r = 0; r < rows && n < cnt; r++) {
+          for (let c = 0; c < cols && n < cnt; c++) {
+            const px = x + c * cellW + p, py = M + labelH + r * cellH + p;
+            els += `<rect x="${px}" y="${py}" width="${cellW - 2 * p}" height="${cellH - 2 * p}" fill="${color}" opacity="0.85" rx="1"/>`;
+            n++;
+          }
+        }
+      });
+      schematicSvg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${els}</svg>`;
+    }
+
     setMapData(prev => ({
       ...(prev ?? {}),
       panelCount: totalPanels,
       totalKwp,
       roofArea: totalRoofArea,
+      ...(schematicSvg ? { panelSvg: schematicSvg } : {}),
       ...(primary ? {
         panelW: primary.panelW,
         panelH: primary.panelH,
@@ -291,6 +327,14 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
           break;
         case "modeChanged":
           setMapMode(data.mode as MapMode);
+          break;
+        case "screenshotReady":
+          setIsCapturing(false);
+          setMapData(prev => ({
+            ...(prev ?? {}),
+            ...(data.dataUrl ? { mapImageDataUrl: data.dataUrl as string } : {}),
+            ...(data.panelSvg ? { panelSvg: data.panelSvg as string } : {}),
+          }));
           break;
       }
     };
@@ -670,6 +714,30 @@ export default function TabMapa({ isActive = false }: TabMapaProps) {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Capture for report ── */}
+          {areas.length > 0 && (
+            <div className="px-4 pb-2">
+              <button
+                type="button"
+                disabled={isCapturing}
+                onClick={() => {
+                  setIsCapturing(true);
+                  post({ type: "requestScreenshot" });
+                  setTimeout(() => setIsCapturing(false), 8000);
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-lg py-2 px-3 text-[11px] font-semibold transition-colors bg-[#0D2B45] text-white hover:bg-[#1565C0] disabled:opacity-60"
+              >
+                {isCapturing
+                  ? <><Loader2 size={12} className="animate-spin" /> A capturar…</>
+                  : <><Camera size={12} /> Capturar Vista para Relatório</>
+                }
+              </button>
+              {(mapData?.mapImageDataUrl || mapData?.panelSvg) && (
+                <p className="text-center text-[9px] text-green-600 mt-1 font-medium">✓ Vista guardada no relatório</p>
               )}
             </div>
           )}

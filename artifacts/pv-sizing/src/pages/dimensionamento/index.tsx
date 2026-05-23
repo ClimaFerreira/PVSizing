@@ -72,10 +72,13 @@ export default function DimensionamentoPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="dados-fv" className="mt-0">
-          <Suspense fallback={<LoadingSkeleton />}>
-            <WizardPage />
-          </Suspense>
+        {/* Force-mount so wizard autosave captures mapData changes from other tabs */}
+        <TabsContent value="dados-fv" className="mt-0" forceMount>
+          <div className={activeTab === "dados-fv" ? "block" : "hidden"}>
+            <Suspense fallback={<LoadingSkeleton />}>
+              <WizardPage />
+            </Suspense>
+          </div>
         </TabsContent>
 
         <TabsContent value="espacamento" className="mt-0">
