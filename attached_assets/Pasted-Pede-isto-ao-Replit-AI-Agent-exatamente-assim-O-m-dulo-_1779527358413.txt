@@ -1,0 +1,288 @@
+Pede isto ao Replit AI Agent exatamente assim:
+
+---
+
+O módulo “Relatório Técnico” já está criado, mas atualmente NÃO está a importar automaticamente todos os dados das páginas:
+
+* Dados FV
+* Espaçamento / Sombras
+* Mapa Satélite
+
+Neste momento apenas aparecem secções básicas. Quero sincronização TOTAL do relatório com o projeto completo.
+
+# 1. Problema atual
+
+O relatório:
+
+* não mostra todos os campos do dimensionamento;
+* não mostra cálculos de espaçamento;
+* não mostra dados do mapa;
+* não mostra layout de painéis;
+* não mostra strings;
+* não mostra imagens do mapa;
+* não mostra obstáculos;
+* não mostra áreas/telhados;
+* não mostra configurações elétricas.
+
+---
+
+# 2. Objetivo
+
+Quero que o relatório seja gerado automaticamente a partir do estado global do projeto.
+
+Tudo o que existe nas tabs:
+
+* Dados FV
+* Espaçamento / Sombras
+* Mapa Satélite
+
+deve ficar disponível no relatório.
+
+---
+
+# 3. Integrar dados do “Dados FV”
+
+Adicionar ao relatório:
+
+## Cliente
+
+* nome
+* morada
+* contacto
+* empresa
+
+## Projeto
+
+* tipo instalação
+* potência total
+* potência inversor
+* potência módulos
+* nº painéis
+* inclinação
+* orientação
+* azimute
+* estrutura
+
+## Consumos
+
+* tabela mensal
+* gráfico
+* perfil consumo
+
+## Produção
+
+* produção anual
+* PR
+* autoconsumo
+* excedentes
+
+## Equipamentos
+
+* módulos
+* inversores
+* baterias
+* estruturas
+
+---
+
+# 4. Integrar dados do “Espaçamento / Sombras”
+
+Adicionar:
+
+## Cálculos
+
+* distância entre filas
+* gap
+* projeção horizontal
+* comprimento N-S
+* largura E-O
+* sombra
+
+## Dados solares
+
+* latitude
+* ângulo solar
+* otimização inverno/verão
+
+## Diagramas
+
+* gráfico de sombras
+* perfil solar
+* esquema geométrico
+
+Adicionar captura automática do canvas/gráfico.
+
+---
+
+# 5. Integrar dados do “Mapa Satélite”
+
+Adicionar:
+
+## Mapa
+
+* screenshot HD do mapa
+* imagem satélite
+
+## Áreas
+
+* múltiplos telhados
+* perímetros
+* área útil
+
+## Layout
+
+* disposição dos painéis
+* orientação
+* inclinação
+
+## Strings
+
+* strings desenhadas
+* nº módulos por string
+* MPPT
+* tensões
+* correntes
+
+## Obstáculos
+
+* chaminés
+* sombras
+* exclusões
+
+## Estatísticas
+
+* nº painéis
+* potência por área
+* potência total
+
+---
+
+# 6. Capturas automáticas
+
+Implementar:
+
+```js id="ddhpxc"
+html2canvas()
+```
+
+OU:
+
+```js id="yd5c7v"
+dom-to-image
+```
+
+Para gerar automaticamente:
+
+* imagens do mapa;
+* diagramas;
+* layouts;
+* strings;
+* gráficos.
+
+---
+
+# 7. Sincronização automática
+
+Sempre que:
+
+* mudar layout;
+* mudar mapa;
+* mudar strings;
+* mudar potência;
+* mudar espaçamento;
+
+o relatório deve atualizar automaticamente.
+
+---
+
+# 8. Criar secções dinâmicas
+
+Cada secção do relatório deve ser um componente independente:
+
+```txt id="lgl7w6"
+/report/sections
+  CoverSection
+  ClientSection
+  ProductionSection
+  SpacingSection
+  MapSection
+  LayoutSection
+  StringSection
+  FinancialSection
+```
+
+---
+
+# 9. Dados devem vir do store global
+
+Usar:
+
+```txt id="i1lkd6"
+SolarProjectStore
+```
+
+ou:
+
+```txt id="x3s4qe"
+ProjectContext
+```
+
+O relatório NÃO deve usar dados mockados.
+
+Deve consumir:
+
+* estado real do projeto;
+* mapa real;
+* layout real;
+* cálculos reais.
+
+---
+
+# 10. Melhorar preview
+
+Quero:
+
+* preview igual a PDF final;
+* páginas A4 reais;
+* paginação;
+* cabeçalho;
+* rodapé;
+* índice automático.
+
+---
+
+# 11. Gerar relatório profissional completo
+
+Objetivo final:
+
+O relatório deve parecer gerado por:
+
+* Aurora Solar
+* OpenSolar
+* SolarEdge Designer
+* PVsyst
+
+Incluindo:
+
+* capa profissional;
+* imagens;
+* cálculos;
+* diagramas;
+* layouts;
+* strings;
+* produção;
+* ROI;
+* documentação técnica completa.
+
+---
+
+# 12. Corrigir problema atual
+
+Atualmente o relatório está incompleto porque:
+
+* os componentes não estão ligados ao store global;
+* as tabs estão isoladas;
+* os dados do mapa não estão a ser exportados;
+* os cálculos de espaçamento não estão a ser injetados no relatório.
+
+Corrigir toda essa integração.
