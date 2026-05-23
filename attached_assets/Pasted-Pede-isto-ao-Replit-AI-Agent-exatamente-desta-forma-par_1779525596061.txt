@@ -1,0 +1,311 @@
+Pede isto ao Replit AI Agent exatamente desta forma para criar um módulo profissional de relatórios técnicos integrados:
+
+---
+
+Quero adicionar no lado esquerdo da página “Dimensionamento FV” um novo painel chamado:
+
+# RELATÓRIO TÉCNICO
+
+Este painel deve permitir criar automaticamente um relatório profissional completo do projeto FV, integrando:
+
+* Dimensionamento FV
+* Espaçamento / Sombras
+* Mapa Satélite
+* Layout de painéis
+* Strings
+* Equipamentos
+* Produção
+* ROI
+* Dados do cliente
+
+---
+
+# 1. Novo painel lateral
+
+Adicionar no lado esquerdo:
+
+```txt id="14jgj1"
+┌─────────────────────┐
+│ RELATÓRIO TÉCNICO   │
+├─────────────────────┤
+│ ☑ Dados Cliente     │
+│ ☑ Consumos          │
+│ ☑ Produção FV       │
+│ ☑ Painéis           │
+│ ☑ Inversores        │
+│ ☑ Baterias          │
+│ ☑ Layout Painéis    │
+│ ☑ Strings           │
+│ ☑ Mapa Satélite     │
+│ ☑ Espaçamento       │
+│ ☑ Sombras           │
+│ ☑ ROI               │
+│ ☑ Financeiro        │
+│ ☑ Diagramas         │
+│ ☑ Notas Técnicas    │
+├─────────────────────┤
+│ [Pré-visualizar]    │
+│ [Gerar PDF]         │
+│ [Exportar DOCX]     │
+└─────────────────────┘
+```
+
+---
+
+# 2. Sistema de seleção de campos
+
+Quero escolher:
+
+* quais secções entram no relatório;
+* ordem das secções;
+* mostrar/esconder campos;
+* adicionar comentários personalizados.
+
+---
+
+# 3. Relatório automático sincronizado
+
+O relatório deve atualizar automaticamente quando:
+
+* mudar potência;
+* mudar layout;
+* alterar strings;
+* alterar mapa;
+* alterar espaçamento;
+* alterar equipamentos.
+
+Tudo deve vir do estado global sincronizado.
+
+---
+
+# 4. Estrutura do relatório
+
+## CAPA
+
+* Logo empresa
+* Nome cliente
+* Morada
+* Potência FV
+* Data
+* Técnico responsável
+* Imagem satélite
+
+---
+
+## SECÇÕES OPCIONAIS
+
+### Dados Cliente
+
+* nome
+* morada
+* contacto
+* CPE
+
+### Consumos
+
+* gráficos
+* tabela mensal
+* perfil carga
+
+### Dimensionamento FV
+
+* potência instalada
+* nº módulos
+* potência inversor
+* DC/AC ratio
+
+### Equipamentos
+
+* painéis
+* inversores
+* baterias
+* estruturas
+
+### Espaçamento e Sombras
+
+* cálculos
+* diagramas
+* perfil solar
+
+### Mapa Satélite
+
+* captura do mapa
+* perímetros
+* layout
+* orientação
+* strings
+
+### Layout Painéis
+
+* nº por fileira
+* azimute
+* inclinação
+* estrutura
+
+### Strings
+
+* esquema elétrico
+* MPPT
+* tensão
+* corrente
+* cablagem
+
+### Produção
+
+* produção anual
+* PR
+* perdas
+* autoconsumo
+
+### Financeiro
+
+* ROI
+* payback
+* poupança
+* cashflow
+
+### Notas Técnicas
+
+* texto editável manualmente
+
+---
+
+# 5. Pré-visualização em tempo real
+
+Adicionar:
+
+```txt id="7l0iag"
+Modo Preview
+```
+
+Com:
+
+* páginas A4;
+* zoom;
+* navegação;
+* visualização instantânea.
+
+---
+
+# 6. Exportação profissional
+
+Implementar:
+
+* PDF profissional;
+* DOCX;
+* impressão.
+
+PDF deve ter:
+
+* paginação;
+* cabeçalho;
+* rodapé;
+* índice;
+* branding empresa.
+
+---
+
+# 7. Capturas automáticas do mapa
+
+O relatório deve incluir automaticamente:
+
+* screenshot do mapa;
+* layout FV;
+* strings;
+* obstáculos;
+* áreas desenhadas.
+
+Gerar imagem em alta resolução.
+
+---
+
+# 8. Templates
+
+Criar:
+
+```txt id="a0xh1k"
+Template Comercial
+Template Técnico
+Template Executivo
+Template Simplificado
+```
+
+---
+
+# 9. Editor drag-and-drop
+
+Quero reorganizar secções:
+
+* arrastar;
+* esconder;
+* expandir;
+* duplicar páginas.
+
+---
+
+# 10. Arquitetura
+
+Criar:
+
+```txt id="psuz4p"
+/components/report/
+  ReportBuilder
+  ReportPreview
+  ReportSections
+  PdfExporter
+  ReportTemplates
+```
+
+Estado:
+
+```txt id="dc3t08"
+ReportContext
+```
+
+---
+
+# 11. Dados sincronizados automaticamente
+
+Integrar com:
+
+```txt id="owiv6s"
+SolarProjectStore
+```
+
+Para obter:
+
+* dados FV;
+* mapa;
+* strings;
+* equipamentos;
+* ROI;
+* produção;
+* cliente.
+
+---
+
+# 12. Objetivo final
+
+Quero um gerador de relatórios semelhante a:
+
+* Aurora Solar
+* OpenSolar
+* PVsyst
+* SolarEdge Designer
+
+Com relatórios:
+
+* comerciais;
+* técnicos;
+* profissionais;
+* totalmente automáticos;
+* personalizáveis.
+
+---
+
+Além disso:
+
+* manter compatibilidade mobile;
+* garantir geração rápida;
+* permitir futuras integrações com propostas comerciais;
+* preparar exportação automática para clientes.

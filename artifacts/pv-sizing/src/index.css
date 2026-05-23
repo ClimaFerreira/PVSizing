@@ -179,3 +179,62 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+/* ── Report print styles ───────────────────────────────────────────────────── */
+@media print {
+  /* Hide everything except the report */
+  body > #root > * {
+    display: none !important;
+  }
+  body > #root > div:has(#report-content) {
+    display: block !important;
+  }
+
+  /* More reliable: hide the app shell, show only report */
+  nav, header, aside, .sidebar, [data-sidebar], footer,
+  [role="navigation"], [role="banner"],
+  .print\:hidden {
+    display: none !important;
+  }
+
+  #report-content {
+    display: block !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 9999;
+  }
+
+  .report-root {
+    display: block !important;
+  }
+
+  .a4-page {
+    width: 21cm;
+    min-height: 29.7cm;
+    padding: 2cm 2.5cm;
+    margin: 0 auto;
+    box-shadow: none !important;
+    background: white;
+    page-break-after: always;
+  }
+
+  .page-break-after {
+    page-break-after: always;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+}
+
+/* Screen: A4-like preview */
+.a4-page {
+  width: 21cm;
+  min-height: 29.7cm;
+  background: white;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  border-radius: 4px;
+}

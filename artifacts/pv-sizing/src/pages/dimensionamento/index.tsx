@@ -1,11 +1,19 @@
 import { lazy, Suspense, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Wand2, Ruler, Map } from "lucide-react";
+import { Wand2, Ruler, Map, FileText } from "lucide-react";
 import TabEspacamento from "./tab-espacamento";
+import ReportBuilder from "@/components/report/ReportBuilder";
 
 const TabMapa = lazy(() => import("./tab-mapa"));
 const WizardPage = lazy(() => import("@/pages/wizard"));
+
+function readProjectIdFromUrl(): number | null {
+  if (typeof window === "undefined") return null;
+  const id = new URLSearchParams(window.location.search).get("projectId");
+  const n = id ? Number(id) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 function LoadingSkeleton() {
   return (
@@ -23,6 +31,7 @@ function LoadingSkeleton() {
 
 export default function DimensionamentoPage() {
   const [activeTab, setActiveTab] = useState("dados-fv");
+  const projectId = readProjectIdFromUrl();
 
   return (
     <div className="space-y-0">
@@ -54,6 +63,13 @@ export default function DimensionamentoPage() {
             <Map size={16} />
             Mapa Satélite
           </TabsTrigger>
+          <TabsTrigger
+            value="relatorio"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-[#0D2B45] data-[state=active]:shadow-sm whitespace-nowrap"
+          >
+            <FileText size={16} />
+            Relatório Técnico
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dados-fv" className="mt-0">
@@ -72,6 +88,12 @@ export default function DimensionamentoPage() {
             <Suspense fallback={<LoadingSkeleton />}>
               <TabMapa isActive={activeTab === "mapa"} />
             </Suspense>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="relatorio" className="mt-0">
+          <div className="border rounded-xl bg-card overflow-hidden" style={{ minHeight: "75vh" }}>
+            <ReportBuilder projectId={projectId} />
           </div>
         </TabsContent>
       </Tabs>
