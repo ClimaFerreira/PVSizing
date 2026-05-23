@@ -1148,6 +1148,12 @@ components:
         noct:
           type: ["number", "null"]
           description: "NOCT — Temperatura Normal de Operação da Célula (°C), ex: 45"
+        alturaMm:
+          type: ["integer", "null"]
+          description: "Altura física do painel (mm), ex: 2279"
+        larguraMm:
+          type: ["integer", "null"]
+          description: "Largura física do painel (mm), ex: 1134"
         createdAt:
           type: string
           format: date-time
@@ -1186,6 +1192,10 @@ components:
           type: ["number", "null"]
         noct:
           type: ["number", "null"]
+        alturaMm:
+          type: ["integer", "null"]
+        larguraMm:
+          type: ["integer", "null"]
       required:
         - nome
         - fabricante
@@ -1219,6 +1229,10 @@ components:
           type: ["number", "null"]
         noct:
           type: ["number", "null"]
+        alturaMm:
+          type: ["integer", "null"]
+        larguraMm:
+          type: ["integer", "null"]
 
     # --- Inverter ---
     Inverter:

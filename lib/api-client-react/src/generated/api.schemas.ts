@@ -130,6 +130,16 @@ export interface SolarPanel {
    * @nullable
    */
   noct?: number | null;
+  /**
+   * Altura física do painel (mm), ex: 2279
+   * @nullable
+   */
+  alturaMm?: number | null;
+  /**
+   * Largura física do painel (mm), ex: 1134
+   * @nullable
+   */
+  larguraMm?: number | null;
   createdAt: string;
 }
 
@@ -146,6 +156,10 @@ export interface CreateSolarPanelBody {
   coeficienteTemperaturaVoc?: number | null;
   /** @nullable */
   noct?: number | null;
+  /** @nullable */
+  alturaMm?: number | null;
+  /** @nullable */
+  larguraMm?: number | null;
 }
 
 export interface UpdateSolarPanelBody {
@@ -161,6 +175,10 @@ export interface UpdateSolarPanelBody {
   coeficienteTemperaturaVoc?: number | null;
   /** @nullable */
   noct?: number | null;
+  /** @nullable */
+  alturaMm?: number | null;
+  /** @nullable */
+  larguraMm?: number | null;
 }
 
 export interface Inverter {

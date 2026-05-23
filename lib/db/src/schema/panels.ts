@@ -15,6 +15,8 @@ export const panelsTable = pgTable("solar_panels", {
   coeficienteTemperatura: numeric("coeficiente_temperatura", { precision: 10, scale: 4 }).notNull(),
   coeficienteTemperaturaVoc: numeric("coeficiente_temperatura_voc", { precision: 10, scale: 4 }),
   noct: numeric("noct", { precision: 5, scale: 2 }),
+  alturaMm: integer("altura_mm"),
+  larguraMm: integer("largura_mm"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

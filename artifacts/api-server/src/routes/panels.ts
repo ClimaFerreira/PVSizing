@@ -40,6 +40,8 @@ router.post("/panels", async (req, res): Promise<void> => {
       coeficienteTemperatura: String(d.coeficienteTemperatura),
       coeficienteTemperaturaVoc: d.coeficienteTemperaturaVoc != null ? String(d.coeficienteTemperaturaVoc) : null,
       noct: d.noct != null ? String(d.noct) : null,
+      alturaMm: d.alturaMm ?? null,
+      larguraMm: d.larguraMm ?? null,
     })
     .returning();
   res.status(201).json(GetPanelResponse.parse(toPanelResponse(panel)));
@@ -72,6 +74,8 @@ router.patch("/panels/:id", async (req, res): Promise<void> => {
   if (d.coeficienteTemperatura !== undefined) updateValues.coeficienteTemperatura = String(d.coeficienteTemperatura);
   if (d.coeficienteTemperaturaVoc !== undefined) updateValues.coeficienteTemperaturaVoc = d.coeficienteTemperaturaVoc != null ? String(d.coeficienteTemperaturaVoc) : null;
   if (d.noct !== undefined) updateValues.noct = d.noct != null ? String(d.noct) : null;
+  if (d.alturaMm !== undefined) updateValues.alturaMm = d.alturaMm;
+  if (d.larguraMm !== undefined) updateValues.larguraMm = d.larguraMm;
   const [panel] = await db
     .update(panelsTable)
     .set(updateValues)

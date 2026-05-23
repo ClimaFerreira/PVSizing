@@ -19,4 +19,8 @@ export interface CreateSolarPanelBody {
   coeficienteTemperaturaVoc?: number | null;
   /** @nullable */
   noct?: number | null;
+  /** @nullable */
+  alturaMm?: number | null;
+  /** @nullable */
+  larguraMm?: number | null;
 }

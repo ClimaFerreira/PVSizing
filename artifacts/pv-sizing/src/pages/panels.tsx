@@ -53,6 +53,8 @@ const panelSchema = z.object({
   coeficienteTemperatura: z.coerce.number(),
   coeficienteTemperaturaVoc: z.union([z.coerce.number(), z.null()]).optional(),
   noct: z.union([z.coerce.number(), z.null()]).optional(),
+  alturaMm: z.union([z.coerce.number().int().min(1).max(9999), z.null()]).optional(),
+  larguraMm: z.union([z.coerce.number().int().min(1).max(9999), z.null()]).optional(),
 }).refine(d => d.voc === 0 || d.vmp === 0 || d.voc > d.vmp, {
   message: "Voc deve ser maior que Vmp (fisicamente impossível: Voc ≤ Vmp)",
   path: ["voc"],
@@ -88,6 +90,8 @@ export default function Panels() {
       coeficienteTemperatura: -0.35,
       coeficienteTemperaturaVoc: null,
       noct: null,
+      alturaMm: null,
+      larguraMm: null,
     },
   });
 
@@ -146,6 +150,8 @@ export default function Panels() {
       coeficienteTemperatura: panel.coeficienteTemperatura,
       coeficienteTemperaturaVoc: panel.coeficienteTemperaturaVoc ?? null,
       noct: panel.noct ?? null,
+      alturaMm: panel.alturaMm ?? null,
+      larguraMm: panel.larguraMm ?? null,
     });
   };
 
@@ -211,6 +217,8 @@ export default function Panels() {
                       coeficienteTemperatura: Number(d.coeficienteTemperatura ?? -0.35),
                       coeficienteTemperaturaVoc: d.coeficienteTemperaturaVoc ? Number(d.coeficienteTemperaturaVoc) : null,
                       noct: d.noct ? Number(d.noct) : null,
+                      alturaMm: d.alturaMm ? Math.round(Number(d.alturaMm)) : null,
+                      larguraMm: d.larguraMm ? Math.round(Number(d.larguraMm)) : null,
                     }});
                     ok++;
                   } catch { /* skip failed */ }
@@ -252,6 +260,12 @@ export default function Panels() {
                   )} />
                   <FormField control={form.control} name="noct" render={({ field }) => (
                     <FormItem><FormLabel>NOCT (°C)</FormLabel><FormControl><Input type="number" step="0.5" placeholder="45" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="alturaMm" render={({ field }) => (
+                    <FormItem><FormLabel>Altura (mm)</FormLabel><FormControl><Input type="number" step="1" placeholder="2279" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Math.round(Number(e.target.value)))} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="larguraMm" render={({ field }) => (
+                    <FormItem><FormLabel>Largura (mm)</FormLabel><FormControl><Input type="number" step="1" placeholder="1134" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Math.round(Number(e.target.value)))} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
                 <div className="flex justify-end">

@@ -26,5 +26,15 @@ export interface SolarPanel {
    * @nullable
    */
   noct?: number | null;
+  /**
+   * Altura física do painel (mm), ex: 2279
+   * @nullable
+   */
+  alturaMm?: number | null;
+  /**
+   * Largura física do painel (mm), ex: 1134
+   * @nullable
+   */
+  larguraMm?: number | null;
   createdAt: Date;
 }

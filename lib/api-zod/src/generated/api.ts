@@ -135,6 +135,14 @@ export const ListPanelsResponseItem = zod.object({
     .number()
     .nullish()
     .describe("NOCT — Temperatura Normal de Operação da Célula (°C), ex: 45"),
+  alturaMm: zod
+    .number()
+    .nullish()
+    .describe("Altura física do painel (mm), ex: 2279"),
+  larguraMm: zod
+    .number()
+    .nullish()
+    .describe("Largura física do painel (mm), ex: 1134"),
   createdAt: zod.coerce.date(),
 });
 export const ListPanelsResponse = zod.array(ListPanelsResponseItem);
@@ -153,6 +161,8 @@ export const CreatePanelBody = zod.object({
   coeficienteTemperatura: zod.number(),
   coeficienteTemperaturaVoc: zod.number().nullish(),
   noct: zod.number().nullish(),
+  alturaMm: zod.number().nullish(),
+  larguraMm: zod.number().nullish(),
 });
 
 /**
@@ -180,6 +190,14 @@ export const GetPanelResponse = zod.object({
     .number()
     .nullish()
     .describe("NOCT — Temperatura Normal de Operação da Célula (°C), ex: 45"),
+  alturaMm: zod
+    .number()
+    .nullish()
+    .describe("Altura física do painel (mm), ex: 2279"),
+  larguraMm: zod
+    .number()
+    .nullish()
+    .describe("Largura física do painel (mm), ex: 1134"),
   createdAt: zod.coerce.date(),
 });
 
@@ -201,6 +219,8 @@ export const UpdatePanelBody = zod.object({
   coeficienteTemperatura: zod.number().optional(),
   coeficienteTemperaturaVoc: zod.number().nullish(),
   noct: zod.number().nullish(),
+  alturaMm: zod.number().nullish(),
+  larguraMm: zod.number().nullish(),
 });
 
 export const UpdatePanelResponse = zod.object({
@@ -221,6 +241,14 @@ export const UpdatePanelResponse = zod.object({
     .number()
     .nullish()
     .describe("NOCT — Temperatura Normal de Operação da Célula (°C), ex: 45"),
+  alturaMm: zod
+    .number()
+    .nullish()
+    .describe("Altura física do painel (mm), ex: 2279"),
+  larguraMm: zod
+    .number()
+    .nullish()
+    .describe("Largura física do painel (mm), ex: 1134"),
   createdAt: zod.coerce.date(),
 });
 

@@ -271,7 +271,7 @@ function WizardInner({ projectId }: { projectId: number }) {
 
   /* ── Shared contexts: keep spacing + map tabs in sync with wizard ── */
   const { setPanel: setPanelCtx } = usePanelCtx();
-  const { setLocation: setSolarLocation } = useSolar();
+  const { setLocation: setSolarLocation, setParams: setSolarParams } = useSolar();
 
   const [perfilDiurnoPct, setPerfilDiurnoPct] = useState(60);
 
@@ -463,14 +463,44 @@ function WizardInner({ projectId }: { projectId: number }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locData]);
 
-  // ── Sync selected panel power → PanelContext ──────────────────────────────
-  // Spacing and map tabs read panelPower from PanelContext; keep it aligned with
-  // the panel chosen in the wizard equipment step.
+  // ── Sync selected panel → PanelContext (power + physical dimensions) ─────────
+  // Spacing and map tabs read panelPower/panelHeight/panelWidth from PanelContext.
+  // Dimensions only sync when the panel has alturaMm/larguraMm recorded.
   useEffect(() => {
     if (!panelRef) return;
-    setPanelCtx(prev => ({ ...prev, panelPower: String(panelRef.potencia) }));
+    setPanelCtx(prev => ({
+      ...prev,
+      panelPower: String(panelRef.potencia),
+      ...(panelRef.alturaMm != null ? { panelHeight: String((panelRef.alturaMm / 1000).toFixed(3)) } : {}),
+      ...(panelRef.larguraMm != null ? { panelWidth: String((panelRef.larguraMm / 1000).toFixed(3)) } : {}),
+    }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelRef?.potencia]);
+  }, [panelRef?.id]);
+
+  // ── Sync inverter power → SolarContext ────────────────────────────────────
+  // The spacing tab shows potência do inversor; keep it in sync with wizard selection.
+  useEffect(() => {
+    if (!inverterUnits.length || !inverters) return;
+    const totalKw = inverterUnits.reduce((sum, unit) => {
+      const inv = inverters.find(i => i.id === unit.inverterId);
+      return sum + (inv ? Number(inv.potenciaAc) * unit.quantidade : 0);
+    }, 0);
+    if (totalKw > 0) {
+      setSolarParams(prev => ({ ...prev, inverterPower: String(totalKw) }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inverterUnits, inverters]);
+
+  // ── Sync nº painéis (step 5 explicit) → spacing rows/cols ────────────────
+  // Only triggers when the user explicitly sets panel count in step 5.
+  // Computes a square-ish grid: e.g. 20 panels → cols=5, rows=4.
+  useEffect(() => {
+    if (numPaineisStep5 == null || numPaineisStep5 <= 0) return;
+    const cols = Math.max(1, Math.round(Math.sqrt(numPaineisStep5)));
+    const rows = Math.ceil(numPaineisStep5 / cols);
+    setSolarParams(prev => ({ ...prev, cols: String(cols), rows: String(rows) }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numPaineisStep5]);
 
   // Coverage multipliers per scenario type (mirrors server buildCenario logic)
   const CENARIO_COB_MULT: Record<string, number> = {
