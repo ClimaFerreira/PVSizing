@@ -1,0 +1,356 @@
+Pede isto ao Replit AI Agent exatamente desta forma — este é o problema estrutural principal da aplicação neste momento:
+
+---
+
+Existe um problema crítico de arquitetura na aplicação SolarDim:
+
+# PROBLEMA ATUAL
+
+As páginas:
+
+* Dados FV
+* Espaçamento / Sombras
+* Mapa Satélite
+* Relatório Técnico
+
+NÃO estão sincronizadas entre si.
+
+Atualmente:
+
+* os dados introduzidos em “Dados FV” não atualizam:
+
+  * Espaçamento;
+  * Mapa;
+  * Relatório.
+* o relatório não mostra:
+
+  * gráficos;
+  * mapa satélite;
+  * layout;
+  * strings;
+  * cálculos reais;
+  * dados reais do estudo.
+* cada página está a usar estado isolado/local.
+
+---
+
+# OBJETIVO
+
+Quero transformar toda a aplicação num sistema centralizado baseado num único estado global do projeto.
+
+Tudo deve estar sincronizado em tempo real.
+
+---
+
+# 1. Criar STORE GLOBAL CENTRAL
+
+Criar:
+
+```txt id="s73mpx"
+/stores/useSolarProjectStore.ts
+```
+
+Usar:
+
+* Zustand (preferencial)
+  OU
+* Redux Toolkit.
+
+---
+
+# 2. Estrutura do STORE
+
+Criar store completo:
+
+```ts id="mr5yr9"
+type SolarProjectStore = {
+  client: {}
+  location: {}
+  consumption: {}
+  production: {}
+  panels: {}
+  inverters: {}
+  batteries: {}
+
+  spacing: {}
+  shadows: {}
+
+  map: {
+    center
+    zoom
+    roofAreas
+    obstacles
+    strings
+    panelLayouts
+    screenshots
+  }
+
+  report: {}
+
+  updateField()
+  saveProject()
+  loadProject()
+}
+```
+
+---
+
+# 3. Dados FV devem alimentar tudo
+
+Quando o utilizador alterar:
+
+* morada;
+* potência;
+* nº painéis;
+* inclinação;
+* azimute;
+* painel;
+* inversor;
+
+o sistema deve atualizar automaticamente:
+
+* Espaçamento;
+* Mapa;
+* Relatório;
+* Produção;
+* ROI.
+
+---
+
+# 4. Sincronização da localização
+
+Fluxo obrigatório:
+
+## Em Dados FV:
+
+Utilizador escreve:
+
+```txt id="qff3wc"
+Morada
+```
+
+Sistema:
+
+1. Faz geocoding;
+2. Obtém:
+
+   * latitude;
+   * longitude;
+3. Guarda no store;
+4. Atualiza:
+
+   * mapa;
+   * cálculos solares;
+   * espaçamento.
+
+---
+
+# 5. Página Espaçamento deve usar STORE
+
+A página:
+
+```txt id="bfvjlwm"
+/dimensionamento/espacamento
+```
+
+NÃO deve usar estado local.
+
+Deve ler:
+
+```ts id="7lp6vw"
+useSolarProjectStore()
+```
+
+Para obter:
+
+* latitude;
+* inclinação;
+* altura painel;
+* largura painel;
+* azimute;
+* estrutura.
+
+---
+
+# 6. Página Mapa deve usar STORE
+
+O mapa deve:
+
+* abrir automaticamente na morada;
+* usar layout do projeto;
+* usar potência;
+* usar estrutura;
+* usar espaçamento.
+
+O mapa deve atualizar:
+
+* nº painéis;
+* áreas;
+* strings;
+* screenshots;
+* orientação.
+
+Tudo guardado no store global.
+
+---
+
+# 7. RELATÓRIO TÉCNICO
+
+O relatório NÃO pode usar mock data.
+
+Deve consumir diretamente:
+
+```ts id="z9d5pf"
+useSolarProjectStore()
+```
+
+---
+
+# 8. Relatório deve mostrar TODO o estudo
+
+## Dados FV
+
+* cliente;
+* potência;
+* consumo;
+* equipamentos;
+* produção;
+* ROI;
+* gráficos.
+
+## Espaçamento
+
+* distância entre filas;
+* gap;
+* perfil solar;
+* gráficos;
+* sombras.
+
+## Mapa
+
+* screenshot HD;
+* layout painéis;
+* strings;
+* obstáculos;
+* áreas;
+* estatísticas.
+
+---
+
+# 9. Exportar gráficos reais
+
+Atualmente os gráficos não aparecem.
+
+Implementar captura automática usando:
+
+```js id="4q7l08"
+html2canvas
+```
+
+OU:
+
+```js id="uk8q5f"
+dom-to-image
+```
+
+Capturar:
+
+* gráficos;
+* mapas;
+* layouts;
+* diagramas.
+
+Guardar no store:
+
+```ts id="3e6g5j"
+report.assets[]
+```
+
+---
+
+# 10. Sistema de screenshots do mapa
+
+Quando:
+
+* mudar layout;
+* mudar strings;
+* mover painéis;
+
+gerar automaticamente:
+
+```ts id="5f0vqo"
+mapScreenshot
+```
+
+Usar no relatório PDF.
+
+---
+
+# 11. Fluxo correto da aplicação
+
+## Dados FV
+
+↓
+Atualiza STORE
+↓
+Espaçamento recalcula
+↓
+Mapa atualiza
+↓
+Relatório atualiza
+
+Tudo automático.
+
+---
+
+# 12. Persistência completa
+
+Guardar:
+
+```txt id="udlk6x"
+localStorage
+```
+
+OU DB.
+
+Salvar:
+
+* estudo;
+* mapa;
+* strings;
+* layouts;
+* screenshots;
+* gráficos;
+* relatório.
+
+---
+
+# 13. Corrigir arquitetura atual
+
+Atualmente:
+
+* cada tab usa estado próprio;
+* dados não são partilhados;
+* relatório usa placeholders;
+* gráficos não são exportados;
+* mapa não está integrado.
+
+Refatorar completamente para arquitetura centralizada.
+
+---
+
+# 14. Objetivo final
+
+Quero comportamento semelhante a:
+
+* Aurora Solar
+* OpenSolar
+* PVsyst
+* SolarEdge Designer
+
+Onde:
+
+* tudo é sincronizado;
+* qualquer alteração atualiza todo o sistema;
+* relatório é gerado automaticamente com dados reais;
+* mapas e gráficos aparecem automaticamente no PDF.

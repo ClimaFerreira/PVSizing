@@ -51,6 +51,8 @@ import {
   getOrCreateSessionId,
   type WizardDraftData,
 } from "@/lib/wizard-draft";
+import { usePanelCtx } from "@/contexts/PanelContext";
+import { useSolar } from "@/contexts/SolarContext";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { simulateAnual } from "@/lib/energy-simulation";
@@ -267,6 +269,10 @@ function WizardInner({ projectId }: { projectId: number }) {
   const { data: locations } = useListLocations();
   const createProposal      = useCreateProposal();
 
+  /* ── Shared contexts: keep spacing + map tabs in sync with wizard ── */
+  const { setPanel: setPanelCtx } = usePanelCtx();
+  const { setLocation: setSolarLocation } = useSolar();
+
   const [perfilDiurnoPct, setPerfilDiurnoPct] = useState(60);
 
   const clienteForm = useForm<ClienteForm>({ resolver: zodResolver(clienteSchema), defaultValues: { tipoCliente: "particular", morada: "", tipoTarifa: "simples", potenciaContratada: 3.45 } });
@@ -434,6 +440,37 @@ function WizardInner({ projectId }: { projectId: number }) {
   }, [panelRefId, panels]);  // equipForm intentionally omitted — reads on demand
 
   const wpRef: number = panelRef ? Number(panelRef.potencia) : 400;
+
+  // ── Sync wizard locData → SolarContext + PanelContext ─────────────────────
+  // When the user sets location/inclination in the wizard, push those values to the
+  // shared contexts so the Espaçamento and Mapa tabs auto-update without user re-entry.
+  useEffect(() => {
+    if (!locData) return;
+    // Update map flyTo target and spacing latitude
+    setSolarLocation(
+      String(locData.latitude),
+      String(locData.longitude),
+      "",  // locationName — user can refine it in the spacing search box
+    );
+    // Convert "degrees from South" to absolute bearing (0°=N, 90°=E, 180°=S, 270°=W)
+    const absoluteAzimuth = ((180 + (locData.azimute ?? 0)) + 360) % 360;
+    // Push inclination + azimuth to PanelContext (spacing + map read from here)
+    setPanelCtx(prev => ({
+      ...prev,
+      inclination: String(locData.inclinacao ?? 30),
+      azimuth: String(absoluteAzimuth),
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locData]);
+
+  // ── Sync selected panel power → PanelContext ──────────────────────────────
+  // Spacing and map tabs read panelPower from PanelContext; keep it aligned with
+  // the panel chosen in the wizard equipment step.
+  useEffect(() => {
+    if (!panelRef) return;
+    setPanelCtx(prev => ({ ...prev, panelPower: String(panelRef.potencia) }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelRef?.potencia]);
 
   // Coverage multipliers per scenario type (mirrors server buildCenario logic)
   const CENARIO_COB_MULT: Record<string, number> = {

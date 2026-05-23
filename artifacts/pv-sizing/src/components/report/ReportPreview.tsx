@@ -174,11 +174,11 @@ export default function ReportPreview({ sections, data }: Props) {
               <KvRow k="Tipo de Cliente" v={customer.tipoCliente} />
               <KvRow k="Perfil de Consumo" v={customer.perfilConsumo} />
               <KvRow k="Potência Contratada" v={fmt(customer.potenciaContratada, 1, "kVA")} />
-              {customer.consumoMensal && <KvRow k="Consumo Mensal" v={fmt(customer.consumoMensal, 0, "kWh")} />}
-              {customer.consumoAnual && <KvRow k="Consumo Anual" v={fmt(customer.consumoAnual, 0, "kWh")} />}
+              {!!customer.consumoMensal && <KvRow k="Consumo Mensal" v={fmt(customer.consumoMensal, 0, "kWh")} />}
+              {!!customer.consumoAnual && <KvRow k="Consumo Anual" v={fmt(customer.consumoAnual, 0, "kWh")} />}
               <KvRow k="Preço Eletricidade" v={fmt(tarifa, 4, "€/kWh")} />
-              {cd?.cpe && <KvRow k="CPE" v={cd.cpe} />}
-              {cd?.distribuidora && <KvRow k="Distribuidora" v={cd.distribuidora} />}
+              {!!cd?.cpe && <KvRow k="CPE" v={cd!.cpe} />}
+              {!!cd?.distribuidora && <KvRow k="Distribuidora" v={cd!.distribuidora} />}
               {ld?.municipio && <KvRow k="Município (PVGIS)" v={ld.municipio} />}
               {(ld?.latitude ?? spacingParams?.latitude) && (
                 <KvRow k="Latitude" v={fmt(ld?.latitude ?? Number(spacingParams?.latitude), 4, "°")} />
