@@ -376,6 +376,12 @@ export default function Panels() {
                               <FormField control={form.control} name="noct" render={({ field }) => (
                                 <FormItem><FormLabel>NOCT (°C)</FormLabel><FormControl><Input type="number" step="0.5" placeholder="45" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                               )} />
+                              <FormField control={form.control} name="alturaMm" render={({ field }) => (
+                                <FormItem><FormLabel>Altura (mm)</FormLabel><FormControl><Input type="number" step="1" placeholder="2279" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Math.round(Number(e.target.value)))} /></FormControl><FormMessage /></FormItem>
+                              )} />
+                              <FormField control={form.control} name="larguraMm" render={({ field }) => (
+                                <FormItem><FormLabel>Largura (mm)</FormLabel><FormControl><Input type="number" step="1" placeholder="1134" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Math.round(Number(e.target.value)))} /></FormControl><FormMessage /></FormItem>
+                              )} />
                             </div>
                             <div className="flex justify-end">
                               <Button type="submit" disabled={updatePanel.isPending}>
