@@ -15,6 +15,7 @@ import { Customer, CreateCustomerBodyTipoCliente, CreateCustomerBodyPerfilConsum
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -69,6 +70,8 @@ export default function Customers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [coordinatesText, setCoordinatesText] = useState("");
+  const [isGeocoding, setIsGeocoding] = useState(false);
 
   const { data: customers, isLoading } = useListCustomers();
   const createCustomer = useCreateCustomer();
@@ -102,7 +105,7 @@ export default function Customers() {
             queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
             toast({ title: "Cliente atualizado com sucesso" });
             setEditingCustomer(null);
-            form.reset();
+            resetForm();
           },
         }
       );
@@ -114,10 +117,101 @@ export default function Customers() {
             queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
             toast({ title: "Cliente criado com sucesso" });
             setIsCreateOpen(false);
-            form.reset();
+            resetForm();
           },
         }
       );
+    }
+  };
+
+  const resetForm = () => {
+    form.reset();
+    setCoordinatesText("");
+  };
+
+  const applyCoordinatesText = (value: string) => {
+    setCoordinatesText(value);
+
+    const match = value
+      .trim()
+      .match(/^(-?\d+(?:[.,]\d+)?)\s*[,;]\s*(-?\d+(?:[.,]\d+)?)$/);
+
+    if (!match) {
+      return;
+    }
+
+    const latitude = Number(match[1].replace(",", "."));
+    const longitude = Number(match[2].replace(",", "."));
+
+    if (
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180
+    ) {
+      form.setValue("latitude", latitude, { shouldDirty: true, shouldValidate: true });
+      form.setValue("longitude", longitude, { shouldDirty: true, shouldValidate: true });
+    }
+  };
+
+  const findCoordinatesByAddress = async () => {
+    const address = form.getValues("morada").trim();
+
+    if (!address) {
+      toast({
+        title: "Introduza a morada primeiro",
+        description: "Preencha a morada completa antes de procurar coordenadas.",
+      });
+      return;
+    }
+
+    setIsGeocoding(true);
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`,
+        {
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Geocoding request failed");
+      }
+
+      const results: Array<{ lat: string; lon: string; display_name?: string }> = await response.json();
+      const firstResult = results[0];
+
+      if (!firstResult) {
+        toast({
+          title: "Coordenadas não encontradas",
+          description: "Confirme a morada ou cole as coordenadas manualmente.",
+        });
+        return;
+      }
+
+      const latitude = Number(firstResult.lat);
+      const longitude = Number(firstResult.lon);
+
+      form.setValue("latitude", latitude, { shouldDirty: true, shouldValidate: true });
+      form.setValue("longitude", longitude, { shouldDirty: true, shouldValidate: true });
+      setCoordinatesText(`${latitude}, ${longitude}`);
+
+      toast({
+        title: "Coordenadas encontradas",
+        description: firstResult.display_name,
+      });
+    } catch {
+      toast({
+        title: "Não foi possível procurar coordenadas",
+        description: "Tente novamente ou cole as coordenadas manualmente.",
+      });
+    } finally {
+      setIsGeocoding(false);
     }
   };
 
@@ -137,6 +231,7 @@ export default function Customers() {
 
   const openEdit = (customer: Customer) => {
     setEditingCustomer(customer);
+    setCoordinatesText(`${customer.latitude}, ${customer.longitude}`);
     form.reset({
       nome: customer.nome,
       morada: customer.morada,
@@ -156,6 +251,38 @@ export default function Customers() {
     p.morada.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const renderCoordinateFields = () => (
+    <>
+      <FormItem className="col-span-2">
+        <Label htmlFor="customer-coordinates">Coordenadas</Label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            id="customer-coordinates"
+            value={coordinatesText}
+            onChange={(event) => applyCoordinatesText(event.target.value)}
+            placeholder="38.70476291364403, -9.415706227415274"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="sm:shrink-0"
+            onClick={findCoordinatesByAddress}
+            disabled={isGeocoding}
+          >
+            <Search className="mr-2 h-4 w-4" />
+            {isGeocoding ? "A procurar..." : "Procurar pela morada"}
+          </Button>
+        </div>
+      </FormItem>
+      <FormField control={form.control} name="latitude" render={({ field }) => (
+        <FormItem><FormLabel>Latitude</FormLabel><FormControl><Input type="number" step="0.000001" {...field} /></FormControl><FormMessage /></FormItem>
+      )} />
+      <FormField control={form.control} name="longitude" render={({ field }) => (
+        <FormItem><FormLabel>Longitude</FormLabel><FormControl><Input type="number" step="0.000001" {...field} /></FormControl><FormMessage /></FormItem>
+      )} />
+    </>
+  );
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
@@ -165,7 +292,7 @@ export default function Customers() {
         </div>
 
         <Dialog open={isCreateOpen} onOpenChange={(open) => {
-          if (!open) form.reset();
+          if (!open) resetForm();
           setIsCreateOpen(open);
         }}>
           <DialogTrigger asChild>
@@ -187,12 +314,7 @@ export default function Customers() {
                   <FormField control={form.control} name="morada" render={({ field }) => (
                     <FormItem className="col-span-2"><FormLabel>Morada Completa</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
-                  <FormField control={form.control} name="latitude" render={({ field }) => (
-                    <FormItem><FormLabel>Latitude</FormLabel><FormControl><Input type="number" step="0.000001" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name="longitude" render={({ field }) => (
-                    <FormItem><FormLabel>Longitude</FormLabel><FormControl><Input type="number" step="0.000001" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
+                  {renderCoordinateFields()}
                   
                   <FormField control={form.control} name="tipoCliente" render={({ field }) => (
                     <FormItem>
@@ -311,7 +433,7 @@ export default function Customers() {
                         </Button>
                       </Link>
                       <Dialog open={editingCustomer?.id === cust.id} onOpenChange={(open) => {
-                        if (!open) { setEditingCustomer(null); form.reset(); }
+                        if (!open) { setEditingCustomer(null); resetForm(); }
                         else openEdit(cust);
                       }}>
                         <DialogTrigger asChild>
@@ -332,12 +454,7 @@ export default function Customers() {
                                 <FormField control={form.control} name="morada" render={({ field }) => (
                                   <FormItem className="col-span-2"><FormLabel>Morada Completa</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                                 )} />
-                                <FormField control={form.control} name="latitude" render={({ field }) => (
-                                  <FormItem><FormLabel>Latitude</FormLabel><FormControl><Input type="number" step="0.000001" {...field} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="longitude" render={({ field }) => (
-                                  <FormItem><FormLabel>Longitude</FormLabel><FormControl><Input type="number" step="0.000001" {...field} /></FormControl><FormMessage /></FormItem>
-                                )} />
+                                {renderCoordinateFields()}
                                 
                                 <FormField control={form.control} name="tipoCliente" render={({ field }) => (
                                   <FormItem>
