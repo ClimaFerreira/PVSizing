@@ -2,16 +2,17 @@ const DRAFT_KEY_PREFIX   = "solardim:wizard-draft:v1";
 const SESSION_KEY_PREFIX = "solardim:session-id";
 
 function draftKey(companyId: number | null | undefined): string {
-  return companyId == null ? `${DRAFT_KEY_PREFIX}:anon` : `${DRAFT_KEY_PREFIX}:c${companyId}`;
+  return companyId == null ?`${DRAFT_KEY_PREFIX}:anon` : `${DRAFT_KEY_PREFIX}:c${companyId}`;
 }
 function sessionKey(companyId: number | null | undefined): string {
-  return companyId == null ? `${SESSION_KEY_PREFIX}:anon` : `${SESSION_KEY_PREFIX}:c${companyId}`;
+  return companyId == null ?`${SESSION_KEY_PREFIX}:anon` : `${SESSION_KEY_PREFIX}:c${companyId}`;
 }
 
 export interface WizardDraftData {
   version: 1;
   savedAt: string;
   step: number;
+  clienteData?: Record<string, unknown> | null;
   consumoData: Record<string, unknown>;
   locData: Record<string, unknown> | null;
   sizing: Record<string, unknown> | null;
@@ -26,6 +27,8 @@ export interface WizardDraftData {
   investimentoManual?: number | null;
   panelRefId?: number | null;
   mapData?: Record<string, unknown> | null;
+  reportMapData?: Record<string, unknown> | null;
+  orcamentoState?: Record<string, unknown> | null;
 }
 
 // ── Session ID (per-tenant) ──────────────────────────────────────────────────
@@ -45,7 +48,7 @@ export function getOrCreateSessionId(companyId: number | null | undefined): stri
 
 // ── localStorage per-project cache ──────────────────────────────────────────
 function projectDraftKey(companyId: number | null | undefined, projectId: number): string {
-  const cid = companyId ?? "anon";
+  const cid = companyId ??"anon";
   return `${DRAFT_KEY_PREFIX}:c${cid}:p${projectId}`;
 }
 

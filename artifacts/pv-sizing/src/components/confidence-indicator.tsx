@@ -32,9 +32,9 @@ export function calcConfidence(opts: {
     motivos.push("Períodos tarifários completos");
   } else if (mesesFatura + mesesManuais >= 6 || (mesesFatura >= 3 && tarifaCompleta)) {
     level = "medio";
-    if (mesesFatura > 0) motivos.push(`${mesesFatura} ${mesesFatura === 1 ? "mês real" : "meses reais"} de fatura`);
-    if (mesesEstimados > 0) motivos.push(`${mesesEstimados} ${mesesEstimados === 1 ? "mês estimado" : "meses estimados"}`);
-    if (mesesManuais > 0) motivos.push(`${mesesManuais} ${mesesManuais === 1 ? "mês manual" : "meses manuais"}`);
+    if (mesesFatura > 0) motivos.push(`${mesesFatura} ${mesesFatura === 1 ?"mês real" : "meses reais"} de fatura`);
+    if (mesesEstimados > 0) motivos.push(`${mesesEstimados} ${mesesEstimados === 1 ?"mês estimado" : "meses estimados"}`);
+    if (mesesManuais > 0) motivos.push(`${mesesManuais} ${mesesManuais === 1 ?"mês manual" : "meses manuais"}`);
     if (!tarifaCompleta) motivos.push("Tarifa V/C/P em falta");
   } else {
     level = "baixo";

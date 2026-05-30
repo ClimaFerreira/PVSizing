@@ -2,9 +2,11 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, Loader2, Sparkles, RefreshCw, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getAiHeaders } from "@/lib/ai-key";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -30,21 +32,21 @@ interface Props {
 }
 
 function modelLabel(tipo: TipoEquipamento, d: Record<string, unknown>): string {
-  const nome = String(d.nome ?? "—");
+  const nome = String(d.nome ??"—");
   if (tipo === "inversor") {
-    const kw = d.potenciaAc ? `${(Number(d.potenciaAc) / 1000).toFixed(1)} kW AC` : "";
-    const mppt = d.numMppt ? `${d.numMppt} MPPT` : "";
+    const kw = d.potenciaAc ?`${(Number(d.potenciaAc) / 1000).toFixed(1)} kW AC` : "";
+    const mppt = d.numMppt ?`${d.numMppt} MPPT` : "";
     return [nome, kw, mppt].filter(Boolean).join(" · ");
   }
   if (tipo === "painel") {
-    const wp = d.potencia ? `${d.potencia} Wp` : "";
-    const voc = d.voc ? `Voc ${d.voc} V` : "";
+    const wp = d.potencia ?`${d.potencia} Wp` : "";
+    const voc = d.voc ?`Voc ${d.voc} V` : "";
     return [nome, wp, voc].filter(Boolean).join(" · ");
   }
   if (tipo === "bateria") {
-    const kwh = d.capacidade ? `${d.capacidade} kWh` : "";
-    const v   = d.tensao ? `${d.tensao} V` : "";
-    return [nome, kwh, v, String(d.tecnologia ?? "")].filter(Boolean).join(" · ");
+    const kwh = d.capacidade ?`${d.capacidade} kWh` : "";
+    const v   = d.tensao ?`${d.tensao} V` : "";
+    return [nome, kwh, v, String(d.tecnologia ??"")].filter(Boolean).join(" · ");
   }
   return nome;
 }
@@ -56,9 +58,29 @@ export function DatasheetImport({ tipoEquipamento, onExtracted, onBatchCreate }:
   const [result, setResult]                 = useState<DatasheetResult | null>(null);
   const [modelos, setModelos]               = useState<ModeloItem[]>([]);
   const [expanded, setExpanded]             = useState(true);
+  const [textInput, setTextInput]           = useState("");
   const { toast } = useToast();
 
   const reset = () => { setResult(null); setModelos([]); setExpanded(true); };
+
+  const applyResult = (r: DatasheetResult) => {
+    setResult(r);
+    const items: ModeloItem[] = (r.modelos ??[r.dados]).map(d => ({ dados: d, selecionado: true }));
+    setModelos(items);
+
+    if (items.length === 1 && !onBatchCreate) {
+      onExtracted(items[0].dados);
+      toast({
+        title: `Dados extraídos (${(r.confianca * 100).toFixed(0)}% confiança)`,
+        description: r.notas ??"Dados pré-preenchidos no formulário abaixo.",
+      });
+    } else {
+      toast({
+        title: `${items.length} modelo(s) detetado(s) · ${(r.confianca * 100).toFixed(0)}% confiança`,
+        description: r.notas ??"Selecione os modelos a criar.",
+      });
+    }
+  };
 
   const handleFile = async (file: File) => {
     setIsLoading(true);
@@ -67,23 +89,25 @@ export function DatasheetImport({ tipoEquipamento, onExtracted, onBatchCreate }:
       const fd = new FormData();
       fd.append("file", file);
       fd.append("tipoEquipamento", tipoEquipamento);
-      const resp = await fetch(`${BASE}/api/tools/import-datasheet`, { method: "POST", body: fd });
+      const resp = await fetch(`${BASE}/api/tools/import-datasheet`, { method: "POST", headers: getAiHeaders(), body: fd });
       if (!resp.ok) throw new Error(await resp.text());
       const r: DatasheetResult = await resp.json();
+      applyResult(r);
+      return;
       setResult(r);
-      const items: ModeloItem[] = (r.modelos ?? [r.dados]).map(d => ({ dados: d, selecionado: true }));
+      const items: ModeloItem[] = (r.modelos ??[r.dados]).map(d => ({ dados: d, selecionado: true }));
       setModelos(items);
 
       if (items.length === 1 && !onBatchCreate) {
         onExtracted(items[0].dados);
         toast({
           title: `Ficha técnica extraída (${(r.confianca * 100).toFixed(0)}% confiança)`,
-          description: r.notas ?? "Dados pré-preenchidos no formulário abaixo.",
+          description: r.notas ??"Dados pré-preenchidos no formulário abaixo.",
         });
       } else {
         toast({
           title: `${items.length} modelo(s) detetado(s) · ${(r.confianca * 100).toFixed(0)}% confiança`,
-          description: r.notas ?? "Selecione os modelos a criar.",
+          description: r.notas ??"Selecione os modelos a criar.",
         });
       }
     } catch {
@@ -99,8 +123,31 @@ export function DatasheetImport({ tipoEquipamento, onExtracted, onBatchCreate }:
     if (file) handleFile(file);
   };
 
+  const handleTextImport = async () => {
+    if (textInput.trim().length < 10) {
+      toast({ title: "Cole o modelo ou especificações primeiro", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    reset();
+    try {
+      const resp = await fetch(`${BASE}/api/tools/import-datasheet-text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAiHeaders() },
+        body: JSON.stringify({ tipoEquipamento, texto: textInput }),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      const r: DatasheetResult = await resp.json();
+      applyResult(r);
+    } catch {
+      toast({ title: "Erro ao processar texto com IA", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const toggleModelo = (i: number) =>
-    setModelos(prev => prev.map((m, idx) => idx === i ? { ...m, selecionado: !m.selecionado } : m));
+    setModelos(prev => prev.map((m, idx) => idx === i ?{ ...m, selecionado: !m.selecionado } : m));
 
   const toggleAll = (v: boolean) =>
     setModelos(prev => prev.map(m => ({ ...m, selecionado: v })));
@@ -122,7 +169,7 @@ export function DatasheetImport({ tipoEquipamento, onExtracted, onBatchCreate }:
     }
   };
 
-  const tipoLabel = tipoEquipamento === "painel" ? "painel" : tipoEquipamento === "inversor" ? "inversor" : "bateria";
+  const tipoLabel = tipoEquipamento === "painel" ?"painel" : tipoEquipamento === "inversor" ?"inversor" : "bateria";
 
   return (
     <div className="space-y-3 mb-4">
@@ -131,21 +178,21 @@ export function DatasheetImport({ tipoEquipamento, onExtracted, onBatchCreate }:
         className={cn(
           "border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors",
           isLoading
-            ? "border-primary/30 bg-primary/5"
+            ?"border-primary/30 bg-primary/5"
             : result
-            ? "border-green-400/50 bg-green-50/30 dark:bg-green-950/10"
+            ?"border-green-400/50 bg-green-50/30 dark:bg-green-950/10"
             : "border-primary/30 hover:border-primary/60 hover:bg-primary/5"
         )}
         onClick={() => !isLoading && fileInputRef.current?.click()}
         onDrop={handleDrop}
         onDragOver={e => e.preventDefault()}
       >
-        {isLoading ? (
+        {isLoading ?(
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 size={18} className="animate-spin text-primary" />
             <span className="text-sm">A analisar ficha técnica com IA… a detetar modelos…</span>
           </div>
-        ) : result ? (
+        ) : result ?(
           <div className="flex items-center justify-center gap-2 text-green-700 dark:text-green-400">
             <CheckCircle2 size={18} />
             <span className="text-sm font-medium">
@@ -178,6 +225,27 @@ export function DatasheetImport({ tipoEquipamento, onExtracted, onBatchCreate }:
         />
       </div>
 
+      <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+        <Textarea
+          value={textInput}
+          onChange={(event) => setTextInput(event.target.value)}
+          placeholder={`Cole aqui o modelo ou dados técnicos do ${tipoLabel}.`}
+          rows={3}
+        />
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleTextImport}
+            disabled={isLoading || textInput.trim().length < 10}
+          >
+            {isLoading ?<Loader2 size={14} className="mr-1.5 animate-spin" /> : <Sparkles size={14} className="mr-1.5" />}
+            Preencher com IA
+          </Button>
+        </div>
+      </div>
+
       {/* Multi-model review panel */}
       {result && modelos.length > 0 && (modelos.length > 1 || onBatchCreate) && (
         <div className="border rounded-lg overflow-hidden">
@@ -195,7 +263,7 @@ export function DatasheetImport({ tipoEquipamento, onExtracted, onBatchCreate }:
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">{selectedCount} selecionado(s)</span>
-              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {expanded ?<ChevronUp size={14} /> : <ChevronDown size={14} />}
             </div>
           </div>
 
@@ -227,7 +295,7 @@ export function DatasheetImport({ tipoEquipamento, onExtracted, onBatchCreate }:
                       onClick={e => e.stopPropagation()}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{String(m.dados.nome ?? "—")}</p>
+                      <p className="text-sm font-medium truncate">{String(m.dados.nome ??"—")}</p>
                       <p className="text-xs text-muted-foreground truncate">
                         {modelLabel(tipoEquipamento, m.dados)}
                       </p>
@@ -246,7 +314,7 @@ export function DatasheetImport({ tipoEquipamento, onExtracted, onBatchCreate }:
                     disabled={isBatchCreating || selectedCount === 0}
                   >
                     {isBatchCreating
-                      ? <><Loader2 size={14} className="mr-1.5 animate-spin" />A criar…</>
+                      ?<><Loader2 size={14} className="mr-1.5 animate-spin" />A criar…</>
                       : <><CheckCircle2 size={14} className="mr-1.5" />Criar {selectedCount} {tipoLabel}(s)</>}
                   </Button>
                 )}

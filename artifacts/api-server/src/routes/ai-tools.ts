@@ -2,11 +2,43 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
-import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { anthropic as defaultAnthropic } from "@workspace/integrations-anthropic-ai";
 import { pvgisGet, pvgisSet } from "../lib/pvgis-cache";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+
+function getAnthropicClient(req: { get?: (name: string) => string | undefined }) {
+  const headerKey = req.get?.("x-anthropic-api-key")?.trim();
+  const envKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY?.trim();
+  const apiKey = headerKey || envKey;
+  const isPlaceholder = !apiKey || apiKey === "local-dev-placeholder";
+
+  if (isPlaceholder) {
+    throw Object.assign(
+      new Error("Chave Anthropic em falta. Adicione a chave nas definições da empresa."),
+      { status: 400 },
+    );
+  }
+
+  if (headerKey) {
+    const AnthropicClient = (defaultAnthropic as unknown as { constructor: new (options: { apiKey: string; baseURL?: string }) => typeof defaultAnthropic }).constructor;
+    return new AnthropicClient({
+      apiKey: headerKey,
+      baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL || "https://api.anthropic.com",
+    });
+  }
+
+  return defaultAnthropic;
+}
+
+function handleAiError(res: { status: (code: number) => { json: (body: unknown) => void } }, err: unknown, fallback: string) {
+  const status = typeof err === "object" && err !== null && "status" in err
+    ? Number((err as { status?: unknown }).status)
+    : 502;
+  const message = err instanceof Error ? err.message : fallback;
+  res.status(Number.isFinite(status) ? status : 502).json({ error: message || fallback });
+}
 
 // ── File upload (memory, 10 MB, MIME filter) ──────────────────────────────────
 const ALLOWED_MIMES = [
@@ -247,6 +279,19 @@ function buildFileBlock(isPdf: boolean, mime: string, base64: string) {
   };
 }
 
+function cleanAiJson(text: string) {
+  return text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+}
+
+const InvoiceTextBodySchema = z.object({
+  texto: z.string().min(20, "Cole texto da fatura com pelo menos 20 caracteres"),
+});
+
+const DatasheetTextBodySchema = z.object({
+  tipoEquipamento: z.enum(["painel", "inversor", "bateria"]),
+  texto: z.string().min(10, "Indique modelo, fabricante ou especificações"),
+});
+
 interface CenarioParams {
   tipo: "conservador" | "equilibrado" | "agressivo";
   coberturaMeta: number;
@@ -426,7 +471,7 @@ router.post(
       const base64 = buffer.toString("base64");
       const contentBlock = buildFileBlock(isPdf, mimetype, base64);
 
-      const message = await anthropic.messages.create({
+      const message = await getAnthropicClient(req).messages.create({
         model: "claude-opus-4-5",
         max_tokens: 1024,
         messages: [
@@ -503,12 +548,72 @@ Devolve APENAS este JSON (sem texto adicional, sem markdown):
       res.json(data);
     } catch (err) {
       req.log?.error({ err }, "parse-invoice AI error");
-      res.status(502).json({ error: "Erro ao processar fatura com IA" });
+      handleAiError(res, err, "Erro ao processar fatura com IA");
     }
   },
 );
 
 // ── POST /tools/auto-size ─────────────────────────────────────────────────────
+router.post(
+  "/tools/parse-invoice-text",
+  aiLimiter,
+  async (req, res): Promise<void> => {
+    const parsed = InvoiceTextBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues.map((i) => i.message).join("; ") });
+      return;
+    }
+
+    try {
+      const message = await getAnthropicClient(req).messages.create({
+        model: "claude-opus-4-5",
+        max_tokens: 1536,
+        messages: [
+          {
+            role: "user",
+            content: `És um especialista em faturas de eletricidade portuguesas. Extrai os dados do texto abaixo e devolve APENAS JSON, sem markdown.
+
+Formato obrigatório:
+{
+  "consumoTotal": number|null,
+  "consumoMensal": number|null,
+  "consumoAnual": number|null,
+  "consumoPonta": number|null,
+  "consumoCheio": number|null,
+  "consumoVazio": number|null,
+  "potenciaContratada": number|null,
+  "precoKwh": number|null,
+  "operador": string|null,
+  "tarifario": "simples"|"bi-horária"|"tri-horária"|null,
+  "dataInicio": "YYYY-MM-DD"|null,
+  "dataFim": "YYYY-MM-DD"|null,
+  "periodoMeses": number|null,
+  "leiturasMensais": [],
+  "historicoMensalGrafico": [],
+  "mesesNoGrafico": 0,
+  "consumoAnualGrafico": null,
+  "sazonalidade": "verao_pico"|"inverno_pico"|"uniforme"|null,
+  "confianca": number,
+  "notas": string|null
+}
+
+Se só existir valor do período, calcula consumoMensal com base no período. Se houver custo total e kWh, estima precoKwh.
+
+Texto da fatura:
+${parsed.data.texto}`,
+          },
+        ],
+      });
+
+      const text = message.content[0].type === "text" ? message.content[0].text : "{}";
+      res.json(JSON.parse(cleanAiJson(text)));
+    } catch (err) {
+      req.log?.error({ err }, "parse-invoice-text AI error");
+      handleAiError(res, err, "Erro ao processar texto da fatura com IA");
+    }
+  },
+);
+
 router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => {
   const parsed = AutoSizeBodySchemaExt.safeParse(req.body);
   if (!parsed.success) {
@@ -772,6 +877,84 @@ router.post(
 
 // ── POST /tools/import-datasheet ──────────────────────────────────────────────
 router.post(
+  "/tools/import-datasheet-text",
+  aiLimiter,
+  async (req, res): Promise<void> => {
+    const parsed = DatasheetTextBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues.map((i) => i.message).join("; ") });
+      return;
+    }
+
+    const { tipoEquipamento, texto } = parsed.data;
+    const nomeTipo =
+      tipoEquipamento === "painel"
+        ? "painel solar"
+        : tipoEquipamento === "inversor"
+          ? "inversor fotovoltaico"
+          : "bateria de armazenamento";
+
+    const schemaByType: Record<string, string> = {
+      painel: `{"nome":"string","fabricante":"string","potencia":number,"voc":number,"vmp":number,"isc":number,"imp":number,"coeficienteTemperatura":number,"coeficienteTemperaturaVoc":number,"noct":number,"alturaMm":number,"larguraMm":number}`,
+      inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"vdcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":number,"stringsPorMppt":number}`,
+      bateria: `{"nome":"string","fabricante":"string","capacidade":number,"tensao":number,"tecnologia":"LiFePO4|Li-ion|AGM|Gel"}`,
+    };
+
+    try {
+      const message = await getAnthropicClient(req).messages.create({
+        model: "claude-opus-4-5",
+        max_tokens: 2048,
+        messages: [
+          {
+            role: "user",
+            content: `Analisa estes dados de ${nomeTipo}. Pode ser uma referência curta, texto colado de uma ficha técnica ou uma lista de modelos.
+
+Para cada modelo encontrado, extrai:
+${schemaByType[tipoEquipamento]}
+
+Devolve APENAS este JSON:
+{
+  "modelos": [ <array com um objeto por modelo> ],
+  "confianca": <número 0-1>,
+  "notas": <string|null>
+}
+
+Regras:
+- Usa unidades normalizadas: W, V, A, kWh e mm.
+- Para inversores, potenciaAc/potenciaDcMax em Watts.
+- Se um campo numérico não existir, usa 0.
+- Não inventes dados técnicos ausentes; só estima fabricante/modelo quando for evidente pela referência.
+
+Dados:
+${texto}`,
+          },
+        ],
+      });
+
+      const text = message.content[0].type === "text" ? message.content[0].text : "{}";
+      const result = JSON.parse(cleanAiJson(text)) as {
+        modelos?: Record<string, unknown>[];
+        confianca?: number;
+        notas?: string | null;
+      };
+      const modelos = Array.isArray(result.modelos) && result.modelos.length > 0
+        ? result.modelos
+        : [];
+      res.json({
+        tipoEquipamento,
+        modelos,
+        dados: modelos[0] ?? {},
+        confianca: result.confianca ?? 0.75,
+        notas: result.notas ?? null,
+      });
+    } catch (err) {
+      req.log?.error({ err }, "import-datasheet-text AI error");
+      handleAiError(res, err, "Erro ao processar texto técnico com IA");
+    }
+  },
+);
+
+router.post(
   "/tools/import-datasheet",
   aiLimiter,
   upload.single("file"),
@@ -818,7 +1001,7 @@ router.post(
       const base64 = buffer.toString("base64");
       const contentBlock = buildFileBlock(isPdf, mimetype, base64);
 
-      const message = await anthropic.messages.create({
+      const message = await getAnthropicClient(req).messages.create({
         model: "claude-opus-4-5",
         max_tokens: 4096,
         messages: [
@@ -884,7 +1067,7 @@ Responde APENAS com o JSON pedido, sem texto adicional, sem markdown.`,
       });
     } catch (err) {
       req.log?.error({ err }, "import-datasheet AI error");
-      res.status(502).json({ error: "Erro ao processar ficha técnica com IA" });
+      handleAiError(res, err, "Erro ao processar ficha técnica com IA");
     }
   },
 );

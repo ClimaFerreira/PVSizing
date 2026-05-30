@@ -44,13 +44,13 @@ function NumInput({
         min={min}
         max={max}
         step={step}
-        value={value === 0 ? "" : value}
+        value={value === 0 ?"" : value}
         placeholder="0"
         onChange={e => {
           const v = parseFloat(e.target.value);
-          onChange(isNaN(v) ? 0 : v);
+          onChange(isNaN(v) ?0 : v);
         }}
-        className={unit ? "pr-12" : ""}
+        className={unit ?"pr-12" : ""}
       />
       {unit && (
         <span className="absolute right-3 text-xs text-muted-foreground pointer-events-none">{unit}</span>
@@ -98,7 +98,7 @@ export default function WizardStep1Upgrade({ tipoProjeto, data, onChange, panels
             <Field label="Modelo dos painéis existentes" hint="Selecione do catálogo ou introduza manualmente">
               {panels.length > 0 && (
                 <Select
-                  value={data.panelId ? String(data.panelId) : "__manual__"}
+                  value={data.panelId ?String(data.panelId) : "__manual__"}
                   onValueChange={v => {
                     if (v === "__manual__") {
                       set("panelId", null);
@@ -155,7 +155,7 @@ export default function WizardStep1Upgrade({ tipoProjeto, data, onChange, panels
               <Field label="Modelo do inversor" hint="Selecione do catálogo ou introduza manualmente">
                 {inverters.length > 0 && (
                   <Select
-                    value={data.inverterId ? String(data.inverterId) : "__manual__"}
+                    value={data.inverterId ?String(data.inverterId) : "__manual__"}
                     onValueChange={v => {
                       if (v === "__manual__") {
                         set("inverterId", null);
@@ -165,8 +165,8 @@ export default function WizardStep1Upgrade({ tipoProjeto, data, onChange, panels
                         onChange({
                           ...data,
                           inverterId: id,
-                          inversorModeloManual: inv ? `${inv.fabricante} ${inv.nome}` : "",
-                          potenciaACkW: inv ? Number(inv.potenciaAc) : data.potenciaACkW,
+                          inversorModeloManual: inv ?`${inv.fabricante} ${inv.nome}` : "",
+                          potenciaACkW: inv ?Number(inv.potenciaAc) : data.potenciaACkW,
                         });
                       }
                     }}
@@ -260,12 +260,12 @@ export default function WizardStep1Upgrade({ tipoProjeto, data, onChange, panels
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Resumo do Sistema Existente</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {[
-                  { label: "Pot. FV",       val: data.potenciaFVkWp > 0 ? `${data.potenciaFVkWp} kWp` : "—" },
-                  { label: "Painéis",       val: data.numPaineis > 0 ? `${data.numPaineis} un.` : "—" },
-                  { label: "Inversor AC",   val: data.potenciaACkW > 0 ? `${data.potenciaACkW} kW` : "—" },
+                  { label: "Pot. FV",       val: data.potenciaFVkWp > 0 ?`${data.potenciaFVkWp} kWp` : "—" },
+                  { label: "Painéis",       val: data.numPaineis > 0 ?`${data.numPaineis} un.` : "—" },
+                  { label: "Inversor AC",   val: data.potenciaACkW > 0 ?`${data.potenciaACkW} kW` : "—" },
                   { label: "Strings",       val: `${data.numStrings}` },
-                  { label: "Produção/ano",  val: data.producaoAnualkWh > 0 ? `${data.producaoAnualkWh.toLocaleString("pt-PT")} kWh` : "—" },
-                  { label: "Bateria",       val: data.temBateria ? "Sim" : "Não" },
+                  { label: "Produção/ano",  val: data.producaoAnualkWh > 0 ?`${data.producaoAnualkWh.toLocaleString("pt-PT")} kWh` : "—" },
+                  { label: "Bateria",       val: data.temBateria ?"Sim" : "Não" },
                 ].map(r => (
                   <div key={r.label} className="rounded-lg bg-muted/40 p-2.5">
                     <div className="text-sm font-semibold">{r.val}</div>

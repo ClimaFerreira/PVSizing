@@ -32,7 +32,7 @@ import {
   Zap, MapPin, Settings2, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown,
   Loader2, Sun, Battery, BarChart3, AlertTriangle, TrendingUp, TrendingDown,
   Clock, Lightbulb, ArrowRight, Calculator, SlidersHorizontal, RotateCcw, Target, Euro,
-  Save, HistoryIcon, Plus, Trash2,
+  Save, HistoryIcon, Plus, Trash2, FileText,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -64,17 +64,21 @@ import WizardStep1Cliente, {
   clienteSchema, localizacaoSchema,
   type ClienteForm, type LocalizacaoForm,
 } from "@/components/wizard-step1-cliente";
-// ── Code-split heavy step components ─────────────────────────────────────────
+// —— Code-split heavy step components —————————————————————————————————————————
 const WizardStep3Perfil          = lazy(() => import("@/components/wizard-step3-perfil"));
 const WizardSugestoesInversor    = lazy(() => import("@/components/wizard-sugestoes-inversor"));
 const WizardStep5Tecnica         = lazy(() => import("@/components/wizard-step5-tecnica"));
 const WizardStep6MultiTecnica = lazy(() => import("@/components/wizard-step6-multi-tecnica"));
 const WizardStep7Financeiro   = lazy(() => import("@/components/wizard-step7-financeiro"));
-const WizardOrcamento         = lazy(() => import("@/components/wizard-orcamento"));
+const WizardOrcamento = lazy(() => import("@/components/wizard-orcamento"));
+const WizardMapStep = lazy(() => import("@/components/wizard-map-step"));
+const ReportBuilder = lazy(() => import("@/components/report/ReportBuilder"));
+
 import { type OrcamentoState, defaultOrcamentoState } from "@/lib/orcamento";
 import { type InverterUnit, criarUnidade } from "@/lib/multi-inverter";
 const WizardBatteryStudy = lazy(() => import("@/components/wizard-battery-study"));
 import { type BatteryUnit } from "@/components/wizard-battery-study";
+import type { MapReportData } from "@/components/wizard-map-step";
 const WizardStep1Upgrade       = lazy(() => import("@/components/wizard-step1-upgrade"));
 const WizardStep6UpgradeAnalise = lazy(() => import("@/components/wizard-step6-upgrade-analise"));
 const WizardCenarios            = lazy(() => import("@/components/wizard-cenarios"));
@@ -96,7 +100,7 @@ const CENARIO_META: Record<CenarioTipo, { label: string; Icon: React.ElementType
   agressivo:   { label: "Premium",     Icon: TrendingUp,   accent: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-700", bg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
 };
 
-// ─── Schemas ──────────────────────────────────────────────────────────────────
+// ——— Schemas ——————————————————————————————————————————————————————————————————
 // localizacaoSchema and LocalizacaoForm are imported from wizard-step1-cliente
 
 const equipamentosSchema = z.object({
@@ -184,14 +188,17 @@ interface ManualOverride {
 }
 
 const STEPS = [
-  { id: 1, label: "Cliente",        icon: MapPin },
-  { id: 2, label: "Consumos",       icon: Zap },
-  { id: 3, label: "Perfil",         icon: Target },
-  { id: 4, label: "Pré-dim. FV",    icon: BarChart3 },
-  { id: 5, label: "Equipamentos",   icon: Settings2 },
-  { id: 6, label: "Técnica",        icon: CheckCircle2 },
-  { id: 7, label: "Poupança",       icon: Euro },
-  { id: 8, label: "Orçamento",      icon: Save },
+  { id: 1, label: "Cliente", icon: MapPin },
+  { id: 2, label: "Consumos", icon: Zap },
+  { id: 3, label: "Perfil", icon: Target },
+  { id: 4, label: "Pré-dim. FV", icon: BarChart3 },
+  { id: 5, label: "Equipamentos", icon: Settings2 },
+  { id: 6, label: "Técnica", icon: CheckCircle2 },
+  { id: 7, label: "Poupança", icon: Euro },
+  { id: 8, label: "Sombras", icon: Calculator },
+  { id: 9, label: "Mapa", icon: MapPin },
+  { id: 10, label: "Orçamento", icon: Save },
+  { id: 11, label: "Relatório", icon: FileText },
 ];
 
 const STEP_TITLES = [
@@ -202,18 +209,21 @@ const STEP_TITLES = [
   "Seleção de Equipamentos",
   "Análise Técnica",
   "Estudo de Poupança e Retorno",
-  "Orçamento / Proposta PDF",
+  "Espaçamento / Sombras",
+  "Mapa Satélite",
+  "Orçamento Comercial",
+  "Relatório Técnico",
 ];
 
 function readProjectIdFromUrl(): number | null {
   if (typeof window === "undefined") return null;
   const id = new URLSearchParams(window.location.search).get("projectId");
-  const n = id ? Number(id) : NaN;
-  return Number.isFinite(n) && n > 0 ? n : null;
+  const n = id ?Number(id) : NaN;
+  return Number.isFinite(n) && n > 0 ?n : null;
 }
 
 export default function Wizard() {
-  // ── Project binding ──────────────────────────────────────────────────────
+  // —— Project binding ——————————————————————————————————————————————————————
   // The wizard always operates on a Project. If no `?projectId=N` is present
   // in the URL, show the entry card so the user can create or pick one.
   const [projectId, setProjectId] = useState<number | null>(() => readProjectIdFromUrl());
@@ -239,7 +249,7 @@ function WizardInner({ projectId }: { projectId: number }) {
   const [manual, setManual]       = useState<ManualOverride | null>(null);
   const [selectedCenarioTipo, setSelectedCenarioTipo] = useState<CenarioTipo>("equilibrado");
   const [panelRefId, setPanelRefId] = useState<number | null>(null);
-  // Legacy recovery dialog — kept dormant; project hydration replaces it.
+  // Legacy recovery dialog ? kept dormant; project hydration replaces it.
   const [showRecovery, setShowRecovery] = useState(false);
   const [pendingDraft] = useState<WizardDraftData | null>(null);
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
@@ -250,11 +260,12 @@ function WizardInner({ projectId }: { projectId: number }) {
   const [instalacaoExistente, setInstalacaoExistente] = useState<InstalacaoExistente>(defaultInstalacaoExistente);
   const [investimentoManual, setInvestimentoManual] = useState<number | null>(null);
   const [orcamentoState, setOrcamentoState] = useState<OrcamentoState | null>(null);
+  const [reportMapData, setReportMapData] = useState<MapReportData | null>(null);
   const [lastSaved, setLastSaved]   = useState<Date | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const hydratedRef                 = useRef(false);
   const { company } = useAuth();
-  const companyId = company?.id ?? null;
+  const companyId = company?.id ??null;
   const sessionId = useRef<string>(getOrCreateSessionId(companyId));
   const qc = useQueryClient();
   // Load the bound project to hydrate state on first mount.
@@ -271,12 +282,15 @@ function WizardInner({ projectId }: { projectId: number }) {
   const { data: locations } = useListLocations();
   const createProposal      = useCreateProposal();
 
-  /* ── Shared contexts: keep spacing + map tabs in sync with wizard ── */
+  /* —— Shared contexts: keep spacing + map tabs in sync with wizard —— */
   const { setPanel: setPanelCtx } = usePanelCtx();
   const { setLocation: setSolarLocation, setParams: setSolarParams } = useSolar();
   const { mapData: mapaCtxData, setMapData } = useMapa();
 
   const [perfilDiurnoPct, setPerfilDiurnoPct] = useState(60);
+const [spacingRows, setSpacingRows] = useState<number | null>(null);
+const [spacingCols, setSpacingCols] = useState<number | null>(null);
+const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "vertical">("vertical");
 
   const clienteForm = useForm<ClienteForm>({ resolver: zodResolver(clienteSchema), defaultValues: { tipoCliente: "particular", morada: "", tipoTarifa: "simples", potenciaContratada: 3.45 } });
   const locForm     = useForm<LocalizacaoForm>({ resolver: zodResolver(localizacaoSchema), defaultValues: { latitude: 38.7, longitude: -9.1, inclinacao: 30, azimute: 0 } });
@@ -290,14 +304,14 @@ function WizardInner({ projectId }: { projectId: number }) {
         skipNextManualReset.current = false;
         return;
       }
-      const tipo: CenarioTipo = (sizing.recomendado ?? "equilibrado") as CenarioTipo;
+      const tipo: CenarioTipo = (sizing.recomendado ??"equilibrado") as CenarioTipo;
       setSelectedCenarioTipo(tipo);
       // cenariosDimensionamentoAdj isn't stable here yet (depends on wpRef which may change),
       // so fall back to the server values for the initial manual seed.
-      const c = sizing.cenariosDimensionamento?.find(x => x.tipo === tipo) ?? null;
-      const currentWp = panelRef ? Number(panelRef.potencia) : 400;
+      const c = sizing.cenariosDimensionamento?.find(x => x.tipo === tipo) ??null;
+      const currentWp = panelRef ?Number(panelRef.potencia) : 400;
       setManual({
-        numPaineis: c?.numPaineis ?? sizing.numPaineis,
+        numPaineis: c?.numPaineis ??sizing.numPaineis,
         potenciaWp: currentWp,
         hsp: sizing.hsp,
         rendimento: sizing.fatorRendimento,
@@ -309,20 +323,20 @@ function WizardInner({ projectId }: { projectId: number }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sizing]);
 
-  // ── Initialise orçamento when entering step 8 ────────────────────────────
+  // —— Initialise orçamento when entering step 8 ————————————————————————————
   useEffect(() => {
-    if (step !== 8 || orcamentoState !== null) return;
+    if (step !== 10 || orcamentoState !== null) return;
     const eq = equipForm.getValues();
     const panel    = panels?.find(p => p.id === eq.panelId);
     const inverter = inverters?.find(i => i.id === eq.inverterId);
     const primaryBatId = batteryUnits[0]?.batteryId;
-    const battery  = primaryBatId ? batteries?.find(b => b.id === primaryBatId) : null;
+    const battery  = primaryBatId ?batteries?.find(b => b.id === primaryBatId) : null;
     const numPaineis = numPaineisStep5 ?? effectiveSizing?.numPaineis ?? sizing?.numPaineis ?? 0;
     const investimento = investimentoManual ?? activeCenario?.investimentoEstimado ?? 0;
     setOrcamentoState(defaultOrcamentoState({
       panelNome:        panel?.nome,
       panelFabricante:  panel?.fabricante,
-      panelPotencia:    panel?.potencia ? Number(panel.potencia) : undefined,
+      panelPotencia:    panel?.potencia ?Number(panel.potencia) : undefined,
       inversorNome:     inverter?.nome,
       inversorFabricante: inverter?.fabricante,
       bateriaNome:      battery?.nome,
@@ -334,39 +348,39 @@ function WizardInner({ projectId }: { projectId: number }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // ── Project hydration: restore state from project.draftData on first load ──
+  // —— Project hydration: restore state from project.draftData on first load ——
   useEffect(() => {
     if (hydratedRef.current) return;
     if (!projectRow) return;
     hydratedRef.current = true;
     // Step counter from the row, but draftData carries the full snapshot
     const draft = projectRow.draftData as WizardDraftData | null | undefined;
-    if (draft && (draft.step ?? 1) >= 1) {
+    if (draft && (draft.step ??1) >= 1) {
       restoreDraft(draft);
       if (draft.mapData) setMapData(draft.mapData as unknown as MapData);
       // Show a brief toast only when there's real progress to recover
-      if ((draft.step ?? 1) > 1 || draft.sizing) {
+      if ((draft.step ??1) > 1 || draft.sizing) {
         toast({
           title: "Estudo retomado",
-          description: `Projeto «${projectRow.nome}» foi recuperado no passo ${draft.step ?? 1}.`,
+          description: `Projeto «${projectRow.nome}» foi recuperado no passo ${draft.step ??1}.`,
         });
       }
     } else if (projectRow.currentStep && projectRow.currentStep > 1) {
       setStep(projectRow.currentStep);
     }
     if (projectRow.lastSavedAt) setLastSaved(new Date(projectRow.lastSavedAt));
-    setSaveStatus(projectRow.draftData ? "saved" : "idle");
+    setSaveStatus(projectRow.draftData ?"saved" : "idle");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectRow]);
 
-  // ── Auto-enable battery when project type is "adicionarBateria" ──────────
+  // —— Auto-enable battery when project type is "adicionarBateria" ——————————
   useEffect(() => {
     if (tipoProjeto === "bateria") {
-      setConsumoData(prev => prev.incluirBateria ? prev : { ...prev, incluirBateria: true });
+      setConsumoData(prev => prev.incluirBateria ?prev : { ...prev, incluirBateria: true });
     }
   }, [tipoProjeto]);
 
-  // ── Auto-save: localStorage cache (800ms) + project PATCH (3s) ───────────
+  // —— Auto-save: localStorage cache (800ms) + project PATCH (3s) ———————————
   // The Project row is the source of truth; localStorage is a fast offline cache.
   useEffect(() => {
     // Don't auto-save before initial hydration completes — otherwise we'd
@@ -377,8 +391,9 @@ function WizardInner({ projectId }: { projectId: number }) {
 
     const snapshot: Omit<WizardDraftData, "version" | "savedAt"> = {
       step,
+      clienteData: clienteForm.getValues() as unknown as Record<string, unknown>,
       consumoData: consumoData as unknown as Record<string, unknown>,
-      locData: locData as unknown as Record<string, unknown> | null,
+      locData: (locData ??locForm.getValues()) as unknown as Record<string, unknown>,
       sizing: sizing as unknown as Record<string, unknown> | null,
       selectedCenarioTipo,
       manual: manual as unknown as Record<string, unknown> | null,
@@ -391,6 +406,8 @@ function WizardInner({ projectId }: { projectId: number }) {
       investimentoManual,
       panelRefId,
       mapData: mapaCtxData as unknown as Record<string, unknown> | null,
+      reportMapData: reportMapData as unknown as Record<string, unknown> | null,
+      orcamentoState: orcamentoState as unknown as Record<string, unknown> | null,
     };
 
     // localStorage — fast offline cache (800ms), keyed per-project
@@ -403,7 +420,7 @@ function WizardInner({ projectId }: { projectId: number }) {
       setSaveStatus("saving");
       // Derive a status from progress: step 1-3 = rascunho, 4-7 = em_analise, 8 = pronto_proposta
       const derivedStatus: "rascunho" | "em_analise" | "pronto_proposta" =
-        step >= 8 ? "pronto_proposta" : step >= 4 ? "em_analise" : "rascunho";
+        step >= 10 ?"pronto_proposta" : step >= 4 ?"em_analise" : "rascunho";
       const draftPayload: WizardDraftData = {
         ...snapshot,
         version: 1,
@@ -433,20 +450,23 @@ function WizardInner({ projectId }: { projectId: number }) {
       if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust, numPaineisStep5, inverterUnits, batteryUnits, tipoProjeto, investimentoManual, panelRefId, mapaCtxData, projectId]);
+  }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust, numPaineisStep5, inverterUnits, batteryUnits, tipoProjeto, investimentoManual, panelRefId, mapaCtxData, reportMapData, orcamentoState, projectId, clienteForm, locForm]);
 
-  // ── Reference panel for step-4 scenarios ─────────────────────────────────
+  // —— Reference panel for step-4 scenarios —————————————————————————————————
   // Prefer explicitly chosen panelRefId, then step-5 form selection, then first in catalogue.
   const panelRef = useMemo(() => {
-    if (panelRefId) return panels?.find(p => p.id === panelRefId) ?? null;
+    if (panelRefId) return panels?.find(p => p.id === panelRefId) ??null;
     const fromForm = equipForm.getValues("panelId");
-    if (fromForm) return panels?.find(p => p.id === fromForm) ?? null;
-    return panels?.[0] ?? null;
+    if (fromForm) return panels?.find(p => p.id === fromForm) ??null;
+    return panels?.[0] ??null;
   }, [panelRefId, panels]);  // equipForm intentionally omitted — reads on demand
 
-  const wpRef: number = panelRef ? Number(panelRef.potencia) : 400;
+  const wpRef: number = panelRef ?Number(panelRef.potencia) : 400;
+  const currentTiltDeg = Number(
+    locData?.inclinacao ?? locForm.watch("inclinacao") ?? 30,
+  );
 
-  // ── Sync wizard locData → SolarContext + PanelContext ─────────────────────
+  // —— Sync wizard locData → SolarContext + PanelContext —————————————————————
   // When the user sets location/inclination in the wizard, push those values to the
   // shared contexts so the Espaçamento and Mapa tabs auto-update without user re-entry.
   useEffect(() => {
@@ -458,17 +478,17 @@ function WizardInner({ projectId }: { projectId: number }) {
       "",  // locationName — user can refine it in the spacing search box
     );
     // Convert "degrees from South" to absolute bearing (0°=N, 90°=E, 180°=S, 270°=W)
-    const absoluteAzimuth = ((180 + (locData.azimute ?? 0)) + 360) % 360;
+    const absoluteAzimuth = ((180 + (locData.azimute ??0)) + 360) % 360;
     // Push inclination + azimuth to PanelContext (spacing + map read from here)
     setPanelCtx(prev => ({
       ...prev,
-      inclination: String(locData.inclinacao ?? 30),
+      inclination: String(locData.inclinacao ??30),
       azimuth: String(absoluteAzimuth),
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locData]);
 
-  // ── Sync selected panel → PanelContext (power + physical dimensions) ─────────
+  // —— Sync selected panel → PanelContext (power + physical dimensions) —————————
   // Spacing and map tabs read panelPower/panelHeight/panelWidth from PanelContext.
   // Dimensions only sync when the panel has alturaMm/larguraMm recorded.
   useEffect(() => {
@@ -476,19 +496,19 @@ function WizardInner({ projectId }: { projectId: number }) {
     setPanelCtx(prev => ({
       ...prev,
       panelPower: String(panelRef.potencia),
-      ...(panelRef.alturaMm != null ? { panelHeight: String((panelRef.alturaMm / 1000).toFixed(3)) } : {}),
-      ...(panelRef.larguraMm != null ? { panelWidth: String((panelRef.larguraMm / 1000).toFixed(3)) } : {}),
+      ...(panelRef.alturaMm != null ?{ panelHeight: String((panelRef.alturaMm / 1000).toFixed(3)) } : {}),
+      ...(panelRef.larguraMm != null ?{ panelWidth: String((panelRef.larguraMm / 1000).toFixed(3)) } : {}),
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelRef?.id]);
 
-  // ── Sync inverter power → SolarContext ────────────────────────────────────
+  // —— Sync inverter power → SolarContext ———————————————————
   // The spacing tab shows potência do inversor; keep it in sync with wizard selection.
   useEffect(() => {
     if (!inverterUnits.length || !inverters) return;
     const totalKw = inverterUnits.reduce((sum, unit) => {
       const inv = inverters.find(i => i.id === unit.inverterId);
-      return sum + (inv ? Number(inv.potenciaAc) * unit.quantidade : 0);
+      return sum + (inv ?Number(inv.potenciaAc) * unit.quantidade : 0);
     }, 0);
     if (totalKw > 0) {
       setSolarParams(prev => ({ ...prev, inverterPower: String(totalKw) }));
@@ -496,7 +516,7 @@ function WizardInner({ projectId }: { projectId: number }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inverterUnits, inverters]);
 
-  // ── Sync nº painéis (step 5 explicit) → spacing rows/cols ────────────────
+  // —— Sync nº painéis (step 5 explicit) → spacing rows/cols ————————
   // Only triggers when the user explicitly sets panel count in step 5.
   // Computes a square-ish grid: e.g. 20 panels → cols=5, rows=4.
   useEffect(() => {
@@ -520,12 +540,12 @@ function WizardInner({ projectId }: { projectId: number }) {
     if (!sizing?.cenariosDimensionamento) return [];
     if (wpRef === 400) return sizing.cenariosDimensionamento;
 
-    const precoKwh = consumoData.precoKwh ?? 0.18;
+    const precoKwh = consumoData.precoKwh ??0.18;
     const custoKwp = 1050;
     const custoBateria = 0; // battery cost not auto-estimated — must be defined by user
 
     return sizing.cenariosDimensionamento.map(c => {
-      const mult = CENARIO_COB_MULT[c.tipo] ?? 1.0;
+      const mult = CENARIO_COB_MULT[c.tipo] ??1.0;
       // Recompute minimum power for this scenario using the same formula as the server
       const potenciaMinima =
         (sizing.consumoAnualAjustado / 365 * (consumoData.coberturaMeta * mult / 100))
@@ -535,7 +555,7 @@ function WizardInner({ projectId }: { projectId: number }) {
       const potenciaInstalada = Math.round(numPaineis * wpRef) / 1000;
 
       // Scale monthly production proportionally
-      const scale = c.potenciaInstalada > 0 ? potenciaInstalada / c.potenciaInstalada : 1;
+      const scale = c.potenciaInstalada > 0 ?potenciaInstalada / c.potenciaInstalada : 1;
       const producaoMensal = c.producaoMensal.map(v => Math.round(v * scale));
       const consumoMensal  = c.consumoMensal;
 
@@ -546,10 +566,10 @@ function WizardInner({ projectId }: { projectId: number }) {
       const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
       const consumoAnualReal     = consumoMensal.reduce((a, b) => a + b, 0);
       const coberturaReal = Math.round(energiaAnualEstimada / consumoAnualReal * 100);
-      const investBat = c.capacidadeBateriaRecomendada ? Math.round(c.capacidadeBateriaRecomendada * custoBateria) : 0;
+      const investBat = c.capacidadeBateriaRecomendada ?Math.round(c.capacidadeBateriaRecomendada * custoBateria) : 0;
       const investimentoEstimado = Math.round(potenciaInstalada * custoKwp) + investBat;
       const poupancaAnual = Math.round(autoconsumoAnual * precoKwh * 100) / 100;
-      const paybackAnos   = poupancaAnual > 0 ? Math.round(investimentoEstimado / poupancaAnual * 10) / 10 : 99;
+      const paybackAnos   = poupancaAnual > 0 ?Math.round(investimentoEstimado / poupancaAnual * 10) / 10 : 99;
 
       return {
         ...c,
@@ -574,16 +594,16 @@ function WizardInner({ projectId }: { projectId: number }) {
   // Currently selected sizing scenario (uses adjusted values)
   const activeCenario: AutoSizeCenario | null = useMemo(() => {
     if (!cenariosDimensionamentoAdj.length) return null;
-    return cenariosDimensionamentoAdj.find(c => c.tipo === selectedCenarioTipo) ?? null;
+    return cenariosDimensionamentoAdj.find(c => c.tipo === selectedCenarioTipo) ??null;
   }, [cenariosDimensionamentoAdj, selectedCenarioTipo]);
 
   // Switch scenario and reset manual to match
   const selectCenario = useCallback((tipo: CenarioTipo) => {
     setSelectedCenarioTipo(tipo);
     if (sizing) {
-      const c = cenariosDimensionamentoAdj.find(x => x.tipo === tipo) ?? null;
+      const c = cenariosDimensionamentoAdj.find(x => x.tipo === tipo) ??null;
       setManual({
-        numPaineis: c?.numPaineis ?? sizing.numPaineis,
+        numPaineis: c?.numPaineis ??sizing.numPaineis,
         potenciaWp: wpRef,
         hsp: sizing.hsp,
         rendimento: sizing.fatorRendimento,
@@ -595,7 +615,7 @@ function WizardInner({ projectId }: { projectId: number }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sizing, cenariosDimensionamentoAdj, wpRef, consumoData.coberturaMeta]);
 
-  // ── Panel scenarios computed from the real catalogue ─────────────────────
+  // —— Panel scenarios computed from the real catalogue —————————————————————
   interface CenarioCatalogoPainel {
     potenciaWp: number;
     panelNome: string;
@@ -616,7 +636,7 @@ function WizardInner({ projectId }: { projectId: number }) {
         const energiaAnual = Math.round(potInst * sizing.hsp * 365 * sizing.fatorRendimento);
         const coberturaReal =
           sizing.consumoAnualAjustado > 0
-            ? Math.min(100, Math.round((energiaAnual / sizing.consumoAnualAjustado) * 100))
+            ?Math.min(100, Math.round((energiaAnual / sizing.consumoAnualAjustado) * 100))
             : 0;
         return {
           potenciaWp: wp,
@@ -637,7 +657,7 @@ function WizardInner({ projectId }: { projectId: number }) {
     const potenciaInstalada = +(manual.numPaineis * manual.potenciaWp / 1000).toFixed(2);
     const energiaAnualEstimada = Math.round(potenciaInstalada * manual.hsp * 365 * manual.rendimento);
     const coberturaReal = sizing.consumoAnualAjustado > 0
-      ? Math.round((energiaAnualEstimada / sizing.consumoAnualAjustado) * 100)
+      ?Math.round((energiaAnualEstimada / sizing.consumoAnualAjustado) * 100)
       : 0;
     return {
       ...sizing,
@@ -647,20 +667,20 @@ function WizardInner({ projectId }: { projectId: number }) {
       energiaAnualEstimada,
       coberturaReal,
       coberturaAlvo: manual.coberturaMeta,
-      capacidadeBateriaRecomendada: manual.capacidadeBateria > 0 ? manual.capacidadeBateria : null,
+      capacidadeBateriaRecomendada: manual.capacidadeBateria > 0 ?manual.capacidadeBateria : null,
       hsp: manual.hsp,
       fatorRendimento: manual.rendimento,
     };
   }, [sizing, manual]);
 
-  // ── Financial projections for orçamento estudo ─────────────────────────────
+  // —— Financial projections for orçamento estudo —————————————————————————————
   const PRECO_INJECAO_ORC = 0.06;
   const estudoFinanceiro = useMemo(() => {
     if (!activeCenario) return null;
     const { potenciaInstalada, energiaAnualEstimada, autoconsumoPerc, autoconsumoAnual,
             poupancaAnual, paybackAnos, excessoAnual } = activeCenario;
     const receitaExcedente = excessoAnual * PRECO_INJECAO_ORC;
-    const investimento = investimentoManual ?? activeCenario.investimentoEstimado;
+    const investimento = investimentoManual ??activeCenario.investimentoEstimado;
     let poupancaAcum = -investimento;
     let npvAcum = -investimento;
     let p10 = 0, p15 = 0, p25 = 0, npv25 = 0, paybackReal = paybackAnos;
@@ -696,13 +716,13 @@ function WizardInner({ projectId }: { projectId: number }) {
   // Compare manual vs active cenario (not the equilibrado top-level values)
   const isManualModified = useMemo(() => {
     if (!manual || !sizing) return false;
-    const base = activeCenario ?? sizing;
+    const base = activeCenario ??sizing;
     return (
       manual.numPaineis !== base.numPaineis ||
       manual.potenciaWp !== wpRef ||
       Math.abs(manual.hsp - sizing.hsp) > 0.01 ||
       Math.abs(manual.rendimento - sizing.fatorRendimento) > 0.005 ||
-      (manual.capacidadeBateria > 0 && manual.capacidadeBateria !== (base.capacidadeBateriaRecomendada ?? 0))
+      (manual.capacidadeBateria > 0 && manual.capacidadeBateria !== (base.capacidadeBateriaRecomendada ??0))
     );
   }, [manual, activeCenario, sizing]);
 
@@ -711,15 +731,15 @@ function WizardInner({ projectId }: { projectId: number }) {
     if (!activeCenario) return null;
     if (!isManualModified || !manual || !sizing) return activeCenario;
     const potenciaInstalada = +(manual.numPaineis * manual.potenciaWp / 1000).toFixed(2);
-    const hspScale   = sizing.hsp > 0 ? manual.hsp / sizing.hsp : 1;
-    const rendScale  = sizing.fatorRendimento > 0 ? manual.rendimento / sizing.fatorRendimento : 1;
-    const scale      = activeCenario.potenciaInstalada > 0 ? potenciaInstalada / activeCenario.potenciaInstalada : 1;
+    const hspScale   = sizing.hsp > 0 ?manual.hsp / sizing.hsp : 1;
+    const rendScale  = sizing.fatorRendimento > 0 ?manual.rendimento / sizing.fatorRendimento : 1;
+    const scale      = activeCenario.potenciaInstalada > 0 ?potenciaInstalada / activeCenario.potenciaInstalada : 1;
     const producaoMensal = activeCenario.producaoMensal.map(v => Math.round(v * scale * hspScale * rendScale));
     const consumoMensal  = activeCenario.consumoMensal;
     const simResult      = simulateAnual(producaoMensal, consumoMensal, perfilDiurnoPct);
     const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
     const consumoAnualReal     = consumoMensal.reduce((a, b) => a + b, 0);
-    const coberturaReal = consumoAnualReal > 0 ? Math.round(energiaAnualEstimada / consumoAnualReal * 100) : 0;
+    const coberturaReal = consumoAnualReal > 0 ?Math.round(energiaAnualEstimada / consumoAnualReal * 100) : 0;
     return {
       ...activeCenario,
       potenciaInstalada,
@@ -737,18 +757,21 @@ function WizardInner({ projectId }: { projectId: number }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCenario, isManualModified, manual, sizing, perfilDiurnoPct]);
 
-  // ── Potência DC efectiva para sugestões (usa painel seleccionado no passo 5) ──
+  // —— Potência DC efectiva para sugestões (usa painel seleccionado no passo 5) ——
   const panelIdStep5 = equipForm.watch("panelId");
-  const potenciaKwpEstudo   = (effectiveSizing ?? sizing)?.potenciaInstalada ?? 0;
+  const potenciaKwpEstudo   = (effectiveSizing ??sizing)?.potenciaInstalada ??0;
   const potenciaKwpEfetiva: number = (() => {
     const panel = panels?.find(p => p.id === panelIdStep5);
-    const n     = numPaineisStep5 ?? (effectiveSizing ?? sizing)?.numPaineis ?? 0;
+    const n = numPaineisStep5 ?? (effectiveSizing ?? sizing)?.numPaineis ?? 0;
     if (panel && n > 0) return +(panel.potencia * n / 1000).toFixed(2);
     return potenciaKwpEstudo;
   })();
 
-  // ── Draft handlers ─────────────────────────────────────────────────────────
+  // —— Draft handlers —————————————————————————————————————————————————————————
   const restoreDraft = useCallback((draft: WizardDraftData) => {
+    if (draft.clienteData) {
+      clienteForm.reset(draft.clienteData as unknown as ClienteForm);
+    }
     setConsumoData(draft.consumoData as unknown as ConsumoData);
     if (draft.locData) {
       setLocData(draft.locData as unknown as LocalizacaoForm);
@@ -775,11 +798,13 @@ function WizardInner({ projectId }: { projectId: number }) {
     if (draft.tipoProjeto) setTipoProjeto(draft.tipoProjeto as TipoProjeto);
     if (draft.investimentoManual != null) setInvestimentoManual(draft.investimentoManual);
     if (draft.panelRefId != null) setPanelRefId(draft.panelRefId);
+    if (draft.reportMapData) setReportMapData(draft.reportMapData as unknown as MapReportData);
+    if (draft.orcamentoState) setOrcamentoState(draft.orcamentoState as unknown as OrcamentoState);
     setStep(draft.step);
     setShowRecovery(false);
     toast({ title: "Estudo retomado", description: "O teu estudo foi recuperado com sucesso." });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locForm, equipForm]);
+  }, [clienteForm, locForm, equipForm]);
 
   const discardDraft = useCallback(() => {
     setShowRecovery(false);
@@ -805,7 +830,7 @@ function WizardInner({ projectId }: { projectId: number }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteForm, locForm, equipForm]);
 
-  // ── Auto-size ─────────────────────────────────────────────────────────────
+  // —— Auto-size —————————————————————————————————————————————————————————————
   const runAutoSize = async (consumo: ConsumoData, loc: LocalizacaoForm) => {
     setIsSizing(true);
     try {
@@ -813,7 +838,7 @@ function WizardInner({ projectId }: { projectId: number }) {
       const hist = consumo.historicoMensal;
       const consumoMensalInput =
         Array.isArray(hist) && hist.length === 12 && hist.every(v => v != null)
-          ? (hist as number[])
+          ?(hist as number[])
           : undefined;
 
       const resp = await fetch(`${BASE}/api/tools/auto-size`, {
@@ -832,7 +857,7 @@ function WizardInner({ projectId }: { projectId: number }) {
           percVazio:          consumo.percVazio,
           percCheio:          consumo.percCheio,
           percPonta:          consumo.percPonta,
-          precoKwh:           consumo.precoKwh ?? 0.18,
+          precoKwh:           consumo.precoKwh ??0.18,
           perfilDiurnoPct:    perfilDiurnoPct,
           consumoMensalInput: consumoMensalInput,
         }),
@@ -846,21 +871,21 @@ function WizardInner({ projectId }: { projectId: number }) {
     }
   };
 
-  // ── Save proposal ─────────────────────────────────────────────────────────
+  // —— Save proposal —————————————————————————————————————————————————————————
   const handleSaveProposal = useCallback(() => {
-    const eff = effectiveSizing ?? sizing;
+    const eff = effectiveSizing ??sizing;
     if (!eff) return;
     const eq    = equipForm.getValues();
     const panel = panels?.find(p => p.id === eq.panelId);
     createProposal.mutate(
       { data: {
-        titulo:                `Proposta ${panel?.fabricante ?? ""} ${eff.potenciaRecomendada} kWp`,
+        titulo:                `Proposta ${panel?.fabricante ??""} ${eff.potenciaRecomendada} kWp`,
         consumoAnualEstimado:  consumoData.consumoAnual,
         potenciaRecomendada:   eff.potenciaRecomendada,
         numPaineis:            eff.numPaineis,
         panelId:               eq.panelId || null,
         inverterId:            eq.inverterId || null,
-        batteryId:             batteryUnits[0]?.batteryId ?? null,
+        batteryId:             batteryUnits[0]?.batteryId ??null,
         producaoAnualEstimada: eff.energiaAnualEstimada,
         alertas:               [],
       }},
@@ -871,7 +896,7 @@ function WizardInner({ projectId }: { projectId: number }) {
     );
   }, [effectiveSizing, sizing, panels, consumoData.consumoAnual, equipForm, createProposal, clearDraft, toast, navigate]);
 
-  // ── Navigation ────────────────────────────────────────────────────────────
+  // —— Navigation ————————————————————————————————————————————————————————————
   const goNext = async () => {
     if (step === 1) {
       // Validate both client data and location
@@ -888,7 +913,7 @@ function WizardInner({ projectId }: { projectId: number }) {
       setStep(3);
     } else if (step === 3) {
       // Run auto-size with consumption + location data before showing study
-      const loc = locData ?? locForm.getValues();
+      const loc = locData ??locForm.getValues();
       await runAutoSize(consumoData, loc);
       setStep(4);
     } else if (step === 4) {
@@ -896,7 +921,7 @@ function WizardInner({ projectId }: { projectId: number }) {
     } else if (step === 5) {
       const vals = equipForm.getValues();
       const hasInverter = inverterUnits.length > 0
-        ? inverterUnits.some(u => u.inverterId > 0)
+        ?inverterUnits.some(u => u.inverterId > 0)
         : Boolean(vals.inverterId);
       if (!vals.panelId || !hasInverter) {
         toast({ title: "Selecione pelo menos um painel e um inversor", variant: "destructive" });
@@ -905,18 +930,24 @@ function WizardInner({ projectId }: { projectId: number }) {
       if (inverterUnits.length > 0 && inverterUnits[0].inverterId) {
         equipForm.setValue("inverterId", inverterUnits[0].inverterId);
       }
-      const eff = effectiveSizing ?? sizing;
+      const eff = effectiveSizing ??sizing;
       const selectedPanel = panels?.find(p => p.id === vals.panelId);
       const computed = eff
-        ? Math.ceil((eff.potenciaInstalada * 1000) / (selectedPanel?.potencia ?? 400))
-        : (manual?.numPaineis ?? 0);
+        ?Math.ceil((eff.potenciaInstalada * 1000) / (selectedPanel?.potencia ??400))
+        : (manual?.numPaineis ??0);
       setNumPaineisStep5(computed);
       setStep(6);
     } else if (step === 6) {
       setStep(7);
     } else if (step === 7) {
-      setStep(8);
-    }
+  setStep(8);
+} else if (step === 8) {
+  setStep(9);
+} else if (step === 9) {
+  setStep(10);
+} else if (step === 10) {
+  setStep(11);
+}
   };
 
   const progress = ((step - 1) / (STEPS.length - 1)) * 100;
@@ -937,7 +968,7 @@ function WizardInner({ projectId }: { projectId: number }) {
 
   const updateInverterUnit = useCallback((key: string, changes: Partial<InverterUnit>) => {
     setInverterUnits(prev => {
-      const next = prev.map(u => u.key === key ? { ...u, ...changes } : u);
+      const next = prev.map(u => u.key === key ?{ ...u, ...changes } : u);
       if (next[0]?.key === key && changes.inverterId != null) {
         equipForm.setValue("inverterId", changes.inverterId);
       }
@@ -952,7 +983,7 @@ function WizardInner({ projectId }: { projectId: number }) {
       const cenarios = sizing?.cenariosDimensionamento;
       if (!cenarios?.length) return;
       const nearest = cenarios.reduce((best, c) =>
-        Math.abs(c.coberturaReal - val) < Math.abs(best.coberturaReal - val) ? c : best
+        Math.abs(c.coberturaReal - val) < Math.abs(best.coberturaReal - val) ?c : best
       );
       selectCenario(nearest.tipo as CenarioTipo);
     }, 80);
@@ -967,7 +998,7 @@ function WizardInner({ projectId }: { projectId: number }) {
   }, [inverterUnits, updateInverterUnit]);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto">
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
 
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -1011,19 +1042,19 @@ function WizardInner({ projectId }: { projectId: number }) {
               <div key={s.id} className="flex flex-col items-center gap-1.5">
                 <div className={cn(
                   "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 bg-background",
-                  done   ? "bg-primary border-primary text-primary-foreground shadow-sm" :
-                  active ? "border-primary text-primary ring-4 ring-primary/10 shadow-sm" :
+                  done   ?"bg-primary border-primary text-primary-foreground shadow-sm" :
+                  active ?"border-primary text-primary ring-4 ring-primary/10 shadow-sm" :
                            "border-border text-muted-foreground/50 bg-muted/20",
                 )}>
                   {done
-                    ? <CheckCircle2 size={13} />
+                    ?<CheckCircle2 size={13} />
                     : <span className="text-[11px] font-bold leading-none">{s.id}</span>
                   }
                 </div>
                 <span className={cn(
                   "text-[10px] font-medium hidden sm:block text-center leading-tight",
-                  active ? "text-primary font-semibold" :
-                  done   ? "text-muted-foreground" : "text-muted-foreground/40",
+                  active ?"text-primary font-semibold" :
+                  done   ?"text-muted-foreground" : "text-muted-foreground/40",
                 )}>
                   {s.label}
                 </span>
@@ -1033,7 +1064,7 @@ function WizardInner({ projectId }: { projectId: number }) {
         </div>
       </div>
 
-      {/* ── Step section header ──────────────────────────────────────────────── */}
+      {/* —— Step section header ———————————————————————————————————————————————— */}
       <div className="flex items-center gap-3 border-l-2 border-primary pl-3 py-0.5">
         <div className="min-w-0">
           <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">
@@ -1062,7 +1093,7 @@ function WizardInner({ projectId }: { projectId: number }) {
       }>
 
       <div key={step} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
-      {/* ── STEP 1: Cliente e Localização ───────────────────────────────────── */}
+      {/* —— STEP 1: Cliente e Localização ————————————————————————————————————— */}
       {step === 1 && (
         <div className="space-y-4">
           {/* Tipo de Projeto */}
@@ -1083,13 +1114,13 @@ function WizardInner({ projectId }: { projectId: number }) {
                     className={cn(
                       "flex items-start gap-3 p-3 rounded-xl border text-left transition-all",
                       tipoProjeto === tipo
-                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        ?"border-primary bg-primary/5 ring-1 ring-primary"
                         : "border-border hover:border-primary/50 hover:bg-muted/40",
                     )}
                   >
                     <div className={cn(
                       "w-2 h-2 rounded-full mt-1.5 shrink-0",
-                      tipoProjeto === tipo ? "bg-primary" : "bg-muted-foreground/30",
+                      tipoProjeto === tipo ?"bg-primary" : "bg-muted-foreground/30",
                     )} />
                     <div>
                       <div className="text-sm font-medium">{TIPO_PROJETO_LABELS[tipo]}</div>
@@ -1107,8 +1138,8 @@ function WizardInner({ projectId }: { projectId: number }) {
               tipoProjeto={tipoProjeto}
               data={instalacaoExistente}
               onChange={setInstalacaoExistente}
-              panels={panels ?? []}
-              inverters={inverters ?? []}
+              panels={panels ??[]}
+              inverters={inverters ??[]}
             />
           )}
 
@@ -1116,7 +1147,7 @@ function WizardInner({ projectId }: { projectId: number }) {
         </div>
       )}
 
-      {/* ── STEP 2: Análise de Consumos ──────────────────────────────────────── */}
+      {/* —— STEP 2: Análise de Consumos ———————————————————————————————————————— */}
       {step === 2 && (
         <Card>
           <CardHeader>
@@ -1131,7 +1162,7 @@ function WizardInner({ projectId }: { projectId: number }) {
         </Card>
       )}
 
-      {/* ── STEP 3: Perfil de Autoconsumo ───────────────────────────────────── */}
+      {/* —— STEP 3: Perfil de Autoconsumo ————————————————————————————————————— */}
       {step === 3 && (
         <WizardStep3Perfil
           consumoData={consumoData}
@@ -1141,10 +1172,10 @@ function WizardInner({ projectId }: { projectId: number }) {
         />
       )}
 
-      {/* ── STEP 4: Pré-Dimensionamento FV ─────────────────────────────────── */}
+      {/* —— STEP 4: Pré-Dimensionamento FV ——————————————————————————————————— */}
       {step === 4 && (
         <div className="space-y-4">
-          {isSizing ? (
+          {isSizing ?(
             <Card>
               <CardContent className="py-16 flex flex-col items-center gap-4">
                 <Loader2 size={40} className="animate-spin text-primary" />
@@ -1154,16 +1185,16 @@ function WizardInner({ projectId }: { projectId: number }) {
                 </div>
               </CardContent>
             </Card>
-          ) : sizing ? (
+          ) : sizing ?(
             <>
-              {/* ── Panel reference picker ──────────────────────────────────── */}
+              {/* —— Panel reference picker ———————————————————————————————————— */}
               {panels && panels.length > 0 && (
                 <Card className="border-muted">
                   <CardContent className="pt-4 pb-3">
                     <div className="flex items-center gap-3 flex-wrap">
                       <p className="text-sm font-medium shrink-0">Painel de referência:</p>
                       <Select
-                        value={panelRef ? String(panelRef.id) : ""}
+                        value={panelRef ?String(panelRef.id) : ""}
                         onValueChange={v => {
                           const id = Number(v);
                           setPanelRefId(id);
@@ -1172,12 +1203,12 @@ function WizardInner({ projectId }: { projectId: number }) {
                           // Re-sync manual Wp to new panel when manual hasn't been touched
                           if (sizing && !showManualAdjust) {
                             const tipo = selectedCenarioTipo;
-                            const mult = CENARIO_COB_MULT[tipo] ?? 1.0;
+                            const mult = CENARIO_COB_MULT[tipo] ??1.0;
                             const pm = (sizing.consumoAnualAjustado / 365 * (consumoData.coberturaMeta * mult / 100)) / (sizing.hsp * sizing.fatorRendimento);
                             const panel = panels.find(p => p.id === id);
-                            const wp = panel ? Number(panel.potencia) : 400;
+                            const wp = panel ?Number(panel.potencia) : 400;
                             const np = Math.ceil(pm * 1000 / wp);
-                            setManual(m => m ? { ...m, numPaineis: np, potenciaWp: wp } : m);
+                            setManual(m => m ?{ ...m, numPaineis: np, potenciaWp: wp } : m);
                           }
                         }}
                       >
@@ -1202,28 +1233,28 @@ function WizardInner({ projectId }: { projectId: number }) {
                 </Card>
               )}
 
-              {/* ── Confidence & data source badge ──────────────────────────── */}
+              {/* —— Confidence & data source badge ———————————————————————————— */}
               {sizing.confianca && (
                 <div className="flex flex-wrap items-center gap-2 px-1">
                   <span className={cn(
                     "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
                     sizing.confianca.pvgis
-                      ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400"
+                      ?"bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400"
                       : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
                   )}>
                     <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                    {sizing.confianca.pvgis ? "Produção: PVGIS real (JRC)" : "Produção: Estimativa HSP"}
+                    {sizing.confianca.pvgis ?"Produção: PVGIS real (JRC)" : "Produção: Estimativa HSP"}
                   </span>
                   <span className={cn(
                     "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
                     sizing.confianca.nivel === "alto"
-                      ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400"
+                      ?"bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400"
                       : sizing.confianca.nivel === "medio"
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                      ?"bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
                       : "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
                   )}>
                     Confiança: {sizing.confianca.pontuacao}%
-                    {" · "}{sizing.confianca.nivel === "alto" ? "alta" : sizing.confianca.nivel === "medio" ? "média" : "baixa"}
+                    {" · "}{sizing.confianca.nivel === "alto" ?"alta" : sizing.confianca.nivel === "medio" ?"média" : "baixa"}
                   </span>
                   {sizing.confianca.avisos.length > 0 && (
                     <span className="text-xs text-muted-foreground italic">
@@ -1233,7 +1264,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                 </div>
               )}
 
-              {/* ── Coverage slider ─────────────────────────────────────────── */}
+              {/* —— Coverage slider ——————————————————————————————————————————— */}
               {cenariosDimensionamentoAdj.length > 0 && (() => {
                 const cenarios = cenariosDimensionamentoAdj;
                 const minCob = Math.min(...cenarios.map(c => c.coberturaReal));
@@ -1252,8 +1283,8 @@ function WizardInner({ projectId }: { projectId: number }) {
                           <p className="text-xs text-muted-foreground">Arraste para comparar cenários e ver a produção mensal</p>
                         </div>
                         <div className="text-right">
-                          <span className="text-3xl font-bold text-primary">{activeCenario?.coberturaReal ?? "—"}%</span>
-                          <p className="text-xs text-muted-foreground">{activeCenario?.label ?? "—"}</p>
+                          <span className="text-3xl font-bold text-primary">{activeCenario?.coberturaReal ??"—"}%</span>
+                          <p className="text-xs text-muted-foreground">{activeCenario?.label ??"—"}</p>
                         </div>
                       </div>
 
@@ -1281,13 +1312,13 @@ function WizardInner({ projectId }: { projectId: number }) {
                               >
                                 <div className={cn(
                                   "w-0.5 h-2 rounded-full transition-colors",
-                                  isActive ? "bg-primary" : "bg-muted-foreground/40"
+                                  isActive ?"bg-primary" : "bg-muted-foreground/40"
                                 )} />
                                 <span className={cn(
                                   "text-[10px] font-medium whitespace-nowrap transition-colors",
-                                  isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                                  isActive ?"text-primary" : "text-muted-foreground group-hover:text-foreground"
                                 )}>
-                                  {meta?.label ?? c.tipo} · {c.coberturaReal}%
+                                  {meta?.label ??c.tipo} · {c.coberturaReal}%
                                 </span>
                               </button>
                             );
@@ -1298,10 +1329,10 @@ function WizardInner({ projectId }: { projectId: number }) {
                       {/* Mini KPI strip */}
                       <div className="flex gap-3 pt-5 flex-wrap">
                         {[
-                          { label: "Potência FV",   val: `${activeCenario?.potenciaInstalada ?? "—"} kWp` },
-                          { label: "Produção/ano",  val: activeCenario ? `${activeCenario.energiaAnualEstimada.toLocaleString("pt-PT")} kWh` : "—" },
-                          { label: "Autoconsumo",   val: activeCenario ? `${activeCenario.autoconsumoPerc}%` : "—" },
-                          { label: "Excedente",     val: activeCenario ? `${activeCenario.excessoAnual.toLocaleString("pt-PT")} kWh` : "—" },
+                          { label: "Potência FV",   val: `${activeCenario?.potenciaInstalada ??"—"} kWp` },
+                          { label: "Produção/ano",  val: activeCenario ?`${activeCenario.energiaAnualEstimada.toLocaleString("pt-PT")} kWh` : "—" },
+                          { label: "Autoconsumo",   val: activeCenario ?`${activeCenario.autoconsumoPerc}%` : "—" },
+                          { label: "Excedente",     val: activeCenario ?`${activeCenario.excessoAnual.toLocaleString("pt-PT")} kWh` : "—" },
                         ].map(({ label, val }) => (
                           <div key={label} className="flex items-center gap-1.5">
                             <span className="text-xs text-muted-foreground">{label}:</span>
@@ -1314,7 +1345,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                 );
               })()}
 
-              {/* ── Scenario comparison (Económico / Equilibrado / Premium) ── */}
+              {/* —— Scenario comparison (Económico / Equilibrado / Premium) —— */}
               {cenariosDimensionamentoAdj.length > 0 && (
                 <Suspense fallback={
                   <div className="flex justify-center py-8">
@@ -1327,7 +1358,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                     selectedTipo={selectedCenarioTipo}
                     coberturaMeta={consumoData.coberturaMeta}
                     onSelect={selectCenario}
-                    panelNome={panelRef ? `${panelRef.fabricante} ${panelRef.nome} (${panelRef.potencia} Wp)` : undefined}
+                    panelNome={panelRef ?`${panelRef.fabricante} ${panelRef.nome} (${panelRef.potencia} Wp)` : undefined}
                   />
                 </Suspense>
               )}
@@ -1352,38 +1383,38 @@ function WizardInner({ projectId }: { projectId: number }) {
                   {/* Key metrics */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {(() => {
-                      const eff = effectiveSizing ?? sizing;
+                      const eff = effectiveSizing ??sizing;
                       return [
                         {
                           label: "Potência Instalada",
                           value: `${eff.potenciaInstalada} kWp`,
-                          sub: isManualModified ? `cenário base: ${(activeCenario ?? sizing).potenciaInstalada} kWp` : `mín. teórica: ${sizing.potenciaMinima} kWp`,
+                          sub: isManualModified ?`cenário base: ${(activeCenario ??sizing).potenciaInstalada} kWp` : `mín. teórica: ${sizing.potenciaMinima} kWp`,
                           hi: true, Icon: Zap,
                         },
                         {
-                          label: isManualModified ? `Nº Painéis (${manual!.potenciaWp} Wp)` : `Nº Painéis (${wpRef} Wp)`,
+                          label: isManualModified ?`Nº Painéis (${manual!.potenciaWp} Wp)` : `Nº Painéis (${wpRef} Wp)`,
                           value: `${eff.numPaineis} un.`,
-                          sub: isManualModified ? `cenário base: ${(activeCenario ?? sizing).numPaineis} un.` : `${eff.potenciaInstalada} kWp reais`,
+                          sub: isManualModified ?`cenário base: ${(activeCenario ??sizing).numPaineis} un.` : `${eff.potenciaInstalada} kWp reais`,
                           hi: true, Icon: Sun,
                         },
                         {
                           label: "Produção Anual Real",
                           value: `${eff.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`,
-                          sub: isManualModified ? `cenário base: ${(activeCenario ?? sizing).energiaAnualEstimada.toLocaleString("pt-PT")} kWh` : `base: ${eff.potenciaInstalada} kWp × HSP`,
+                          sub: isManualModified ?`cenário base: ${(activeCenario ??sizing).energiaAnualEstimada.toLocaleString("pt-PT")} kWh` : `base: ${eff.potenciaInstalada} kWp × HSP`,
                           hi: false, Icon: TrendingUp,
                         },
                         {
                           label: "Cobertura Real",
                           value: `${eff.coberturaReal}%`,
-                          sub: isManualModified ? `cenário base: ${(activeCenario ?? sizing).coberturaReal}% · alvo: ${eff.coberturaAlvo}%` : `alvo: ${eff.coberturaAlvo}%`,
+                          sub: isManualModified ?`cenário base: ${(activeCenario ??sizing).coberturaReal}% · alvo: ${eff.coberturaAlvo}%` : `alvo: ${eff.coberturaAlvo}%`,
                           hi: false, Icon: BarChart3,
                         },
                       ];
                     })().map(({ label, value, sub, hi, Icon }) => (
-                      <div key={label} className={cn("rounded-xl p-4 text-center border", hi ? "bg-primary/10 border-primary/30" : "bg-background border-border")}>
-                        <Icon size={18} className={cn("mx-auto mb-2", hi ? "text-primary" : "text-muted-foreground")} />
+                      <div key={label} className={cn("rounded-xl p-4 text-center border", hi ?"bg-primary/10 border-primary/30" : "bg-background border-border")}>
+                        <Icon size={18} className={cn("mx-auto mb-2", hi ?"text-primary" : "text-muted-foreground")} />
                         <p className="text-xs text-muted-foreground leading-tight">{label}</p>
-                        <p className={cn("font-bold text-lg mt-1", hi ? "text-primary" : "text-foreground")}>{value}</p>
+                        <p className={cn("font-bold text-lg mt-1", hi ?"text-primary" : "text-foreground")}>{value}</p>
                         <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
                       </div>
                     ))}
@@ -1400,21 +1431,21 @@ function WizardInner({ projectId }: { projectId: number }) {
                       {[
                         { label: "1. Consumo diário",                        formula: `${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh/ano ÷ 365 dias`,                                     result: `${sizing.consumoDiario} kWh/dia`,             hi: false },
                         { label: "2. Energia solar diária alvo",             formula: `${sizing.consumoDiario} kWh/dia × ${consumoData.coberturaMeta}% cobertura`,                                     result: `${sizing.energiaAlvoDiaria} kWh/dia`,        hi: false },
-                        { label: "3. Potência bruta (sem perdas)",           formula: `${sizing.energiaAlvoDiaria} kWh/dia ÷ ${sizing.hsp} h/dia (HSP)`,                                              result: `${sizing.potenciaBruta} kWp`,                hi: false },
+                        { label: "3. Poténcia bruta (sem perdas)",           formula: `${sizing.energiaAlvoDiaria} kWh/dia ÷ ${sizing.hsp} h/dia (HSP)`,                                              result: `${sizing.potenciaBruta} kWp`,                hi: false },
                         { label: `4. Potência mínima teórica (perdas ${(sizing.margemPerdas*100).toFixed(0)}%)`, formula: `${sizing.potenciaBruta} kWp ÷ ${sizing.fatorRendimento.toFixed(2)} (rendimento)`, result: `${sizing.potenciaMinima} kWp`, hi: false },
-                        { label: `5. Arredondamento → painéis reais`,        formula: `⌈${sizing.potenciaMinima} kWp ÷ ${(wpRef/1000).toFixed(3)} kWp/painel⌉ = ${(activeCenario ?? sizing).numPaineis} × ${wpRef} Wp`,                              result: `${(activeCenario ?? sizing).potenciaInstalada} kWp instalados`, hi: true  },
+                        { label: `5. Arredondamento → painéis reais`,        formula: `⌈${sizing.potenciaMinima} kWp ÷ ${(wpRef/1000).toFixed(3)} kWp/painel⌉ = ${(activeCenario ??sizing).numPaineis} × ${wpRef} Wp`,                              result: `${(activeCenario ??sizing).potenciaInstalada} kWp instalados`, hi: true  },
                         { label: "6. Cobertura real após arredondamento",    formula: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh ÷ ${sizing.consumoAnualAjustado.toLocaleString("pt-PT")} kWh`, result: `${sizing.coberturaReal}%`,           hi: true  },
                       ].map(({ label, formula, result, hi }) => (
                         <div key={label} className={cn(
                           "grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-lg px-3 py-2",
-                          hi ? "bg-primary/10 border border-primary/20 font-semibold" : "bg-muted/40"
+                          hi ?"bg-primary/10 border border-primary/20 font-semibold" : "bg-muted/40"
                         )}>
                           <div>
-                            <p className={cn("text-xs font-medium", hi ? "text-primary" : "text-muted-foreground")}>{label}</p>
+                            <p className={cn("text-xs font-medium", hi ?"text-primary" : "text-muted-foreground")}>{label}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">{formula}</p>
                           </div>
                           <ArrowRight size={14} className="text-muted-foreground shrink-0" />
-                          <p className={cn("text-sm font-bold shrink-0", hi ? "text-primary" : "text-foreground")}>{result}</p>
+                          <p className={cn("text-sm font-bold shrink-0", hi ?"text-primary" : "text-foreground")}>{result}</p>
                         </div>
                       ))}
                     </div>
@@ -1431,7 +1462,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                     <div className={cn(
                       "rounded-xl border p-4",
                       sizing.confianca?.pvgis
-                        ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
+                        ?"bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
                         : "bg-muted/40 border-border"
                     )}>
                       <div className="flex items-center justify-between mb-3">
@@ -1441,10 +1472,10 @@ function WizardInner({ projectId }: { projectId: number }) {
                         <span className={cn(
                           "text-[10px] font-semibold px-2 py-0.5 rounded-full",
                           sizing.confianca?.pvgis
-                            ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                            ?"bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
                             : "bg-muted text-muted-foreground"
                         )}>
-                          {sizing.confianca?.pvgis ? "PVGIS JRC" : "Estimativa"}
+                          {sizing.confianca?.pvgis ?"PVGIS JRC" : "Estimativa"}
                         </span>
                       </div>
                       <div className="grid grid-cols-3 gap-3">
@@ -1535,20 +1566,20 @@ function WizardInner({ projectId }: { projectId: number }) {
                 </CardContent>
               </Card>
 
-              {/* ── Manual Adjustment Card ── */}
+              {/* —— Manual Adjustment Card —— */}
               {manual && (
-                <Card className={cn("transition-colors", showManualAdjust ? "border-primary/50" : "border-dashed")}>
+                <Card className={cn("transition-colors", showManualAdjust ?"border-primary/50" : "border-dashed")}>
                   <div
                     className="px-5 py-4 flex items-center justify-between cursor-pointer select-none"
                     onClick={() => setShowManualAdjust(v => !v)}
                   >
                     <div className="flex items-center gap-2.5">
-                      <SlidersHorizontal size={18} className={cn(showManualAdjust ? "text-primary" : "text-muted-foreground")} />
+                      <SlidersHorizontal size={18} className={cn(showManualAdjust ?"text-primary" : "text-muted-foreground")} />
                       <div>
                         <p className="text-sm font-semibold">Ajuste Manual da Solução</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {isManualModified
-                            ? `Ajustado: ${(effectiveSizing ?? sizing)!.potenciaInstalada} kWp · ${(effectiveSizing ?? sizing)!.numPaineis} painéis · ${(effectiveSizing ?? sizing)!.coberturaReal}% cobertura`
+                            ?`Ajustado: ${(effectiveSizing ??sizing)!.potenciaInstalada} kWp · ${(effectiveSizing ??sizing)!.numPaineis} painéis · ${(effectiveSizing ??sizing)!.coberturaReal}% cobertura`
                             : "Personalizar potência, painéis, HSP e rendimento"}
                         </p>
                       </div>
@@ -1570,15 +1601,15 @@ function WizardInner({ projectId }: { projectId: number }) {
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Nº de Painéis</label>
                             <Input type="number" min={1} step={1} value={manual.numPaineis}
-                              onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, numPaineis: v } : m); }}
-                              onBlur={e => { const v = Math.max(1, Math.round(+e.target.value || 1)); setManual(m => m ? { ...m, numPaineis: v } : m); }} />
+                              onChange={e => { const v = +e.target.value; setManual(m => m ?{ ...m, numPaineis: v } : m); }}
+                              onBlur={e => { const v = Math.max(1, Math.round(+e.target.value || 1)); setManual(m => m ?{ ...m, numPaineis: v } : m); }} />
                             <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.numPaineis} un.</p>
                           </div>
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Potência/Painel (Wp)</label>
                             <Input type="number" min={100} max={700} step={5} value={manual.potenciaWp}
-                              onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, potenciaWp: v } : m); }}
-                              onBlur={e => { const v = Math.max(100, Math.min(700, Math.round(+e.target.value || 400))); setManual(m => m ? { ...m, potenciaWp: v } : m); }} />
+                              onChange={e => { const v = +e.target.value; setManual(m => m ?{ ...m, potenciaWp: v } : m); }}
+                              onBlur={e => { const v = Math.max(100, Math.min(700, Math.round(+e.target.value || 400))); setManual(m => m ?{ ...m, potenciaWp: v } : m); }} />
                             <p className="text-[10px] text-muted-foreground mt-1">Auto: {wpRef} Wp</p>
                           </div>
                           <div>
@@ -1591,31 +1622,31 @@ function WizardInner({ projectId }: { projectId: number }) {
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">HSP (h/dia)</label>
                             <Input type="number" min={1} max={8} step={0.01} value={manual.hsp}
-                              onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, hsp: v } : m); }}
-                              onBlur={e => { const v = Math.max(1, Math.min(8, +e.target.value || 1)); setManual(m => m ? { ...m, hsp: v } : m); }} />
+                              onChange={e => { const v = +e.target.value; setManual(m => m ?{ ...m, hsp: v } : m); }}
+                              onBlur={e => { const v = Math.max(1, Math.min(8, +e.target.value || 1)); setManual(m => m ?{ ...m, hsp: v } : m); }} />
                             <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.hsp} h/dia</p>
                           </div>
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Rendimento Global (%)</label>
                             <Input type="number" min={50} max={100} step={1} value={Math.round(manual.rendimento * 100)}
-                              onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, rendimento: v / 100 } : m); }}
-                              onBlur={e => { const v = Math.max(50, Math.min(100, +e.target.value || 78)); setManual(m => m ? { ...m, rendimento: v / 100 } : m); }} />
+                              onChange={e => { const v = +e.target.value; setManual(m => m ?{ ...m, rendimento: v / 100 } : m); }}
+                              onBlur={e => { const v = Math.max(50, Math.min(100, +e.target.value || 78)); setManual(m => m ?{ ...m, rendimento: v / 100 } : m); }} />
                             <p className="text-[10px] text-muted-foreground mt-1">Auto: {Math.round(sizing.fatorRendimento * 100)}%</p>
                           </div>
                           <div>
                             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Meta de Cobertura (%)</label>
                             <Input type="number" min={10} max={150} step={1} value={manual.coberturaMeta}
-                              onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, coberturaMeta: v } : m); }}
-                              onBlur={e => { const v = Math.max(10, Math.min(150, +e.target.value || 80)); setManual(m => m ? { ...m, coberturaMeta: v } : m); }} />
+                              onChange={e => { const v = +e.target.value; setManual(m => m ?{ ...m, coberturaMeta: v } : m); }}
+                              onBlur={e => { const v = Math.max(10, Math.min(150, +e.target.value || 80)); setManual(m => m ?{ ...m, coberturaMeta: v } : m); }} />
                             <p className="text-[10px] text-muted-foreground mt-1">Auto: {consumoData.coberturaMeta}%</p>
                           </div>
                           {consumoData.incluirBateria && (
                             <div>
                               <label className="text-xs font-medium text-muted-foreground block mb-1.5">Capacidade Bateria (kWh)</label>
                               <Input type="number" min={0} step={0.5} value={manual.capacidadeBateria}
-                                onChange={e => { const v = +e.target.value; setManual(m => m ? { ...m, capacidadeBateria: v } : m); }}
-                                onBlur={e => { const v = Math.max(0, +e.target.value || 0); setManual(m => m ? { ...m, capacidadeBateria: v } : m); }} />
-                              <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.capacidadeBateriaRecomendada ?? 0} kWh</p>
+                                onChange={e => { const v = +e.target.value; setManual(m => m ?{ ...m, capacidadeBateria: v } : m); }}
+                                onBlur={e => { const v = Math.max(0, +e.target.value || 0); setManual(m => m ?{ ...m, capacidadeBateria: v } : m); }} />
+                              <p className="text-[10px] text-muted-foreground mt-1">Auto: {sizing.capacidadeBateriaRecomendada ??0} kWh</p>
                             </div>
                           )}
                         </div>
@@ -1626,18 +1657,18 @@ function WizardInner({ projectId }: { projectId: number }) {
                         const mPotInstalada = +(manual.numPaineis * manual.potenciaWp / 1000).toFixed(2);
                         const mEnergiaAnual = Math.round(mPotInstalada * manual.hsp * 365 * manual.rendimento);
                         const mCobertura = sizing.consumoAnualAjustado > 0
-                          ? Math.round((mEnergiaAnual / sizing.consumoAnualAjustado) * 100) : 0;
+                          ?Math.round((mEnergiaAnual / sizing.consumoAnualAjustado) * 100) : 0;
                         const mExcedente = Math.max(0, mEnergiaAnual - sizing.consumoAnualAjustado);
                         const abaixoMeta = mCobertura < manual.coberturaMeta;
                         const acimaExcesso = mCobertura > manual.coberturaMeta * 1.3;
                         const pNeeded = abaixoMeta
-                          ? Math.ceil(((manual.coberturaMeta / 100 * sizing.consumoAnualAjustado) / (manual.hsp * 365 * manual.rendimento) - mPotInstalada) * 1000 / manual.potenciaWp)
+                          ?Math.ceil(((manual.coberturaMeta / 100 * sizing.consumoAnualAjustado) / (manual.hsp * 365 * manual.rendimento) - mPotInstalada) * 1000 / manual.potenciaWp)
                           : 0;
                         const rows = [
-                          { label: "Potência Instalada", auto: `${sizing.potenciaInstalada} kWp`,                                       adj: `${mPotInstalada} kWp`,                                   d: mPotInstalada - sizing.potenciaInstalada,           fmt: (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(2)} kWp` },
-                          { label: "Nº Painéis",         auto: `${sizing.numPaineis} un.`,                                              adj: `${manual.numPaineis} un.`,                               d: manual.numPaineis - sizing.numPaineis,              fmt: (v: number) => `${v > 0 ? "+" : ""}${v} un.` },
-                          { label: "Produção Anual",     auto: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`,            adj: `${mEnergiaAnual.toLocaleString("pt-PT")} kWh`,           d: mEnergiaAnual - sizing.energiaAnualEstimada,        fmt: (v: number) => `${v > 0 ? "+" : ""}${v.toLocaleString("pt-PT")} kWh` },
-                          { label: "Cobertura Real",     auto: `${sizing.coberturaReal}%`,                                             adj: `${mCobertura}%`,                                         d: mCobertura - sizing.coberturaReal,                 fmt: (v: number) => `${v > 0 ? "+" : ""}${v}%` },
+                          { label: "Potência Instalada", auto: `${sizing.potenciaInstalada} kWp`,                                       adj: `${mPotInstalada} kWp`,                                   d: mPotInstalada - sizing.potenciaInstalada,           fmt: (v: number) => `${v > 0 ?"+" : ""}${v.toFixed(2)} kWp` },
+                          { label: "Nº Painéis",         auto: `${sizing.numPaineis} un.`,                                              adj: `${manual.numPaineis} un.`,                               d: manual.numPaineis - sizing.numPaineis,              fmt: (v: number) => `${v > 0 ?"+" : ""}${v} un.` },
+                          { label: "Produção Anual",     auto: `${sizing.energiaAnualEstimada.toLocaleString("pt-PT")} kWh`,            adj: `${mEnergiaAnual.toLocaleString("pt-PT")} kWh`,           d: mEnergiaAnual - sizing.energiaAnualEstimada,        fmt: (v: number) => `${v > 0 ?"+" : ""}${v.toLocaleString("pt-PT")} kWh` },
+                          { label: "Cobertura Real",     auto: `${sizing.coberturaReal}%`,                                             adj: `${mCobertura}%`,                                         d: mCobertura - sizing.coberturaReal,                 fmt: (v: number) => `${v > 0 ?"+" : ""}${v}%` },
                         ];
                         return (
                           <>
@@ -1650,18 +1681,18 @@ function WizardInner({ projectId }: { projectId: number }) {
                                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Parâmetro</th>
                                       <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Automático</th>
                                       <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Ajustado</th>
-                                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Δ</th>
+                                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Î”</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {rows.map((row, i) => (
-                                      <tr key={row.label} className={cn("border-b last:border-0", i % 2 === 0 ? "bg-background" : "bg-muted/20")}>
+                                      <tr key={row.label} className={cn("border-b last:border-0", i % 2 === 0 ?"bg-background" : "bg-muted/20")}>
                                         <td className="px-3 py-2 text-xs font-medium">{row.label}</td>
                                         <td className="px-3 py-2 text-right text-xs text-muted-foreground">{row.auto}</td>
                                         <td className="px-3 py-2 text-right text-xs font-semibold">{row.adj}</td>
                                         <td className={cn("px-3 py-2 text-right text-xs font-semibold",
-                                          row.d > 0 ? "text-green-600 dark:text-green-400" :
-                                          row.d < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
+                                          row.d > 0 ?"text-green-600 dark:text-green-400" :
+                                          row.d < 0 ?"text-red-600 dark:text-red-400" : "text-muted-foreground"
                                         )}>{row.fmt(row.d)}</td>
                                       </tr>
                                     ))}
@@ -1677,7 +1708,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                                   <div className="text-xs text-amber-700 dark:text-amber-400 space-y-0.5">
                                     <p className="font-semibold">Sistema subdimensionado</p>
                                     <p>Automático: {sizing.coberturaReal}% · Ajustado: {mCobertura}% · Meta: {manual.coberturaMeta}%</p>
-                                    {pNeeded > 0 && <p>Adicione {pNeeded} painel{pNeeded > 1 ? "is" : ""} para atingir a meta.</p>}
+                                    {pNeeded > 0 && <p>Adicione {pNeeded} painel{pNeeded > 1 ?"is" : ""} para atingir a meta.</p>}
                                   </div>
                                 </div>
                               )}
@@ -1707,27 +1738,27 @@ function WizardInner({ projectId }: { projectId: number }) {
                                 <div className="space-y-1.5">
                                   {inverters
                                     .filter(i => {
-                                      const acKw = Number(i.potenciaAc) > 500 ? Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
+                                      const acKw = Number(i.potenciaAc) > 500 ?Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
                                       return acKw >= mPotInstalada * 0.75 && acKw <= mPotInstalada * 1.35;
                                     })
                                     .slice(0, 4)
                                     .map(i => {
-                                      const acKw = Number(i.potenciaAc) > 500 ? Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
+                                      const acKw = Number(i.potenciaAc) > 500 ?Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
                                       const ratio = acKw / mPotInstalada;
                                       const ok = ratio >= 0.85 && ratio <= 1.25;
                                       return (
                                         <div key={i.id} className={cn(
                                           "flex items-center justify-between px-3 py-2 rounded-lg border text-xs",
-                                          ok ? "border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20"
+                                          ok ?"border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20"
                                              : "border-border bg-muted/30"
                                         )}>
                                           <span className="font-medium">{i.fabricante} {i.nome}</span>
                                           <div className="flex items-center gap-2">
-                                            <span className="text-muted-foreground">{Number(i.potenciaAc) > 500 ? (Number(i.potenciaAc) / 1000).toFixed(1) : i.potenciaAc} kW AC</span>
+                                            <span className="text-muted-foreground">{Number(i.potenciaAc) > 500 ?(Number(i.potenciaAc) / 1000).toFixed(1) : i.potenciaAc} kW AC</span>
                                             <Badge variant="outline" className={cn("text-[10px] px-1.5", ok
-                                              ? "text-green-700 dark:text-green-400 border-green-300 dark:border-green-700"
+                                              ?"text-green-700 dark:text-green-400 border-green-300 dark:border-green-700"
                                               : "text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700")}>
-                                              {ok ? "✓ Adequado" : "≈ Marginal"}
+                                              {ok ?"✓ Adequado" : "≈ Marginal"}
                                             </Badge>
                                           </div>
                                         </div>
@@ -1744,9 +1775,9 @@ function WizardInner({ projectId }: { projectId: number }) {
                               <div className="flex justify-end pt-1">
                                 <Button variant="ghost" size="sm" className="text-xs gap-1.5 text-muted-foreground"
                                   onClick={() => setManual({
-                                    numPaineis: (activeCenario ?? sizing).numPaineis, potenciaWp: wpRef, hsp: sizing.hsp,
+                                    numPaineis: (activeCenario ??sizing).numPaineis, potenciaWp: wpRef, hsp: sizing.hsp,
                                     rendimento: sizing.fatorRendimento,
-                                    capacidadeBateria: (activeCenario ?? sizing).capacidadeBateriaRecomendada ?? 0,
+                                    capacidadeBateria: (activeCenario ??sizing).capacidadeBateriaRecomendada ??0,
                                     coberturaMeta: consumoData.coberturaMeta,
                                   })}>
                                   <RotateCcw size={12} /> Repor Automático
@@ -1761,7 +1792,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                 </Card>
               )}
 
-              {/* ── Gráfico: Produção estimada vs Consumo mensal ──────────────── */}
+              {/* —— Gráfico: Produção estimada vs Consumo mensal ———————————————— */}
               {chartCenario && (
                 <Card>
                   <CardHeader className="pb-2">
@@ -1774,7 +1805,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                     </CardTitle>
                     <CardDescription>
                       {isManualModified
-                        ? `Ajuste manual: ${chartCenario.potenciaInstalada} kWp · ${chartCenario.numPaineis} painéis`
+                        ?`Ajuste manual: ${chartCenario.potenciaInstalada} kWp · ${chartCenario.numPaineis} painéis`
                         : `Cenário ${chartCenario.label} — autoconsumo + excedente vs. consumo`}
                     </CardDescription>
                   </CardHeader>
@@ -1797,7 +1828,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                             const labels: Record<string, string> = {
                               autoconsumo: "Autoconsumo", excesso: "Excedente (rede)", consumo: "Consumo",
                             };
-                            return [`${Math.round(value).toLocaleString("pt-PT")} kWh`, labels[name] ?? name];
+                            return [`${Math.round(value).toLocaleString("pt-PT")} kWh`, labels[name] ??name];
                           }}
                         />
                         <Bar dataKey="autoconsumo" stackId="prod" fill="#22c55e" name="autoconsumo" radius={[0, 0, 2, 2]} />
@@ -1820,17 +1851,17 @@ function WizardInner({ projectId }: { projectId: number }) {
                         { label: "Excedente rede",  value: `${chartCenario.excessoAnual.toLocaleString("pt-PT")} kWh`,          sub: "injectado na rede",                                                    hi: false, Icon: TrendingUp },
                         { label: "Cobertura solar", value: `${chartCenario.coberturaReal}%`,                                    sub: `meta: ${consumoData.coberturaMeta}%`,                                  hi: false, Icon: BarChart3 },
                       ].map(({ label, value, sub, hi, Icon: Ic }) => (
-                        <div key={label} className={cn("rounded-xl p-3 text-center border", hi ? "bg-primary/10 border-primary/30" : "bg-muted/30 border-border")}>
-                          <Ic size={15} className={cn("mx-auto mb-1.5", hi ? "text-primary" : "text-muted-foreground")} />
+                        <div key={label} className={cn("rounded-xl p-3 text-center border", hi ?"bg-primary/10 border-primary/30" : "bg-muted/30 border-border")}>
+                          <Ic size={15} className={cn("mx-auto mb-1.5", hi ?"text-primary" : "text-muted-foreground")} />
                           <p className="text-[10px] text-muted-foreground leading-tight">{label}</p>
-                          <p className={cn("font-bold text-sm mt-0.5", hi ? "text-primary" : "text-foreground")}>{value}</p>
+                          <p className={cn("font-bold text-sm mt-0.5", hi ?"text-primary" : "text-foreground")}>{value}</p>
                           <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
                         </div>
                       ))}
                     </div>
 
                     {/* Summer excess warning */}
-                    {chartCenario.excessoMensal.slice(4, 9).some(e => e > (chartCenario.consumoMensal[6] ?? 0) * 0.4) && (
+                    {chartCenario.excessoMensal.slice(4, 9).some(e => e > (chartCenario.consumoMensal[6] ??0) * 0.4) && (
                       <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
                         <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
                         <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -1869,7 +1900,7 @@ function WizardInner({ projectId }: { projectId: number }) {
         </div>
       )}
 
-      {/* ── STEP 5: Seleção de Equipamentos ─────────────────────────────────── */}
+      {/* —— STEP 5: Seleção de Equipamentos ——————————————————————————————————— */}
       {step === 5 && (
         <div className="space-y-4">
           {/* Existing system reference banner (upgrade mode) */}
@@ -1882,9 +1913,9 @@ function WizardInner({ projectId }: { projectId: number }) {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   {[
                     { label: "FV existente",  val: `${instalacaoExistente.potenciaFVkWp} kWp` },
-                    { label: "Painéis",       val: instalacaoExistente.numPaineis > 0 ? `${instalacaoExistente.numPaineis} un.` : "—" },
-                    { label: "Inversor AC",   val: instalacaoExistente.potenciaACkW > 0 ? `${instalacaoExistente.potenciaACkW} kW` : "—" },
-                    { label: "Produção/ano",  val: instalacaoExistente.producaoAnualkWh > 0 ? `${instalacaoExistente.producaoAnualkWh.toLocaleString("pt-PT")} kWh` : "—" },
+                    { label: "Painéis",       val: instalacaoExistente.numPaineis > 0 ?`${instalacaoExistente.numPaineis} un.` : "—" },
+                    { label: "Inversor AC",   val: instalacaoExistente.potenciaACkW > 0 ?`${instalacaoExistente.potenciaACkW} kW` : "—" },
+                    { label: "Produção/ano",  val: instalacaoExistente.producaoAnualkWh > 0 ?`${instalacaoExistente.producaoAnualkWh.toLocaleString("pt-PT")} kWh` : "—" },
                   ].map(r => (
                     <div key={r.label} className="rounded-lg bg-amber-50 dark:bg-amber-950/20 p-2.5">
                       <div className="font-semibold text-amber-900 dark:text-amber-200">{r.val}</div>
@@ -1898,8 +1929,8 @@ function WizardInner({ projectId }: { projectId: number }) {
               </CardContent>
             </Card>
           )}
-          {(effectiveSizing ?? sizing) && (() => {
-            const eff = (effectiveSizing ?? sizing)!;
+          {(effectiveSizing ??sizing) && (() => {
+            const eff = (effectiveSizing ??sizing)!;
             return (
               <div className="flex flex-wrap gap-3 p-4 bg-primary/5 border border-primary/20 rounded-xl">
                 <div className="flex items-center gap-2">
@@ -1909,7 +1940,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                 <div className="flex items-center gap-2">
                   <Sun size={16} className="text-primary" />
                   <span className="text-sm font-medium">
-                    {eff.numPaineis} painéis{isManualModified && manual ? ` de ${manual.potenciaWp} Wp` : ` de ${wpRef} Wp`}
+                    {eff.numPaineis} painéis{isManualModified && manual ?` de ${manual.potenciaWp} Wp` : ` de ${wpRef} Wp`}
                   </span>
                 </div>
                 {eff.capacidadeBateriaRecomendada && (
@@ -1930,8 +1961,8 @@ function WizardInner({ projectId }: { projectId: number }) {
             );
           })()}
 
-          {/* ── Auto inverter suggestions ── */}
-          {(effectiveSizing ?? sizing) && inverters && inverters.length > 0 && (
+          {/* —— Auto inverter suggestions —— */}
+          {(effectiveSizing ??sizing) && inverters && inverters.length > 0 && (
             <Suspense fallback={
               <div className="flex justify-center py-6">
                 <Loader2 size={24} className="animate-spin text-muted-foreground" />
@@ -1940,9 +1971,9 @@ function WizardInner({ projectId }: { projectId: number }) {
               <WizardSugestoesInversor
                 potenciaKwpEstudo={potenciaKwpEstudo}
                 potenciaKwpEfetiva={potenciaKwpEfetiva}
-                energiaAnualEstimada={(effectiveSizing ?? sizing)!.energiaAnualEstimada}
+                energiaAnualEstimada={(effectiveSizing ??sizing)!.energiaAnualEstimada}
                 inverters={inverters}
-                selectedInverterId={inverterUnits.length === 0 ? equipForm.watch("inverterId") : undefined}
+                selectedInverterId={inverterUnits.length === 0 ?equipForm.watch("inverterId") : undefined}
                 inverterUnits={inverterUnits}
                 onSelectInverter={id => {
                   equipForm.setValue("inverterId", id);
@@ -1977,8 +2008,8 @@ function WizardInner({ projectId }: { projectId: number }) {
                           ))}
                         </SelectContent>
                       </Select>
-                      {(effectiveSizing ?? sizing) && (equipForm.watch("panelId") ?? 0) > 0 && (() => {
-                        const eff = (effectiveSizing ?? sizing)!;
+                      {(effectiveSizing ??sizing) && (equipForm.watch("panelId") ??0) > 0 && (() => {
+                        const eff = (effectiveSizing ??sizing)!;
                         const panel = panels?.find(p => p.id === equipForm.watch("panelId"));
                         if (!panel) return null;
                         const n   = Math.ceil((eff.potenciaInstalada * 1000) / panel.potencia);
@@ -1993,8 +2024,8 @@ function WizardInner({ projectId }: { projectId: number }) {
                     </FormItem>
                   )} />
 
-                  {/* ── Inversores (single or multi) ── */}
-                  {inverterUnits.length === 0 ? (
+                  {/* —— Inversores (single or multi) —— */}
+                  {inverterUnits.length === 0 ?(
                     <FormField control={equipForm.control} name="inverterId" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Inversor *</FormLabel>
@@ -2002,11 +2033,11 @@ function WizardInner({ projectId }: { projectId: number }) {
                           <FormControl><SelectTrigger><SelectValue placeholder="Selecionar inversor..." /></SelectTrigger></FormControl>
                           <SelectContent>
                             {inverters?.map(i => {
-                              const acKw = Number(i.potenciaAc) > 500 ? Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
+                              const acKw = Number(i.potenciaAc) > 500 ?Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
                               const ok = sizing && acKw >= sizing.potenciaRecomendada * 0.9;
                               return (
                                 <SelectItem key={i.id} value={String(i.id)}>
-                                  {i.fabricante} {i.nome} — {acKw > 0 ? (Number.isInteger(acKw) ? acKw : acKw.toFixed(1)) : i.potenciaAc} kW AC{ok ? " ✓" : ""}
+                                  {i.fabricante} {i.nome} — {acKw > 0 ?(Number.isInteger(acKw) ?acKw : acKw.toFixed(1)) : i.potenciaAc} kW AC{ok ? " ✓" : ""}
                                 </SelectItem>
                               );
                             })}
@@ -2037,7 +2068,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                         <div key={unit.key} className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground w-5 shrink-0 text-right">{idx + 1}.</span>
                           <Select
-                            value={unit.inverterId ? String(unit.inverterId) : ""}
+                            value={unit.inverterId ?String(unit.inverterId) : ""}
                             onValueChange={v => updateInverterUnit(unit.key, { inverterId: Number(v) })}
                           >
                             <SelectTrigger className="flex-1 h-9">
@@ -2045,11 +2076,11 @@ function WizardInner({ projectId }: { projectId: number }) {
                             </SelectTrigger>
                             <SelectContent>
                               {inverters?.map(i => {
-                                const acKw = Number(i.potenciaAc) > 500 ? Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
+                                const acKw = Number(i.potenciaAc) > 500 ?Number(i.potenciaAc) / 1000 : Number(i.potenciaAc);
                                 const ok = sizing && acKw >= sizing.potenciaRecomendada * 0.9;
                                 return (
                                   <SelectItem key={i.id} value={String(i.id)}>
-                                    {i.fabricante} {i.nome} — {acKw > 0 ? (Number.isInteger(acKw) ? acKw : acKw.toFixed(1)) : i.potenciaAc} kW AC{ok ? " ✓" : ""}
+                                    {i.fabricante} {i.nome} — {acKw > 0 ?(Number.isInteger(acKw) ?acKw : acKw.toFixed(1)) : i.potenciaAc} kW AC{ok ? " ✓" : ""}
                                   </SelectItem>
                                 );
                               })}
@@ -2084,11 +2115,11 @@ function WizardInner({ projectId }: { projectId: number }) {
                       {inverters && (() => {
                         const totalAC = inverterUnits.reduce((s, u) => {
                           const inv = inverters.find(i => i.id === u.inverterId);
-                          return s + (inv ? Number(inv.potenciaAc) * u.quantidade : 0);
+                          return s + (inv ?Number(inv.potenciaAc) * u.quantidade : 0);
                         }, 0);
                         const totalDC = inverterUnits.reduce((s, u) => {
                           const inv = inverters.find(i => i.id === u.inverterId);
-                          return s + (inv ? Number(inv.potenciaDcMax) * u.quantidade : 0);
+                          return s + (inv ?Number(inv.potenciaDcMax) * u.quantidade : 0);
                         }, 0);
                         if (totalAC === 0) return null;
                         return (
@@ -2114,8 +2145,8 @@ function WizardInner({ projectId }: { projectId: number }) {
                           batteries={batteries}
                           batteryUnits={batteryUnits}
                           onUnitsChange={setBatteryUnits}
-                          activeCenario={activeCenario ?? null}
-                          precoKwh={consumoData.precoKwh ?? 0.18}
+                          activeCenario={activeCenario ??null}
+                          precoKwh={consumoData.precoKwh ??0.18}
                           perfilDiurnoPct={perfilDiurnoPct}
                           percVazio={consumoData.percVazio}
                           percCheio={consumoData.percCheio}
@@ -2139,18 +2170,18 @@ function WizardInner({ projectId }: { projectId: number }) {
         </div>
       )}
 
-      {/* ── STEP 6: Análise Técnica ─────────────────────────────────────────── */}
+      {/* —— STEP 6: Análise Técnica ——————————————————————————————————————————— */}
       {step === 6 && (() => {
         const vals = equipForm.getValues();
-        const eff = effectiveSizing ?? sizing;
-        const panel = panels?.find(p => p.id === vals.panelId) ?? null;
+        const eff = effectiveSizing ??sizing;
+        const panel = panels?.find(p => p.id === vals.panelId) ??null;
         // In multi-inverter mode use the first unit's inverterId; fall back to form field
-        const effectiveInverterId = inverterUnits.length > 0 ? inverterUnits[0].inverterId : vals.inverterId;
-        const inverter = inverters?.find(i => i.id === effectiveInverterId) ?? null;
+        const effectiveInverterId = inverterUnits.length > 0 ?inverterUnits[0].inverterId : vals.inverterId;
+        const inverter = inverters?.find(i => i.id === effectiveInverterId) ??null;
         const primaryBatIdStep6 = batteryUnits[0]?.batteryId;
-        const battery = primaryBatIdStep6 ? batteries?.find(b => b.id === primaryBatIdStep6) ?? null : null;
-        const numPaineis = numPaineisStep5 ?? 0;
-        const potenciaRealKwp = panel ? (numPaineis * Number(panel.potencia)) / 1000 : (eff?.potenciaInstalada ?? 0);
+        const battery = primaryBatIdStep6 ?batteries?.find(b => b.id === primaryBatIdStep6) ??null : null;
+        const numPaineis = numPaineisStep5 ??0;
+        const potenciaRealKwp = panel ?(numPaineis * Number(panel.potencia)) / 1000 : (eff?.potenciaInstalada ??0);
         const isMultiInverter = inverterUnits.length > 1;
 
         return (
@@ -2194,18 +2225,18 @@ function WizardInner({ projectId }: { projectId: number }) {
                 novaPotenciaFVkWp={potenciaRealKwp}
                 novoInversor={inverter}
                 novoPanel={panel}
-                precoKwh={consumoData.precoKwh ?? 0.18}
+                precoKwh={consumoData.precoKwh ??0.18}
                 investimentoUpgrade={investimentoManual ?? activeCenario?.investimentoEstimado ?? 0}
                 existingPanel={instalacaoExistente.panelId ? panels?.find(p => p.id === instalacaoExistente.panelId) ?? null : null}
                 existingInverter={instalacaoExistente.inverterId ? inverters?.find(i => i.id === instalacaoExistente.inverterId) ?? null : null}
               />
             )}
 
-            {isMultiInverter ? (
+            {isMultiInverter ?(
               <WizardStep6MultiTecnica
                 panel={panel}
                 inverterUnits={inverterUnits}
-                allInverters={inverters ?? []}
+                allInverters={inverters ??[]}
                 battery={battery}
                 numPaineisTotais={numPaineis}
                 onUnitChange={updateInverterUnit}
@@ -2218,7 +2249,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                 numPaineis={numPaineis}
                 potenciaInstalada={potenciaRealKwp}
                 onNumPaineisChange={setNumPaineisStep5}
-                mpptConfig={inverterUnits.length === 1 ? inverterUnits[0].mpptConfig : manualMpptConfig}
+                mpptConfig={inverterUnits.length === 1 ?inverterUnits[0].mpptConfig : manualMpptConfig}
                 onMpptConfigChange={handleMpptConfigChange}
               />
             )}
@@ -2234,16 +2265,16 @@ function WizardInner({ projectId }: { projectId: number }) {
         );
       })()}
 
-      {/* ── STEP 7: Estudo de Poupança e Retorno ─────────────────────────────── */}
+      {/* —— STEP 7: Estudo de Poupança e Retorno ——————————————————————————————— */}
       {step === 7 && activeCenario && (
         <div className="space-y-4">
           {/* Upgrade savings comparison card */}
           {tipoProjeto !== "nova" && instalacaoExistente.producaoAnualkWh > 0 && (() => {
-            const producaoAdd = activeCenario.energiaAnualEstimada ?? 0;
-            const precoKwhUpg = consumoData.precoKwh ?? 0.18;
+            const producaoAdd = activeCenario.energiaAnualEstimada ??0;
+            const precoKwhUpg = consumoData.precoKwh ??0.18;
             const poupancaAdd = producaoAdd * precoKwhUpg;
-            const invest = investimentoManual ?? activeCenario.investimentoEstimado;
-            const payback = poupancaAdd > 0 && invest > 0 ? invest / poupancaAdd : null;
+            const invest = investimentoManual ??activeCenario.investimentoEstimado;
+            const payback = poupancaAdd > 0 && invest > 0 ?invest / poupancaAdd : null;
             return (
               <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/10">
                 <CardHeader className="pb-3">
@@ -2271,7 +2302,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                         label: "Total Pós Upgrade",
                         prod: `${(instalacaoExistente.producaoAnualkWh + producaoAdd).toLocaleString("pt-PT")} kWh/ano`,
                         delta: payback != null
-                          ? `Payback upgrade: ${payback.toFixed(1)} anos`
+                          ?`Payback upgrade: ${payback.toFixed(1)} anos`
                           : "Defina o investimento abaixo",
                         cls: "bg-primary/5 border border-primary/20",
                       },
@@ -2289,10 +2320,10 @@ function WizardInner({ projectId }: { projectId: number }) {
           })()}
           <WizardStep7Financeiro
             cenario={activeCenario}
-            precoKwh={consumoData.precoKwh ?? 0.18}
+            precoKwh={consumoData.precoKwh ??0.18}
             consumoAnual={consumoData.consumoAnual}
             consumoDiurnoPct={perfilDiurnoPct}
-            investimento={investimentoManual ?? undefined}
+            investimento={investimentoManual ??undefined}
             onInvestimentoChange={setInvestimentoManual}
           />
         </div>
@@ -2305,25 +2336,358 @@ function WizardInner({ projectId }: { projectId: number }) {
         </Card>
       )}
 
-      {/* ── STEP 8: Proposta Técnica ─────────────────────────────────────────── */}
-      {step === 8 && (
+      {/* —— STEP 8: Proposta Técnica ——————————————————————————————————————————— */}
+                                    {step === 8 && (() => {
+        const loc = locData ??locForm.getValues();
+
+        const latitude = Math.abs(Number(loc.latitude ??38.7));
+        const inclinacao = Number(loc.inclinacao ??30);
+
+        const baseComprimento = panelRef?.alturaMm ?Number(panelRef.alturaMm) / 1000 : 2.28;
+        const baseLargura = panelRef?.larguraMm ?Number(panelRef.larguraMm) / 1000 : 1.13;
+
+        const painelNS = spacingOrientation === "vertical" ?baseComprimento : baseLargura;
+        const painelEO = spacingOrientation === "vertical" ?baseLargura : baseComprimento;
+
+        const totalPaineis = numPaineisStep5 ?? effectiveSizing?.numPaineis ?? sizing?.numPaineis ?? 16;
+
+        const suggestedCols = Math.max(1, Math.ceil(Math.sqrt(totalPaineis || 1)));
+        const suggestedRows = Math.max(1, Math.ceil((totalPaineis || 1) / suggestedCols));
+
+        const colunas = spacingCols ??suggestedCols;
+        const fileiras = spacingRows ??suggestedRows;
+        const totalLayoutPaineis = fileiras * colunas;
+
+        const alturaSolar = Math.max(1, 90 - latitude - 23.45);
+
+        const beta = inclinacao * Math.PI / 180;
+        const alpha = alturaSolar * Math.PI / 180;
+
+        const alturaFila = painelNS * Math.sin(beta);
+        const projecaoHorizontal = painelNS * Math.cos(beta);
+
+        const sombraTotalSolo = alturaFila / Math.tan(alpha);
+        const espacoLivre = Math.max(0, sombraTotalSolo - projecaoHorizontal);
+        const sombraProjetada = Math.max(0, sombraTotalSolo - espacoLivre);
+
+        const pitch = projecaoHorizontal + sombraProjetada + espacoLivre;
+
+        const dimensaoNS = fileiras * painelNS + Math.max(0, fileiras - 1) * (sombraProjetada + espacoLivre);
+        const dimensaoEO = colunas * painelEO;
+        const areaTotal = dimensaoNS * dimensaoEO;
+
+        const fmt = (n: number) =>
+          Number.isFinite(n)
+            ?n.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : "0,00";
+
+        const panelsTop = Array.from({ length: totalLayoutPaineis });
+
+        const sideScale = 78;
+        const sideX0 = 80;
+        const sideGroundY = 210;
+        const sidePanelProj = projecaoHorizontal * sideScale;
+        const sideShadow = sombraProjetada * sideScale;
+        const sideGap = espacoLivre * sideScale;
+        const sidePanel2X = sideX0 + pitch * sideScale;
+        const sideTopX = sideX0 + sidePanelProj;
+        const sideTopY = sideGroundY - alturaFila * sideScale;
+        const sideShadowEndX = sideTopX + sideShadow;
+        const sideGapEndX = sidePanel2X;
+        const sidePanel2TopX = sidePanel2X + sidePanelProj;
+        const sidePanel2TopY = sideGroundY - alturaFila * sideScale;
+
+        const topPanelW = 34;
+        const topPanelH = Math.max(28, painelNS * 20);
+        const topColGap = 8;
+        const topShadowH = Math.max(18, sombraProjetada * 18);
+        const topGapH = Math.max(8, espacoLivre * 22);
+
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-3xl font-bold">Espaçamento entre Painéis</h2>
+              <p className="text-muted-foreground mt-2">
+                Cálculo da distância mínima entre fileiras no solstício de inverno às 12:00,
+                com painéis orientados a Sul.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-5">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Parâmetros de Entrada</CardTitle>
+                  <CardDescription>Edite o nº de fileiras, colunas e orientação dos painéis.</CardDescription>
+                </CardHeader>
+
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Latitude</p>
+                      <Input value={fmt(latitude)} readOnly />
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">Inclinação</p>
+                      <Input value={fmt(inclinacao)} readOnly />
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">Comprimento N-S</p>
+                      <Input value={fmt(painelNS)} readOnly />
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">Largura E-O</p>
+                      <Input value={fmt(painelEO)} readOnly />
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">Nº de fileiras</p>
+                      <div className="flex">
+                        <Button type="button" variant="outline" className="rounded-r-none" onClick={() => setSpacingRows(Math.max(1, fileiras - 1))}>-</Button>
+                        <Input className="rounded-none text-center" value={fileiras} onChange={(e) => setSpacingRows(Math.max(1, Number(e.target.value) || 1))} />
+                        <Button type="button" variant="outline" className="rounded-l-none" onClick={() => setSpacingRows(fileiras + 1)}>+</Button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">Nº de colunas</p>
+                      <div className="flex">
+                        <Button type="button" variant="outline" className="rounded-r-none" onClick={() => setSpacingCols(Math.max(1, colunas - 1))}>-</Button>
+                        <Input className="rounded-none text-center" value={colunas} onChange={(e) => setSpacingCols(Math.max(1, Number(e.target.value) || 1))} />
+                        <Button type="button" variant="outline" className="rounded-l-none" onClick={() => setSpacingCols(colunas + 1)}>+</Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-2">Orientação do painel mantendo a inclinação</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant={spacingOrientation === "horizontal" ?"default" : "outline"}
+                        onClick={() => setSpacingOrientation("horizontal")}
+                      >
+                        Horizontal
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={spacingOrientation === "vertical" ?"default" : "outline"}
+                        onClick={() => setSpacingOrientation("vertical")}
+                      >
+                        Vertical
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm">
+                    <p className="font-semibold text-amber-800">Condições consideradas</p>
+                    <p className="text-amber-700 mt-1">Solstício de inverno, 21 de dezembro, às 12:00.</p>
+                    <p className="text-amber-700">Painéis orientados a Sul, azimute 0°.</p>
+                  </div>
+
+                  <div className="rounded-lg bg-sky-50 border border-sky-200 p-3 text-sm space-y-1">
+                    <p className="font-semibold text-sky-900">Resumo da disposição</p>
+                    <div className="flex justify-between"><span>Painéis por fila</span><strong>{colunas}</strong></div>
+                    <div className="flex justify-between"><span>Nº de fileiras</span><strong>{fileiras}</strong></div>
+                    <div className="flex justify-between"><span>Total de painéis</span><strong>{totalLayoutPaineis}</strong></div>
+                    <div className="flex justify-between"><span>Projeção do painel</span><strong>{fmt(projecaoHorizontal)} m</strong></div>
+                    <div className="flex justify-between"><span>Sombra projetada</span><strong>{fmt(sombraProjetada)} m</strong></div>
+                    <div className="flex justify-between"><span>Espaço livre / Gap</span><strong>{fmt(espacoLivre)} m</strong></div>
+                    <div className="flex justify-between text-red-600"><span>Pitch início-início</span><strong>{fmt(pitch)} m</strong></div>
+                    <div className="flex justify-between"><span>Área total</span><strong>{fmt(areaTotal)} m²</strong></div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="space-y-5">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Resultados do Cálculo</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                      {[
+                        ["Altura solar", `${fmt(alturaSolar)}°`],
+                        ["Altura da fila", `${fmt(alturaFila)} m`],
+                        ["Sombra projetada", `${fmt(sombraProjetada)} m`],
+                        ["Espaço livre (Gap)", `${fmt(espacoLivre)} m`],
+                        ["Pitch início-início", `${fmt(pitch)} m`],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-xl border p-3">
+                          <p className="text-xs text-muted-foreground">{label}</p>
+                          <p className="text-xl font-bold mt-1">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Perfil e Sombreamento — Vista lateral às 12:00</CardTitle>
+                    <CardDescription>
+                      O pitch começa no início da 1ª fileira e termina no início da 2ª fileira.
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent>
+                    <div className="bg-sky-50 rounded-xl p-4">
+                      <svg viewBox="0 0 760 300" className="w-full h-auto max-h-[340px]">
+                        <line x1="35" y1={sideGroundY} x2="725" y2={sideGroundY} stroke="#94a3b8" strokeWidth="2" />
+
+                        <circle cx="85" cy="55" r="23" fill="#FFD54F" stroke="#F59E0B" strokeWidth="4" />
+                        <text x="74" y="61" fontSize="13" fontWeight="bold" fill="#92400E">Sol</text>
+                        <text x="68" y="95" fontSize="13" fontWeight="bold">12:00</text>
+                        <line x1="108" y1="72" x2={sideTopX - 8} y2={sideTopY + 8} stroke="#F59E0B" strokeDasharray="7 5" strokeWidth="2" />
+
+                        <line x1={sideX0} y1={sideGroundY} x2={sideTopX} y2={sideTopY} stroke="#0F172A" strokeWidth="11" strokeLinecap="round" />
+                        <line x1={sideX0 + 18} y1={sideGroundY} x2={sideX0 + sidePanelProj * 0.55} y2={sideGroundY - alturaFila * sideScale * 0.45} stroke="#94a3b8" strokeWidth="5" />
+                        <line x1={sideTopX - 15} y1={sideGroundY} x2={sideX0 + sidePanelProj * 0.55} y2={sideGroundY - alturaFila * sideScale * 0.45} stroke="#94a3b8" strokeWidth="5" />
+
+                        <polygon points={`${sideTopX},${sideTopY} ${sideShadowEndX},${sideGroundY} ${sideTopX},${sideGroundY}`} fill="rgba(100,116,139,0.22)" />
+
+                        <line x1={sidePanel2X} y1={sideGroundY} x2={sidePanel2TopX} y2={sidePanel2TopY} stroke="#0F172A" strokeWidth="11" strokeLinecap="round" />
+                        <line x1={sidePanel2X + 18} y1={sideGroundY} x2={sidePanel2X + sidePanelProj * 0.55} y2={sideGroundY - alturaFila * sideScale * 0.45} stroke="#94a3b8" strokeWidth="5" />
+                        <line x1={sidePanel2TopX - 15} y1={sideGroundY} x2={sidePanel2X + sidePanelProj * 0.55} y2={sideGroundY - alturaFila * sideScale * 0.45} stroke="#94a3b8" strokeWidth="5" />
+
+                        <line x1={sideTopX} y1={sideTopY} x2={sideTopX} y2={sideGroundY} stroke="#2563EB" strokeDasharray="5 4" strokeWidth="2" />
+                        <text x={sideTopX + 8} y={(sideTopY + sideGroundY) / 2} fill="#2563EB" fontSize="13" fontWeight="bold">{fmt(alturaFila)} m</text>
+
+                        <line x1={sideX0} y1="252" x2={sideTopX} y2="252" stroke="#64748b" strokeWidth="2" />
+                        <text x={(sideX0 + sideTopX) / 2 - 25} y="246" fontSize="12" fontWeight="bold" fill="#334155">{fmt(projecaoHorizontal)} m</text>
+                        <text x={(sideX0 + sideTopX) / 2 - 48} y="266" fontSize="11" fontWeight="bold" fill="#334155">projeção painel</text>
+
+                        <line x1={sideTopX} y1="252" x2={sideShadowEndX} y2="252" stroke="#64748b" strokeWidth="2" />
+                        <text x={(sideTopX + sideShadowEndX) / 2 - 25} y="246" fontSize="12" fontWeight="bold" fill="#334155">{fmt(sombraProjetada)} m</text>
+                        <text x={(sideTopX + sideShadowEndX) / 2 - 48} y="266" fontSize="11" fontWeight="bold" fill="#334155">sombra projetada</text>
+
+                        <line x1={sideShadowEndX} y1="252" x2={sideGapEndX} y2="252" stroke="#16A34A" strokeWidth="3" />
+                        <text x={(sideShadowEndX + sideGapEndX) / 2 - 18} y="244" fontSize="12" fontWeight="bold" fill="#16A34A">{fmt(espacoLivre)} m</text>
+                        <text x={(sideShadowEndX + sideGapEndX) / 2 - 20} y="266" fontSize="11" fontWeight="bold" fill="#16A34A">Gap</text>
+
+                        <line x1={sideX0} y1="285" x2={sidePanel2X} y2="285" stroke="#EF4444" strokeWidth="3" />
+                        <line x1={sideX0} y1="276" x2={sideX0} y2="294" stroke="#EF4444" strokeWidth="2" />
+                        <line x1={sidePanel2X} y1="276" x2={sidePanel2X} y2="294" stroke="#EF4444" strokeWidth="2" />
+                        <text x={(sideX0 + sidePanel2X) / 2 - 22} y="279" fontSize="14" fontWeight="bold" fill="#EF4444">{fmt(pitch)} m</text>
+                        <text x={(sideX0 + sidePanel2X) / 2 - 52} y="298" fontSize="12" fontWeight="bold" fill="#EF4444">Pitch início-início</text>
+
+                        <text x="38" y="236" fill="#EA580C" fontSize="15" fontWeight="bold">← Sul</text>
+                        <text x="660" y="236" fill="#475569" fontSize="15" fontWeight="bold">Norte →</text>
+                      </svg>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Disposição — Dimensões e Distâncias</CardTitle>
+                <CardDescription>Vista superior: painel, sombra projetada, gap e nova fileira.</CardDescription>
+              </CardHeader>
+
+              <CardContent>
+                <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6 items-start">
+                  <div className="bg-slate-50 rounded-xl p-5 flex flex-col items-center overflow-auto">
+                    <div className="font-bold">N</div>
+                    <div className="text-sm text-muted-foreground mb-3">{fmt(dimensaoEO)} m (E-O)</div>
+
+                    <div className="space-y-0">
+                      {Array.from({ length: fileiras }).map((_, r) => (
+                        <div key={r}>
+                          <div
+                            className="grid"
+                            style={{
+                              gridTemplateColumns: `repeat(${colunas}, ${topPanelW}px)`,
+                              gap: `${topColGap}px`,
+                            }}
+                          >
+                            {Array.from({ length: colunas }).map((_, c) => (
+                              <div key={c} className="rounded bg-blue-600 border border-blue-900 shadow-sm" style={{ height: `${topPanelH}px` }} />
+                            ))}
+                          </div>
+
+                          {r < fileiras - 1 && (
+                            <>
+                              <div
+                                className="bg-slate-200/70 border border-dashed border-slate-400"
+                                style={{ height: `${topShadowH}px`, width: `${colunas * topPanelW + (colunas - 1) * topColGap}px` }}
+                              />
+                              <div
+                                className="bg-pink-200/80 border border-pink-300"
+                                style={{ height: `${topGapH}px`, width: `${colunas * topPanelW + (colunas - 1) * topColGap}px` }}
+                              />
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="font-bold mt-3">S</div>
+                  </div>
+
+                  <div className="rounded-xl border bg-white p-4 space-y-2">
+                    <div className="flex justify-between"><span>Projeção do painel</span><strong>{fmt(projecaoHorizontal)} m</strong></div>
+                    <div className="flex justify-between"><span>Sombra projetada</span><strong>{fmt(sombraProjetada)} m</strong></div>
+                    <div className="flex justify-between"><span>Espaço livre / Gap</span><strong>{fmt(espacoLivre)} m</strong></div>
+                    <div className="flex justify-between text-red-600"><span>Pitch início-início</span><strong>{fmt(pitch)} m</strong></div>
+                    <Separator />
+                    <div className="flex justify-between"><span>Dimensão N-S</span><strong>{fmt(dimensaoNS)} m</strong></div>
+                    <div className="flex justify-between"><span>Dimensão E-O</span><strong>{fmt(dimensaoEO)} m</strong></div>
+                    <div className="flex justify-between"><span>Área total ocupada</span><strong>{fmt(areaTotal)} m²</strong></div>
+                    <Separator />
+                    <div className="flex justify-between"><span>Painéis por fila</span><strong>{colunas}</strong></div>
+                    <div className="flex justify-between"><span>Nº de fileiras</span><strong>{fileiras}</strong></div>
+                    <div className="flex justify-between"><span>Total de painéis</span><strong>{totalLayoutPaineis}</strong></div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
+      {step === 9 && (
+        <WizardMapStep
+          morada={clienteForm.getValues("morada")}
+          suggestedPanels={
+            numPaineisStep5 ?? effectiveSizing?.numPaineis ?? sizing?.numPaineis ?? null
+          }
+          tiltDeg={currentTiltDeg}
+          onReportChange={setReportMapData}
+          panelSpec={{
+            nome: panelRef
+              ?`${panelRef.fabricante} ${panelRef.nome}`
+              : "Painel selecionado",
+            potenciaWp: panelRef ?Number(panelRef.potencia) : 450,
+            alturaM: panelRef?.alturaMm
+              ?Number(panelRef.alturaMm) / 1000
+              : 2.279,
+            larguraM: panelRef?.larguraMm
+              ?Number(panelRef.larguraMm) / 1000
+              : 1.134,
+          }}
+        />
+      )}
+      {step === 10 && (
         <div className="space-y-4">
           {/* Sizing summary */}
-          {(effectiveSizing ?? sizing) && (() => {
-            const eff = (effectiveSizing ?? sizing)!;
+          {(effectiveSizing ??sizing) && (() => {
+            const eff = (effectiveSizing ??sizing)!;
             const eq  = equipForm.getValues();
             const panel    = panels?.find(p => p.id === eq.panelId);
             const inverter = inverters?.find(i => i.id === eq.inverterId);
             const primaryBatId8 = batteryUnits[0]?.batteryId;
-            const battery  = primaryBatId8 ? batteries?.find(b => b.id === primaryBatId8) : null;
+            const battery  = primaryBatId8 ?batteries?.find(b => b.id === primaryBatId8) : null;
             const totalBatCap = batteryUnits.reduce((s, u) => {
               const b = batteries?.find(x => x.id === u.batteryId);
-              return s + (b ? Number(b.capacidade) * u.qty : 0);
+              return s + (b ?Number(b.capacidade) * u.qty : 0);
             }, 0);
             const batVal = batteryUnits.length === 0
-              ? "Sem bateria"
+              ?"Sem bateria"
               : batteryUnits.length === 1 && battery
-                ? `${battery.fabricante} ${battery.nome} × ${batteryUnits[0].qty} (${(Number(battery.capacidade) * batteryUnits[0].qty).toFixed(1)} kWh)`
+                ?`${battery.fabricante} ${battery.nome} × ${batteryUnits[0].qty} (${(Number(battery.capacidade) * batteryUnits[0].qty).toFixed(1)} kWh)`
                 : `${batteryUnits.length} modelos — ${totalBatCap.toFixed(1)} kWh nom.`;
             return (
               <Card>
@@ -2337,8 +2701,8 @@ function WizardInner({ projectId }: { projectId: number }) {
                       { label: "Potência instalada",  val: `${eff.potenciaInstalada} kWp` },
                       { label: "Nº de painéis",       val: `${eff.numPaineis} un.` },
                       { label: "Produção anual est.", val: `${eff.energiaAnualEstimada.toLocaleString("pt-PT")} kWh` },
-                      { label: "Painel",              val: panel ? `${panel.fabricante} ${panel.nome}` : "—" },
-                      { label: "Inversor",            val: inverter ? `${inverter.fabricante} ${inverter.nome}` : "—" },
+                      { label: "Painel",              val: panel ?`${panel.fabricante} ${panel.nome}` : "—" },
+                      { label: "Inversor",            val: inverter ?`${inverter.fabricante} ${inverter.nome}` : "—" },
                       { label: "Bateria",             val: batVal },
                     ].map(item => (
                       <div key={item.label} className="bg-muted/40 rounded-lg p-3">
@@ -2378,7 +2742,7 @@ function WizardInner({ projectId }: { projectId: number }) {
                 <div className="flex gap-2 shrink-0 flex-wrap">
                   <Button onClick={handleSaveProposal} disabled={createProposal.isPending}>
                     {createProposal.isPending
-                      ? <Loader2 size={16} className="mr-2 animate-spin" />
+                      ?<Loader2 size={16} className="mr-2 animate-spin" />
                       : <Save size={16} className="mr-2" />}
                     Guardar Proposta
                   </Button>
@@ -2390,13 +2754,13 @@ function WizardInner({ projectId }: { projectId: number }) {
             </CardContent>
           </Card>
 
-          {/* ── Resumo do Upgrade ───────────────────────────────────────── */}
+          {/* —— Resumo do Upgrade ————————————————————————————————————————— */}
           {tipoProjeto !== "nova" && instalacaoExistente.potenciaFVkWp > 0 && (() => {
             const eq8 = equipForm.getValues();
             const panelUpg = panels?.find(p => p.id === eq8.panelId);
             const potNovakWp = panelUpg && numPaineisStep5
-              ? (numPaineisStep5 * Number(panelUpg.potencia)) / 1000
-              : (effectiveSizing?.potenciaInstalada ?? 0);
+              ?(numPaineisStep5 * Number(panelUpg.potencia)) / 1000
+              : (effectiveSizing?.potenciaInstalada ??0);
             const producaoAdd = effectiveSizing?.energiaAnualEstimada ?? activeCenario?.energiaAnualEstimada ?? 0;
             const precoKwhUpg = consumoData.precoKwh ?? 0.18;
             const poupancaAdd = producaoAdd * precoKwhUpg;
@@ -2417,9 +2781,9 @@ function WizardInner({ projectId }: { projectId: number }) {
                         label: "Situação Actual",
                         items: [
                           `${instalacaoExistente.potenciaFVkWp} kWp instalados`,
-                          instalacaoExistente.numPaineis > 0 ? `${instalacaoExistente.numPaineis} painéis` : "—",
+                          instalacaoExistente.numPaineis > 0 ?`${instalacaoExistente.numPaineis} painéis` : "—",
                           instalacaoExistente.producaoAnualkWh > 0
-                            ? `${instalacaoExistente.producaoAnualkWh.toLocaleString("pt-PT")} kWh/ano`
+                            ?`${instalacaoExistente.producaoAnualkWh.toLocaleString("pt-PT")} kWh/ano`
                             : "—",
                         ],
                       },
@@ -2435,8 +2799,8 @@ function WizardInner({ projectId }: { projectId: number }) {
                         label: "Ganho Estimado",
                         items: [
                           `+${poupancaAdd.toLocaleString("pt-PT", { maximumFractionDigits: 0 })} €/ano`,
-                          invest > 0 ? `Investimento: ${invest.toLocaleString("pt-PT")} €` : "Investimento: —",
-                          payback != null ? `Payback: ${payback.toFixed(1)} anos` : "Payback: defina o investimento",
+                          invest > 0 ?`Investimento: ${invest.toLocaleString("pt-PT")} €` : "Investimento: —",
+                          payback != null ?`Payback: ${payback.toFixed(1)} anos` : "Payback: defina o investimento",
                         ],
                       },
                     ].map(col => (
@@ -2453,7 +2817,7 @@ function WizardInner({ projectId }: { projectId: number }) {
             );
           })()}
 
-          {/* ── Orçamento Comercial ──────────────────────────────────────── */}
+          {/* —— Orçamento Comercial ———————————————————————————————————————— */}
           {orcamentoState && (
             <WizardOrcamento
               state={orcamentoState}
@@ -2461,6 +2825,11 @@ function WizardInner({ projectId }: { projectId: number }) {
               estudo={estudoFinanceiro}
             />
           )}
+        </div>
+      )}
+      {step === 11 && (
+        <div className="h-[calc(100vh-220px)] min-h-[760px] overflow-hidden rounded-lg border bg-white shadow-sm">
+          <ReportBuilder projectId={projectId} />
         </div>
       )}
 
@@ -2480,10 +2849,26 @@ function WizardInner({ projectId }: { projectId: number }) {
         <span className="text-xs text-muted-foreground font-medium tabular-nums shrink-0">
           {step} de {STEPS.length}
         </span>
-        {step < 8 ? (
+        {step < STEPS.length ?(
           <Button onClick={goNext} disabled={isSizing} className="gap-1.5">
             {isSizing && <Loader2 size={15} className="animate-spin" />}
-            {step === 3 ? "Calcular" : step === 5 ? "Análise Técnica" : step === 6 ? "Estudo Financeiro" : step === 7 ? "Orçamento" : "Seguinte"}
+            {
+  step === 3
+    ?"Calcular"
+    : step === 5
+    ?"Análise Técnica"
+    : step === 6
+    ?"Estudo Financeiro"
+    : step === 7
+    ?"Sombras"
+    : step === 8
+    ?"Mapa"
+    : step === 9
+    ?"Orçamento"
+    : step === 10
+    ?"Relatório"
+    : "Seguinte"
+}
             {!isSizing && <ChevronRight size={15} />}
           </Button>
         ) : (

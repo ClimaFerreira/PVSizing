@@ -1,646 +1,1319 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import type { SectionId } from "./types";
-import type { SolarPanel, Inverter, Battery, Customer } from "@workspace/api-client-react";
-import type { SolarParams, SolarResult } from "@/contexts/SolarContext";
-import type { MapData } from "@/contexts/MapaContext";
+import type { Battery, Inverter, SolarPanel } from "@workspace/api-client-react";
+import type { BatteryUnit } from "@/components/wizard-battery-study";
+import type { MapReportData } from "@/components/wizard-map-step";
+import { createPanelLayout, type MapArea } from "@/components/satellite-map";
 import type { InverterUnit } from "@/lib/multi-inverter";
+import type { SectionId } from "./types";
 
-const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const PRODUCTION_PROFILE = [0.055, 0.065, 0.085, 0.095, 0.11, 0.12, 0.125, 0.115, 0.095, 0.075, 0.04, 0.02];
 
-function fmt(n: number | null | undefined, dec = 2, unit = "") {
-  if (n == null) return "—";
-  return `${n.toLocaleString("pt-PT", { minimumFractionDigits: dec, maximumFractionDigits: dec })}${unit ? " " + unit : ""}`;
+type AnyRecord = Record<string, unknown>;
+
+export interface NewReportData {
+  projectName: string;
+  generatedAt: string;
+  project: unknown;
+  customer: AnyRecord | null;
+  draft: (AnyRecord & {
+    clienteData?: AnyRecord | null;
+    consumoData?: AnyRecord | null;
+    locData?: AnyRecord | null;
+    sizing?: AnyRecord | null;
+    manual?: AnyRecord | null;
+    reportMapData?: MapReportData | null;
+    orcamentoState?: AnyRecord | null;
+    selectedCenarioTipo?: string;
+    investimentoManual?: number | null;
+    numPaineisStep5?: number | null;
+    tipoProjeto?: string;
+  }) | null;
+  panel: SolarPanel | null;
+  inverters: Inverter[];
+  batteries: Battery[];
+  allInverters: Inverter[];
+  inverterUnits: InverterUnit[];
+  batteryUnits: BatteryUnit[];
+  notes: string;
+}
+
+function num(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ?n : null;
+}
+
+function text(value: unknown): string | null {
+  if (value == null) return null;
+  const str = String(value).trim();
+  return str.length ?str : null;
+}
+
+function fmt(value: unknown, digits = 2, unit = "") {
+  const n = num(value);
+  if (n == null) return "-";
+  return `${n.toLocaleString("pt-PT", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}${unit ?` ${unit}` : ""}`;
+}
+
+function int(value: unknown, unit = "") {
+  const n = num(value);
+  if (n == null) return "-";
+  return `${Math.round(n).toLocaleString("pt-PT")}${unit ?` ${unit}` : ""}`;
+}
+
+function money(value: unknown) {
+  const n = num(value);
+  if (n == null) return "-";
+  return n.toLocaleString("pt-PT", { style: "currency", currency: "EUR" });
+}
+
+function signedMoney(value: unknown) {
+  const n = num(value);
+  if (n == null) return "-";
+  const abs = Math.abs(n).toLocaleString("pt-PT", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  });
+  return `${n >= 0 ?"+" : "-"}${abs}`;
+}
+
+function estimateIrr(cashflows: number[]) {
+  let low = -0.95;
+  let high = 1;
+  const npv = (rate: number) =>
+    cashflows.reduce((sum, cash, index) => sum + cash / (1 + rate) ** index, 0);
+
+  for (let i = 0; i < 80; i++) {
+    const mid = (low + high) / 2;
+    if (npv(mid) > 0) low = mid;
+    else high = mid;
+  }
+
+  const irr = (low + high) / 2;
+  return Number.isFinite(irr) ?irr : null;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="report-section mt-8 first:mt-0">
-      <h2 className="text-lg font-bold text-[#0D2B45] border-b-2 border-[#F59E0B] pb-1 mb-4">{title}</h2>
+    <section className="report-section mt-8 first:mt-0">
+      <h2 className="mb-4 border-b-2 border-amber-400 pb-2 text-xl font-bold text-slate-950">
+        {title}
+      </h2>
       {children}
+    </section>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border bg-slate-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-bold text-slate-950">{value}</p>
     </div>
   );
 }
 
-function KvRow({ k, v }: { k: string; v: React.ReactNode }) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <tr className="border-b border-gray-100">
-      <td className="py-1 pr-4 text-sm text-gray-500 w-48 align-top">{k}</td>
-      <td className="py-1 text-sm font-medium text-gray-900">{v}</td>
+    <tr className="border-b border-slate-100">
+      <td className="w-56 py-2 pr-4 text-sm text-slate-500">{label}</td>
+      <td className="py-2 text-sm font-semibold text-slate-950">{value ??"-"}</td>
     </tr>
   );
 }
 
-export interface ReportData {
-  projectName: string;
-  date: string;
-  customer: Customer | null;
-  panel: SolarPanel | null;
-  inverters: Inverter[];
-  batteries: Battery[];
-  sizing: Record<string, unknown> | null;
-  consumoData: Record<string, unknown> | null;
-  locData: Record<string, unknown> | null;
-  numPaineis: number | null;
-  potenciaKwp: number | null;
-  investimentoManual: number | null;
-  notas: string;
-  spacingParams: SolarParams | null;
-  spacingResults: SolarResult | null;
-  spacingCrossSvg: string;
-  spacingLayoutSvg: string;
-  mapData: MapData | null;
-  inverterUnits: InverterUnit[];
-  allInverters: Inverter[];
+function DataTable({ rows }: { rows: Array<[string, React.ReactNode]> }) {
+  return (
+    <table className="w-full">
+      <tbody>{rows.map(([label, value]) => <Row key={label} label={label} value={value} />)}</tbody>
+    </table>
+  );
 }
 
-interface Props {
-  sections: SectionId[];
-  data: ReportData;
+function monthlyArray(value: unknown, annualFallback: unknown, flatFallback = false) {
+  const arr = Array.isArray(value)
+    ?value.map((item) => num(item) ??0)
+    : [];
+  if (arr.length >= 12 && arr.some((item) => item > 0)) return arr.slice(0, 12);
+
+  const annual = num(annualFallback) ??0;
+  if (annual <= 0) return Array.from({ length: 12 }, () => 0);
+  if (flatFallback) return Array.from({ length: 12 }, () => Math.round(annual / 12));
+  return PRODUCTION_PROFILE.map((factor) => Math.round(annual * factor));
 }
 
-export default function ReportPreview({ sections, data }: Props) {
-  const {
-    projectName, date, customer, panel, inverters, batteries,
-    sizing, consumoData, locData, numPaineis, potenciaKwp,
-    investimentoManual, notas,
-    spacingParams, spacingResults, spacingCrossSvg, spacingLayoutSvg,
-    mapData, inverterUnits, allInverters,
-  } = data;
-
-  const sz = sizing as {
-    potenciaRecomendada?: number; numPaineis?: number; energiaAnualEstimada?: number;
-    coberturaPrevista?: number; coberturaReal?: number; poupancaAnual?: number;
-    paybackAnos?: number; hsp?: number; producaoMensal?: number[];
-    percVazio?: number; percCheio?: number; percPonta?: number;
-    consumoDiario?: number; consumoAnualAjustado?: number; fatorRendimento?: number;
-  } | null;
-
-  const cd = consumoData as {
-    consumoMensal?: number; consumoAnual?: number; tarifaEnergia?: number;
-    potenciaContratada?: number; tipoTarifa?: string; cpe?: string; distribuidora?: string;
-  } | null;
-
-  const ld = locData as {
-    municipio?: string; latitude?: number; longitude?: number;
-    inclinacao?: number; azimute?: number;
-  } | null;
-
-  const potKwp = potenciaKwp ?? sz?.potenciaRecomendada ?? null;
-  const nPaineis = numPaineis ?? sz?.numPaineis ?? null;
-  const poupanca = sz?.poupancaAnual ?? null;
-  const payback = sz?.paybackAnos ?? null;
-  const tarifa = cd?.tarifaEnergia ?? customer?.precoEletricidade ?? null;
-  const investimento = investimentoManual ?? (poupanca && payback ? Math.round(poupanca * payback) : null);
-  const roi = (investimento && poupanca) ? ((poupanca * 25 - investimento) / investimento * 100) : null;
-
-  const producaoMensal = sz?.producaoMensal ?? [];
-  const producaoChartData = MESES.map((m, i) => ({ mes: m, kwh: producaoMensal[i] ?? 0 }));
-  const isCoplanar = spacingParams?.mountType === "coplanar";
-
-  /* check whether any body section is selected */
-  const bodySections: SectionId[] = ["cliente","consumos","dimensionamento","equipamentos","producao","espacamento","mapa","strings","financeiro","notas"];
-  const hasBody = bodySections.some(s => sections.includes(s));
+function SvgLineChart({
+  data,
+  series,
+  xAxisLabel,
+}: {
+  data: Array<Record<string, number | string>>;
+  series: Array<{ key: string; label: string; color: string }>;
+  xAxisLabel?: string;
+}) {
+  const width = 760;
+  const height = 260;
+  const left = 54;
+  const right = 24;
+  const top = 20;
+  const bottom = 42;
+  const values = data.flatMap((row) => series.map((item) => Number(row[item.key] ??0)));
+  const max = Math.max(1, ...values) * 1.12;
+  const xStep = (width - left - right) / Math.max(1, data.length - 1);
+  const y = (value: number) => top + (height - top - bottom) * (1 - value / max);
+  const x = (index: number) => left + index * xStep;
 
   return (
-    <div id="report-content" className="report-root font-sans text-gray-900 bg-white">
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full rounded-lg border bg-white">
+      {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
+        const yy = y(max * tick);
+        return (
+          <g key={tick}>
+            <line x1={left} x2={width - right} y1={yy} y2={yy} stroke="#e2e8f0" />
+            <text x={left - 10} y={yy + 4} textAnchor="end" fontSize="10" fill="#64748b">
+              {Math.round(max * tick).toLocaleString("pt-PT")}
+            </text>
+          </g>
+        );
+      })}
+      {data.map((row, index) => (
+        <text key={String(row.month)} x={x(index)} y={height - 16} textAnchor="middle" fontSize="11" fill="#475569">
+          {row.month}
+        </text>
+      ))}
+      {xAxisLabel && (
+        <text x={width - right} y={height - 16} textAnchor="start" fontSize="11" fontWeight="700" fill="#334155">
+          {xAxisLabel}
+        </text>
+      )}
+      {series.map((item) => {
+        const d = data
+          .map((row, index) => `${index === 0 ?"M" : "L"} ${x(index)} ${y(Number(row[item.key] ??0))}`)
+          .join(" ");
+        return (
+          <g key={item.key}>
+            <path d={d} fill="none" stroke={item.color} strokeWidth="3" strokeLinecap="round" />
+            {data.map((row, index) => (
+              <circle key={index} cx={x(index)} cy={y(Number(row[item.key] ??0))} r="3" fill={item.color} />
+            ))}
+          </g>
+        );
+      })}
+      <g transform={`translate(${left}, ${height - 4})`}>
+        {series.map((item, index) => (
+          <g key={item.key} transform={`translate(${index * 170}, 0)`}>
+            <rect width="12" height="4" y="-8" fill={item.color} rx="2" />
+            <text x="18" y="-4" fontSize="11" fill="#334155">{item.label}</text>
+          </g>
+        ))}
+      </g>
+    </svg>
+  );
+}
 
-      {/* ── CAPA — página própria ───────────────────────────────────────────── */}
-      {sections.includes("capa") && (
-        <div className="report-page a4-page capa-page flex flex-col items-center justify-between py-16 px-12 min-h-[29.7cm]">
-          <div className="w-full">
-            <div className="flex items-center gap-3 mb-12">
-              <div className="w-10 h-10 rounded-lg bg-[#0D2B45] flex items-center justify-center">
-                <span className="text-yellow-400 font-bold text-lg">☀</span>
+function SvgBarChart({
+  data,
+  color = "#16a34a",
+  label = "Valor",
+}: {
+  data: Array<{ month: string; value: number }>;
+  color?: string;
+  label?: string;
+}) {
+  const width = 760;
+  const height = 230;
+  const left = 48;
+  const right = 20;
+  const top = 18;
+  const bottom = 38;
+  const max = Math.max(1, ...data.map((item) => item.value)) * 1.12;
+  const barSlot = (width - left - right) / data.length;
+  const barWidth = barSlot * 0.58;
+  const y = (value: number) => top + (height - top - bottom) * (1 - value / max);
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full rounded-lg border bg-white">
+      {[0, 0.5, 1].map((tick) => {
+        const yy = y(max * tick);
+        return (
+          <g key={tick}>
+            <line x1={left} x2={width - right} y1={yy} y2={yy} stroke="#e2e8f0" />
+            <text x={left - 8} y={yy + 4} textAnchor="end" fontSize="10" fill="#64748b">
+              {Math.round(max * tick).toLocaleString("pt-PT")}
+            </text>
+          </g>
+        );
+      })}
+      {data.map((item, index) => {
+        const x = left + index * barSlot + (barSlot - barWidth) / 2;
+        const yy = y(item.value);
+        const h = height - bottom - yy;
+        return (
+          <g key={item.month}>
+            <rect x={x} y={yy} width={barWidth} height={Math.max(2, h)} rx="4" fill={color} opacity={index >= 3 && index <= 8 ?1 : 0.55} />
+            <text x={x + barWidth / 2} y={height - 16} textAnchor="middle" fontSize="11" fill="#475569">{item.month}</text>
+          </g>
+        );
+      })}
+      <g transform={`translate(${left}, ${height - 4})`}>
+        <rect width="12" height="4" y="-8" fill={color} rx="2" />
+        <text x="18" y="-4" fontSize="11" fill="#334155">{label}</text>
+      </g>
+    </svg>
+  );
+}
+
+function SvgCompareBarChart({
+  data,
+}: {
+  data: Array<{ label: string; value: number; color: string }>;
+}) {
+  const width = 760;
+  const height = 230;
+  const left = 60;
+  const right = 30;
+  const top = 18;
+  const bottom = 54;
+  const max = Math.max(1, ...data.map((item) => item.value)) * 1.12;
+  const slot = (width - left - right) / data.length;
+  const barWidth = Math.min(120, slot * 0.5);
+  const y = (value: number) => top + (height - top - bottom) * (1 - value / max);
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full rounded-lg border bg-white">
+      {[0, 0.5, 1].map((tick) => {
+        const yy = y(max * tick);
+        return (
+          <g key={tick}>
+            <line x1={left} x2={width - right} y1={yy} y2={yy} stroke="#e2e8f0" />
+            <text x={left - 8} y={yy + 4} textAnchor="end" fontSize="10" fill="#64748b">
+              {Math.round(max * tick).toLocaleString("pt-PT")}
+            </text>
+          </g>
+        );
+      })}
+      {data.map((item, index) => {
+        const x = left + index * slot + (slot - barWidth) / 2;
+        const yy = y(item.value);
+        const h = height - bottom - yy;
+        return (
+          <g key={item.label}>
+            <rect x={x} y={yy} width={barWidth} height={Math.max(2, h)} rx="5" fill={item.color} />
+            <text x={x + barWidth / 2} y={height - 30} textAnchor="middle" fontSize="12" fill="#334155">{item.label}</text>
+            <text x={x + barWidth / 2} y={yy - 6} textAnchor="middle" fontSize="11" fontWeight="700" fill="#0f172a">
+              {Math.round(item.value).toLocaleString("pt-PT")}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function renderMapSvg(map: MapReportData | null | undefined) {
+  if (!map?.areas?.length) return null;
+
+  const points = map.areas.flatMap((area) => area.points);
+  if (!points.length) return null;
+
+  const minLat = Math.min(...points.map((point) => point.lat));
+  const maxLat = Math.max(...points.map((point) => point.lat));
+  const minLng = Math.min(...points.map((point) => point.lng));
+  const maxLng = Math.max(...points.map((point) => point.lng));
+  const pad = 24;
+  const width = 760;
+  const height = 420;
+  const spanLat = Math.max(maxLat - minLat, 0.00001);
+  const spanLng = Math.max(maxLng - minLng, 0.00001);
+  const project = (lat: number, lng: number) => ({
+    x: pad + ((lng - minLng) / spanLng) * (width - pad * 2),
+    y: pad + ((maxLat - lat) / spanLat) * (height - pad * 2),
+  });
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full rounded-lg bg-slate-900">
+      <defs>
+        <pattern id="map-grid" width="32" height="32" patternUnits="userSpaceOnUse">
+          <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="1" />
+        </pattern>
+      </defs>
+      <rect width={width} height={height} fill="#132238" />
+      <rect width={width} height={height} fill="url(#map-grid)" />
+      {map.areas.map((area) => {
+        const polygon = area.points.map((point) => {
+          const p = project(point.lat, point.lng);
+          return `${p.x},${p.y}`;
+        }).join(" ");
+        const center = area.points.reduce(
+          (acc, point) => ({ lat: acc.lat + point.lat / area.points.length, lng: acc.lng + point.lng / area.points.length }),
+          { lat: 0, lng: 0 },
+        );
+        const cp = project(center.lat, center.lng);
+        const panelRows = Math.max(1, Math.ceil(area.paineis / 12));
+        const panelCols = Math.max(1, Math.min(12, area.paineis));
+        return (
+          <g key={area.id}>
+            <polygon points={polygon} fill={`${area.cor}33`} stroke={area.cor} strokeWidth="4" />
+            {Array.from({ length: Math.min(area.paineis, 72) }).map((_, index) => {
+              const row = Math.floor(index / panelCols);
+              const col = index % panelCols;
+              const x = cp.x - (panelCols * 13) / 2 + col * 13;
+              const y = cp.y - (panelRows * 8) / 2 + row * 8;
+              return (
+                <rect
+                  key={index}
+                  x={x}
+                  y={y}
+                  width="10"
+                  height="6"
+                  rx="1"
+                  fill="#1e3a5f"
+                  stroke="#9ad1ff"
+                  strokeWidth=".6"
+                  transform={`rotate(${area.rotacao} ${cp.x} ${cp.y})`}
+                />
+              );
+            })}
+            <rect x={cp.x - 52} y={cp.y - 42} width="104" height="34" rx="5" fill="rgba(15,23,42,.86)" />
+            <text x={cp.x - 44} y={cp.y - 22} fill="white" fontSize="13" fontWeight="700">{area.nome}</text>
+            <text x={cp.x - 44} y={cp.y - 10} fill="#cbd5e1" fontSize="10">{area.paineis} painéis</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function latLngToTile(lat: number, lng: number, zoom: number) {
+  const latRad = (lat * Math.PI) / 180;
+  const n = 2 ** zoom;
+  return {
+    x: Math.floor(((lng + 180) / 360) * n),
+    y: Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n),
+  };
+}
+
+function latLngToWorldPixel(lat: number, lng: number, zoom: number) {
+  const sinLat = Math.sin((lat * Math.PI) / 180);
+  const scale = 256 * 2 ** zoom;
+  return {
+    x: ((lng + 180) / 360) * scale,
+    y:
+      (0.5 -
+        Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) *
+      scale,
+  };
+}
+
+function reportAreaToMapArea(area: MapReportData["areas"][number]): MapArea {
+  return {
+    id: area.id,
+    nome: area.nome,
+    cor: area.cor,
+    tipo: area.tipo,
+    paineis: area.paineis,
+    strings: area.strings,
+    rotacao: area.rotacao,
+    panelOffsetLat: area.panelOffsetLat,
+    panelOffsetLng: area.panelOffsetLng,
+    points: area.points,
+  };
+}
+
+function renderMapOverlaySvg(
+  map: MapReportData | null | undefined,
+  tile: { x: number; y: number },
+  zoom: number,
+) {
+  if (!map?.areas?.length) return null;
+
+  const width = 768;
+  const height = 768;
+  const topLeft = {
+    x: (tile.x - 1) * 256,
+    y: (tile.y - 1) * 256,
+  };
+  const project = (lat: number, lng: number) => {
+    const pixel = latLngToWorldPixel(lat, lng, zoom);
+    return {
+      x: pixel.x - topLeft.x,
+      y: pixel.y - topLeft.y,
+    };
+  };
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="pointer-events-none absolute inset-0 z-10 h-full w-full">
+      {map.areas.map((area) => {
+        const polygon = area.points.map((point) => {
+          const p = project(point.lat, point.lng);
+          return `${p.x},${p.y}`;
+        }).join(" ");
+        const panels = createPanelLayout(reportAreaToMapArea(area), map.panelSpec);
+        const labelPoint = panels[0]?.center ??area.points[0];
+        const label = project(labelPoint.lat, labelPoint.lng);
+
+        return (
+          <g key={area.id}>
+            <polygon
+              points={polygon}
+              fill={`${area.cor}33`}
+              stroke={area.cor}
+              strokeWidth="5"
+              strokeLinejoin="round"
+            />
+            {panels.map((panel) => {
+              const panelPolygon = panel.corners.map((point) => {
+                const p = project(point.lat, point.lng);
+                return `${p.x},${p.y}`;
+              }).join(" ");
+              return (
+                <polygon
+                  key={panel.id}
+                  points={panelPolygon}
+                  fill="#19375f"
+                  stroke="#a7d7ff"
+                  strokeWidth="1"
+                />
+              );
+            })}
+            <rect x={label.x - 44} y={label.y - 34} width="88" height="28" rx="5" fill="rgba(15,23,42,.88)" />
+            <text x={label.x - 35} y={label.y - 17} fill="white" fontSize="12" fontWeight="700">{area.nome}</text>
+            <text x={label.x - 35} y={label.y - 6} fill="#cbd5e1" fontSize="9">{area.paineis} painéis</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function renderSatelliteTiles(map: MapReportData | null | undefined) {
+  const points = map?.areas?.flatMap((area) => area.points) ??[];
+  if (!points.length) return null;
+
+  const center = points.reduce(
+    (acc, point) => ({
+      lat: acc.lat + point.lat / points.length,
+      lng: acc.lng + point.lng / points.length,
+    }),
+    { lat: 0, lng: 0 },
+  );
+  const zoom = 19;
+  const tile = latLngToTile(center.lat, center.lng, zoom);
+
+  return (
+    <div className="report-satellite-map overflow-hidden rounded-lg border bg-slate-900">
+      <div className="report-satellite-viewport relative aspect-[16/9] overflow-hidden">
+        <div className="report-satellite-tile-grid absolute left-1/2 top-1/2 grid aspect-square w-[150%] -translate-x-1/2 -translate-y-1/2 grid-cols-3 grid-rows-3">
+          {[-1, 0, 1].flatMap((dy) =>
+            [-1, 0, 1].map((dx) => {
+              const x = tile.x + dx;
+              const y = tile.y + dy;
+              return (
+                <img
+                  key={`${x}-${y}`}
+                  src={`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`}
+                  alt=""
+                  className="block h-full w-full object-cover"
+                  crossOrigin="anonymous"
+                />
+              );
+            }),
+          )}
+          {renderMapOverlaySvg(map, tile, zoom)}
+        </div>
+      </div>
+      <p className="bg-white px-3 py-2 text-xs text-slate-500">
+        Imagem satélite centrada na área desenhada. Fonte: Esri World Imagery.
+      </p>
+    </div>
+  );
+}
+
+function renderSatelliteMapSvg(map: MapReportData | null | undefined) {
+  const points = map?.areas?.flatMap((area) => area.points) ??[];
+  if (!points.length) return null;
+  const mapData = map as MapReportData;
+
+  const center = points.reduce(
+    (acc, point) => ({
+      lat: acc.lat + point.lat / points.length,
+      lng: acc.lng + point.lng / points.length,
+    }),
+    { lat: 0, lng: 0 },
+  );
+  const zoom = 19;
+  const tile = latLngToTile(center.lat, center.lng, zoom);
+  const width = 768;
+  const height = 432;
+  const tileScale = 1.5;
+  const tileGridSize = 256 * 3 * tileScale;
+  const offsetX = (width - tileGridSize) / 2;
+  const offsetY = (height - tileGridSize) / 2;
+  const topLeft = {
+    x: (tile.x - 1) * 256,
+    y: (tile.y - 1) * 256,
+  };
+  const toMapPoint = (lat: number, lng: number) => {
+    const pixel = latLngToWorldPixel(lat, lng, zoom);
+    return {
+      x: (pixel.x - topLeft.x) * tileScale + offsetX,
+      y: (pixel.y - topLeft.y) * tileScale + offsetY,
+    };
+  };
+  const clipId = `sat-map-${tile.x}-${tile.y}-${zoom}`;
+
+  return (
+    <div className="report-satellite-map overflow-hidden rounded-lg border bg-slate-900">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="report-satellite-svg block h-auto w-full bg-slate-800"
+        aria-label="Mapa satélite com implantação fotovoltaica"
+      >
+        <defs>
+          <clipPath id={clipId}>
+            <rect x="0" y="0" width={width} height={height} rx="8" />
+          </clipPath>
+        </defs>
+        <g clipPath={`url(#${clipId})`}>
+          {[-1, 0, 1].flatMap((dy) =>
+            [-1, 0, 1].map((dx) => {
+              const x = tile.x + dx;
+              const y = tile.y + dy;
+              return (
+                <image
+                  key={`${x}-${y}`}
+                  href={`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`}
+                  x={offsetX + (dx + 1) * 256 * tileScale}
+                  y={offsetY + (dy + 1) * 256 * tileScale}
+                  width={256 * tileScale}
+                  height={256 * tileScale}
+                  preserveAspectRatio="none"
+                  crossOrigin="anonymous"
+                />
+              );
+            }),
+          )}
+          {mapData.areas.map((area) => {
+            const polygon = area.points.map((point) => {
+              const p = toMapPoint(point.lat, point.lng);
+              return `${p.x},${p.y}`;
+            }).join(" ");
+            const panels = createPanelLayout(reportAreaToMapArea(area), mapData.panelSpec);
+            const labelPoint = panels[0]?.center ??area.points[0];
+            const label = toMapPoint(labelPoint.lat, labelPoint.lng);
+
+            return (
+              <g key={area.id}>
+                <polygon points={polygon} fill={`${area.cor}33`} stroke={area.cor} strokeWidth="4" strokeLinejoin="round" />
+                {panels.map((panel) => {
+                  const panelPolygon = panel.corners.map((point) => {
+                    const p = toMapPoint(point.lat, point.lng);
+                    return `${p.x},${p.y}`;
+                  }).join(" ");
+                  return (
+                    <polygon key={panel.id} points={panelPolygon} fill="#19375f" stroke="#a7d7ff" strokeWidth="1" />
+                  );
+                })}
+                <rect x={label.x - 44} y={label.y - 34} width="88" height="28" rx="5" fill="rgba(15,23,42,.88)" />
+                <text x={label.x - 35} y={label.y - 17} fill="white" fontSize="12" fontWeight="700">{area.nome}</text>
+                <text x={label.x - 35} y={label.y - 6} fill="#cbd5e1" fontSize="9">{area.paineis} painéis</text>
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+      <p className="bg-white px-3 py-2 text-xs text-slate-500">
+        Imagem satélite centrada na área desenhada. Fonte: Esri World Imagery.
+      </p>
+    </div>
+  );
+}
+
+function renderShadingSvg({
+  tilt,
+  pitch,
+  panelLength,
+  mountType,
+}: {
+  tilt: number;
+  pitch: number;
+  panelLength: number;
+  mountType: string;
+}) {
+  const width = 760;
+  const height = 340;
+  const groundY = 260;
+  const scale = 54;
+  const angle = Math.max(0, Math.min(75, tilt));
+  const radians = (angle * Math.PI) / 180;
+  const projection = Math.max(0.4, panelLength * Math.cos(radians));
+  const panelRise = Math.max(0.1, panelLength * Math.sin(radians));
+  const x0 = 95;
+  const x1 = x0 + projection * scale;
+  const y1 = groundY - panelRise * scale;
+  const pitchPx = pitch * scale;
+  const x2 = x0 + pitchPx;
+  const x3 = x2 + projection * scale;
+  const shadowEnd = x1 + Math.max(1.2, pitch - projection - 0.5) * scale;
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full rounded-lg border bg-sky-50">
+      <rect width={width} height={height} fill="#f0f9ff" />
+      <line x1="40" y1={groundY} x2="720" y2={groundY} stroke="#64748b" strokeWidth="2" />
+      <circle cx="88" cy="58" r="28" fill="#facc15" stroke="#f59e0b" strokeWidth="4" />
+      <text x="62" y="105" fill="#92400e" fontSize="13" fontWeight="700">Sol 21 Dez</text>
+      <line x1="112" y1="72" x2={x1} y2={y1} stroke="#f59e0b" strokeWidth="2" strokeDasharray="7 5" />
+
+      <polygon points={`${x1},${y1} ${shadowEnd},${groundY} ${x1},${groundY}`} fill="rgba(100,116,139,.22)" />
+      <line x1={x0} y1={groundY} x2={x1} y2={y1} stroke="#0f172a" strokeWidth="12" strokeLinecap="round" />
+      <line x1={x2} y1={groundY} x2={x3} y2={groundY - panelRise * scale} stroke="#0f172a" strokeWidth="12" strokeLinecap="round" />
+
+      <line x1={x0} y1="305" x2={x2} y2="305" stroke="#ef4444" strokeWidth="3" />
+      <line x1={x0} y1="296" x2={x0} y2="314" stroke="#ef4444" strokeWidth="2" />
+      <line x1={x2} y1="296" x2={x2} y2="314" stroke="#ef4444" strokeWidth="2" />
+      <text x={(x0 + x2) / 2} y="296" textAnchor="middle" fill="#ef4444" fontSize="15" fontWeight="700">
+        Pitch {fmt(pitch, 2, "m")}
+      </text>
+
+      <line x1={x0} y1="276" x2={x1} y2="276" stroke="#2563eb" strokeWidth="2" />
+      <text x={(x0 + x1) / 2} y="272" textAnchor="middle" fill="#2563eb" fontSize="13" fontWeight="700">
+        Projeção {fmt(projection, 2, "m")}
+      </text>
+      <line x1={x1} y1={y1} x2={x1} y2={groundY} stroke="#16a34a" strokeWidth="2" strokeDasharray="5 4" />
+      <text x={x1 + 8} y={(y1 + groundY) / 2} fill="#16a34a" fontSize="12" fontWeight="700">
+        Altura {fmt(panelRise, 2, "m")}
+      </text>
+      <text x="560" y="48" fill="#0f172a" fontSize="14" fontWeight="700">
+        {mountType === "coplanar" ?"Telhado coplanar" : "Estrutura em triângulos"} · {fmt(angle, 1, "º")}
+      </text>
+      <text x="50" y={groundY - 6} fill="#ea580c" fontSize="14" fontWeight="700">Sul</text>
+      <text x="690" y={groundY - 6} fill="#475569" fontSize="14" fontWeight="700">Norte</text>
+    </svg>
+  );
+}
+
+function renderDispositionSvg({
+  panelCount,
+  panelWidth,
+  panelHeight,
+  pitch,
+  mountType,
+}: {
+  panelCount: number;
+  panelWidth: number;
+  panelHeight: number;
+  pitch: number;
+  mountType: string;
+}) {
+  const cols = Math.max(1, Math.ceil(Math.sqrt(panelCount * 1.7)));
+  const rows = Math.max(1, Math.ceil(panelCount / cols));
+  const cellW = 34;
+  const cellH = 19;
+  const rowGap = mountType === "coplanar" ?8 : 34;
+  const width = 760;
+  const height = Math.max(260, 90 + rows * cellH + (rows - 1) * rowGap + 90);
+  const gridW = cols * cellW;
+  const startX = (width - gridW) / 2;
+  const startY = 64;
+  const totalWidth = cols * panelWidth;
+  const totalDepth = rows > 1 ?(rows - 1) * pitch + panelHeight : panelHeight;
+
+  return (
+    <div className="mt-5 rounded-lg border bg-white p-4">
+      <h3 className="mb-3 text-base font-bold text-slate-950">Disposição — Dimensões e Distâncias</h3>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full rounded-lg bg-slate-50">
+        <text x={width / 2} y="28" textAnchor="middle" fontSize="15" fontWeight="700" fill="#0f172a">N</text>
+        <text x={width / 2} y={height - 18} textAnchor="middle" fontSize="15" fontWeight="700" fill="#0f172a">S</text>
+        <text x={width / 2} y="48" textAnchor="middle" fontSize="12" fill="#475569">
+          Largura estimada E-O: {fmt(totalWidth, 2, "m")}
+        </text>
+        {Array.from({ length: panelCount }).map((_, index) => {
+          const row = Math.floor(index / cols);
+          const col = index % cols;
+          const x = startX + col * cellW;
+          const y = startY + row * (cellH + rowGap);
+          return (
+            <rect key={index} x={x} y={y} width={cellW - 3} height={cellH} rx="3" fill="#1d4ed8" stroke="#0f172a" strokeWidth=".8" />
+          );
+        })}
+        {Array.from({ length: Math.max(0, rows - 1) }).map((_, index) => {
+          const y = startY + (index + 1) * cellH + index * rowGap + rowGap / 2;
+          return (
+            <g key={index}>
+              <line x1={startX} x2={startX + gridW - 3} y1={y} y2={y} stroke="#ef4444" strokeWidth="2" strokeDasharray="6 4" />
+              <text x={startX + gridW + 14} y={y + 4} fontSize="12" fontWeight="700" fill="#ef4444">
+                Pitch {fmt(pitch, 2, "m")}
+              </text>
+            </g>
+          );
+        })}
+        <text x={startX - 24} y={startY + 8} textAnchor="end" fontSize="12" fill="#475569">E-O</text>
+        <text x={startX + gridW + 70} y={height - 44} textAnchor="end" fontSize="12" fill="#475569">
+          Profundidade N-S: {fmt(totalDepth, 2, "m")}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+export default function ReportPreview({ sections, data }: { sections: SectionId[]; data: NewReportData }) {
+  const {
+    projectName,
+    generatedAt,
+    customer,
+    draft,
+    panel,
+    inverters,
+    batteries,
+    allInverters,
+    inverterUnits,
+    batteryUnits,
+    notes,
+  } = data;
+
+  const cliente = draft?.clienteData ??{};
+  const consumo = draft?.consumoData ??{};
+  const loc = draft?.locData ??{};
+  const sizing = draft?.sizing ??{};
+  const manual = draft?.manual ??{};
+  const map = draft?.reportMapData ??null;
+  const orcamento = draft?.orcamentoState ??{};
+
+  const scenarios = (sizing.cenariosDimensionamento as AnyRecord[] | undefined) ??[];
+  const activeScenario =
+    scenarios.find((scenario) => scenario.tipo === draft?.selectedCenarioTipo) ??
+    scenarios[0] ??
+    null;
+
+  const panelCount =
+    draft?.numPaineisStep5 ??
+    num(manual.numPaineis) ??
+    num(sizing.numPaineis) ??
+    num(map?.totals?.paineis);
+  const panelPower = num(panel?.potencia) ?? num(map?.panelSpec?.potenciaWp) ?? num(manual.potenciaWp);
+  const installedKwp =
+    num(sizing.potenciaInstalada) ??
+    (panelCount && panelPower ? (panelCount * panelPower) / 1000 : null);
+  const annualEnergy = num(sizing.energiaAnualEstimada) ?? num(activeScenario?.energiaAnualEstimada);
+  const monthlyProduction = monthlyArray(
+    sizing.producaoMensal ?? activeScenario?.producaoMensal,
+    annualEnergy,
+  );
+  const monthlyConsumption = monthlyArray(
+    sizing.consumoMensal ?? activeScenario?.consumoMensal,
+    num(sizing.consumoAnualAjustado) ??
+      num(consumo.consumoAnual) ??
+      (num(consumo.consumoMensal) ? Number(consumo.consumoMensal) * 12 : null),
+    true,
+  );
+  const productionChart = MONTHS.map((month, index) => ({
+    month,
+    producao: monthlyProduction[index] ?? 0,
+    consumo: monthlyConsumption[index] ?? 0,
+  }));
+  const annualSavings =
+    num(activeScenario?.poupancaAnual) ??
+    num(sizing.poupancaAnual) ??
+    num(orcamento.poupancaAnual);
+  const annualConsumption =
+    num(sizing.consumoAnualAjustado) ??
+    num(consumo.consumoAnual) ??
+    (num(consumo.consumoMensal) ? Number(consumo.consumoMensal) * 12 : null);
+  const energyPrice = num(consumo.precoKwh ?? consumo.tarifaEnergia) ?? 0.18;
+  const currentBill = annualConsumption ? annualConsumption * energyPrice : null;
+  const investment =
+    num(draft?.investimentoManual) ??
+    num(activeScenario?.investimentoEstimado) ??
+    num(orcamento.totalComIva) ??
+    num(orcamento.totalFinal);
+  const escalationRate = 0.03;
+  const degradationRate = 0.005;
+  const discountRate = 0.04;
+  const annualProjection = Array.from({ length: 25 }, (_, index) => {
+    const year = index + 1;
+    const yearlySaving = (annualSavings ??0) *
+      (1 - degradationRate) ** (year - 1) *
+      (1 + escalationRate) ** (year - 1);
+    return { year, yearlySaving };
+  }).reduce<Array<{ year: number; yearlySaving: number; accumulated: number; npvAccumulated: number }>>(
+    (rows, item) => {
+      const previous = rows[rows.length - 1];
+      const accumulated = (previous?.accumulated ?? -(investment ?? 0)) + item.yearlySaving;
+      const npvAccumulated =
+        (previous?.npvAccumulated ?? -(investment ?? 0)) +
+        item.yearlySaving / (1 + discountRate) ** item.year;
+      rows.push({
+        year: item.year,
+        yearlySaving: item.yearlySaving,
+        accumulated,
+        npvAccumulated,
+      });
+      return rows;
+    },
+    [],
+  );
+  const paybackReal = annualProjection.find((row) => row.accumulated >= 0)?.year ?? null;
+  const payback = paybackReal ?? (annualSavings && investment ? investment / annualSavings : num(activeScenario?.paybackAnos));
+  const npv25 = annualProjection[24]?.npvAccumulated ?? null;
+  const p25 = annualProjection[24]?.accumulated ?? null;
+  const irr = investment
+    ?estimateIrr([-(investment ??0), ...annualProjection.map((row) => row.yearlySaving)])
+    : null;
+  const billReduction = currentBill && annualSavings ?Math.round((annualSavings / currentBill) * 100) : null;
+  const cumulativeSavingsData = annualProjection.map((row) => ({
+    month: String(row.year),
+    poupanca: row.accumulated,
+    investimento: 0,
+  }));
+  const roi25 = investment && p25 != null ?(p25 / investment) * 100 : null;
+
+  return (
+    <article id="report-content" className="report-root bg-white text-slate-950 shadow-xl print:shadow-none">
+      {sections.includes("cover") && (
+        <div className="report-page flex min-h-[29.7cm] flex-col justify-between p-12">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-lg bg-amber-500 text-2xl font-bold text-white">
+                S
               </div>
-              <span className="text-2xl font-bold text-[#0D2B45]">SolarDim</span>
+              <div>
+                <p className="text-2xl font-black text-slate-950">SolarDim</p>
+                <p className="text-sm font-semibold text-slate-500">Relatório técnico fotovoltaico</p>
+              </div>
             </div>
-            <div className="h-2 w-full bg-gradient-to-r from-[#0D2B45] to-[#F59E0B] rounded mb-12" />
+            <div className="mt-10 h-2 rounded-full bg-gradient-to-r from-slate-950 via-blue-600 to-amber-400" />
           </div>
-          <div className="w-full text-center flex-1 flex flex-col justify-center gap-6">
-            <p className="text-sm uppercase tracking-widest text-gray-400 font-semibold">Relatório Técnico</p>
-            <h1 className="text-4xl font-extrabold text-[#0D2B45] leading-tight">{projectName || "Projeto Solar"}</h1>
-            {customer && <p className="text-xl text-gray-600 font-medium">{customer.nome}</p>}
-            {(customer?.morada || ld?.municipio) && (
-              <p className="text-base text-gray-400">{customer?.morada ?? ld?.municipio}</p>
-            )}
-            {potKwp && (
-              <div className="inline-flex items-center justify-center gap-2 mx-auto mt-4 px-6 py-3 bg-amber-50 border border-amber-200 rounded-xl">
-                <span className="text-3xl font-bold text-amber-600">{fmt(potKwp, 2)} kWp</span>
-                {nPaineis && <span className="text-base text-amber-400">· {nPaineis} painéis</span>}
-              </div>
-            )}
+
+          <div className="space-y-6 text-center">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">
+              Estudo completo
+            </p>
+            <h1 className="text-5xl font-black leading-tight text-slate-950">{projectName}</h1>
+            <p className="text-xl text-slate-600">
+              {text(customer?.nome) ?? text(cliente.nome) ?? "Cliente"}
+            </p>
+            <div className="mx-auto grid max-w-2xl grid-cols-3 gap-4">
+              <Metric label="Potência" value={fmt(installedKwp, 2, "kWp")} />
+              <Metric label="Painéis" value={panelCount ?int(panelCount) : "-"} />
+              <Metric label="Produção anual" value={int(annualEnergy, "kWh")} />
+            </div>
           </div>
-          <div className="w-full mt-12 grid grid-cols-3 gap-4 text-sm">
-            <div><p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Data</p><p className="font-medium">{date}</p></div>
-            {spacingParams?.locationName && (
-              <div><p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Localização</p><p className="font-medium">{spacingParams.locationName}</p></div>
-            )}
-            {ld?.municipio && (
-              <div><p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Município</p><p className="font-medium">{ld.municipio}</p></div>
-            )}
+
+          <div className="grid grid-cols-3 gap-6 text-sm">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Data</p>
+              <p className="font-semibold">{generatedAt}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Morada</p>
+              <p className="font-semibold">{text(cliente.morada) ?? text(customer?.morada) ?? "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Localização</p>
+              <p className="font-semibold">
+                {fmt(loc.latitude, 4, "º")} / {fmt(loc.longitude, 4, "º")}
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── CORPO — fluxo contínuo (todas as secções seguintes) ─────────────── */}
-      {hasBody && (
-        <div className="report-page a4-body px-12 py-10">
+      <div className="report-page min-h-[29.7cm] space-y-8 p-12">
+        {sections.includes("page1Client") && (
+          <Section title="1. Cliente e localização">
+            <div className="grid grid-cols-2 gap-8">
+              <DataTable
+                rows={[
+                  ["Nome", text(cliente.nome) ?? text(customer?.nome) ?? "-"],
+                  ["Email", text(cliente.email) ?? text(customer?.email) ?? "-"],
+                  ["Telefone", text(cliente.telefone) ?? text(customer?.telefone) ?? "-"],
+                  ["Tipo de cliente", text(cliente.tipoCliente) ?? text(customer?.tipoCliente) ?? "-"],
+                  ["Morada", text(cliente.morada) ?? text(customer?.morada) ?? "-"],
+                  ["Tarifa", text(cliente.tipoTarifa) ?? text(consumo.tipoTarifa) ?? "-"],
+                  ["Potência contratada", fmt(cliente.potenciaContratada ?? consumo.potenciaContratada, 2, "kVA")],
+                ]}
+              />
+              <DataTable
+                rows={[
+                  ["Latitude", fmt(loc.latitude, 5, "º")],
+                  ["Longitude", fmt(loc.longitude, 5, "º")],
+                  ["Inclinação", fmt(loc.inclinacao, 1, "º")],
+                  ["Azimute", fmt(loc.azimute, 1, "º")],
+                  ["Município", text(loc.municipio) ??"-"],
+                  ["Tipo de projeto", text(draft?.tipoProjeto) ??"-"],
+                ]}
+              />
+            </div>
+          </Section>
+        )}
 
-          {/* ── DADOS CLIENTE ─────────────────────────────────────────────── */}
-          {sections.includes("cliente") && customer && (
-            <Section title="Dados do Cliente">
-              <div className="no-break">
-                <table className="w-full"><tbody>
-                  <KvRow k="Nome" v={customer.nome} />
-                  <KvRow k="Morada" v={customer.morada || "—"} />
-                  <KvRow k="Tipo de Cliente" v={customer.tipoCliente} />
-                  <KvRow k="Perfil de Consumo" v={customer.perfilConsumo} />
-                  <KvRow k="Potência Contratada" v={fmt(customer.potenciaContratada, 1, "kVA")} />
-                  {!!customer.consumoMensal && <KvRow k="Consumo Mensal" v={fmt(customer.consumoMensal, 0, "kWh")} />}
-                  {!!customer.consumoAnual && <KvRow k="Consumo Anual" v={fmt(customer.consumoAnual, 0, "kWh")} />}
-                  <KvRow k="Preço Eletricidade" v={fmt(tarifa, 4, "€/kWh")} />
-                  {!!cd?.cpe && <KvRow k="CPE" v={cd!.cpe} />}
-                  {!!cd?.distribuidora && <KvRow k="Distribuidora" v={cd!.distribuidora} />}
-                  {ld?.municipio && <KvRow k="Município (PVGIS)" v={ld.municipio} />}
-                  {(ld?.latitude ?? spacingParams?.latitude) && (
-                    <KvRow k="Latitude" v={fmt(ld?.latitude ?? Number(spacingParams?.latitude), 4, "°")} />
-                  )}
-                  {(ld?.longitude ?? spacingParams?.longitude) && (
-                    <KvRow k="Longitude" v={fmt(ld?.longitude ?? Number(spacingParams?.longitude), 4, "°")} />
-                  )}
-                </tbody></table>
-              </div>
-            </Section>
-          )}
+        {sections.includes("page2Consumption") && (
+          <Section title="2. Consumos">
+            <div className="mb-5 grid grid-cols-4 gap-3">
+              <Metric label="Consumo diário" value={fmt(sizing.consumoDiario, 1, "kWh/dia")} />
+              <Metric label="Consumo anual" value={int(sizing.consumoAnualAjustado ??consumo.consumoAnual, "kWh")} />
+              <Metric label="Preço energia" value={fmt(consumo.precoKwh ??consumo.tarifaEnergia, 4, "€/kWh")} />
+              <Metric label="Cobertura alvo" value={fmt(consumo.coberturaMeta, 0, "%")} />
+            </div>
+            <DataTable
+              rows={[
+                ["Consumo mensal informado", fmt(consumo.consumoMensal, 0, "kWh")],
+                ["Percentagem vazio", fmt(sizing.percVazio ??consumo.percVazio, 1, "%")],
+                ["Percentagem cheias", fmt(sizing.percCheio ??consumo.percCheio, 1, "%")],
+                ["Percentagem ponta", fmt(sizing.percPonta ??consumo.percPonta, 1, "%")],
+                ["Bateria incluída", consumo.incluirBateria ?"Sim" : "Não"],
+              ]}
+            />
+          </Section>
+        )}
 
-          {/* ── CONSUMOS ──────────────────────────────────────────────────── */}
-          {sections.includes("consumos") && sz && (
-            <Section title="Análise de Consumos">
-              <div className="no-break grid grid-cols-3 gap-4 mb-6">
-                {[
-                  { label: "Consumo Diário", value: fmt(sz.consumoDiario, 1, "kWh/dia") },
-                  { label: "Consumo Anual", value: fmt(sz.consumoAnualAjustado, 0, "kWh/ano") },
-                  { label: "Tarifa Energia", value: fmt(tarifa, 4, "€/kWh") },
-                ].map(({ label, value }) => (
-                  <div key={label} className="bg-blue-50 rounded-lg p-4 text-center">
-                    <p className="text-xs text-blue-400 uppercase tracking-wider mb-1">{label}</p>
-                    <p className="text-lg font-bold text-blue-800">{value}</p>
-                  </div>
-                ))}
-              </div>
-              {producaoMensal.length > 0 && (
-                <div className="no-break">
-                  <p className="text-sm font-semibold text-gray-600 mb-3">Perfil de Produção Solar Estimada (kWh/mês)</p>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={producaoChartData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-                      <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v: number) => [`${v.toLocaleString("pt-PT")} kWh`, "Produção"]} />
-                      <Bar dataKey="kwh" radius={[3, 3, 0, 0]}>
-                        {producaoChartData.map((_, i) => (
-                          <Cell key={i} fill={i >= 3 && i <= 8 ? "#F59E0B" : "#93C5FD"} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-              {(sz.percVazio || sz.percCheio || sz.percPonta) && (
-                <div className="no-break mt-4 grid grid-cols-3 gap-3">
-                  {[
-                    { label: "Vazio", v: sz.percVazio, color: "bg-green-50 text-green-700" },
-                    { label: "Cheio", v: sz.percCheio, color: "bg-amber-50 text-amber-700" },
-                    { label: "Ponta", v: sz.percPonta, color: "bg-red-50 text-red-700" },
-                  ].map(({ label, v, color }) => v ? (
-                    <div key={label} className={`rounded p-3 text-center ${color}`}>
-                      <p className="text-xs font-medium uppercase tracking-wider">{label}</p>
-                      <p className="text-base font-bold">{fmt(v, 1, "%")}</p>
-                    </div>
-                  ) : null)}
-                </div>
-              )}
-            </Section>
-          )}
-
-          {/* ── DIMENSIONAMENTO FV ────────────────────────────────────────── */}
-          {sections.includes("dimensionamento") && sz && (
-            <Section title="Dimensionamento Fotovoltaico">
-              <div className="no-break grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Sistema</p>
-                  <table className="w-full"><tbody>
-                    <KvRow k="Potência Instalada" v={<span className="text-amber-600 font-bold">{fmt(potKwp, 2, "kWp")}</span>} />
-                    <KvRow k="Nº de Módulos" v={`${nPaineis ?? "—"} painéis`} />
-                    <KvRow k="HSP (Média Anual)" v={fmt(sz.hsp, 2, "h/dia")} />
-                    <KvRow k="Rendimento Global" v={fmt(sz.fatorRendimento ? sz.fatorRendimento * 100 : null, 1, "%")} />
-                    <KvRow k="Cobertura Solar" v={<span className="text-emerald-600 font-bold">{fmt(sz.coberturaReal ?? sz.coberturaPrevista, 1, "%")}</span>} />
-                    <KvRow k="Energia Anual Estimada" v={fmt(sz.energiaAnualEstimada, 0, "kWh/ano")} />
-                  </tbody></table>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Localização / Solar</p>
-                  <table className="w-full"><tbody>
-                    {ld?.municipio && <KvRow k="Município" v={ld.municipio} />}
-                    {(ld?.latitude ?? spacingParams?.latitude) && <KvRow k="Latitude" v={fmt(ld?.latitude ?? Number(spacingParams?.latitude), 4, "°")} />}
-                    {(ld?.longitude ?? spacingParams?.longitude) && <KvRow k="Longitude" v={fmt(ld?.longitude ?? Number(spacingParams?.longitude), 4, "°")} />}
-                    {(ld?.inclinacao ?? spacingParams?.angle) && <KvRow k="Inclinação" v={fmt(ld?.inclinacao ?? Number(spacingParams?.angle), 1, "°")} />}
-                    {ld?.azimute && <KvRow k="Azimute" v={fmt(ld.azimute, 1, "°")} />}
-                    {spacingResults?.altitudeAngle != null && <KvRow k="Ângulo Solar (21 Dez)" v={fmt(spacingResults.altitudeAngle, 1, "°")} />}
-                  </tbody></table>
-                </div>
-              </div>
-              <div className="no-break grid grid-cols-3 gap-4 mt-6">
-                {[
-                  { label: "Energia Anual Estimada", value: fmt(sz.energiaAnualEstimada, 0, "kWh/ano"), color: "bg-amber-50 border-amber-200" },
-                  { label: "Cobertura Solar", value: fmt(sz.coberturaReal ?? sz.coberturaPrevista, 1, "%"), color: "bg-emerald-50 border-emerald-200" },
-                  { label: "HSP Média", value: fmt(sz.hsp, 2, "h/dia"), color: "bg-blue-50 border-blue-200" },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className={`rounded-lg p-4 text-center border ${color}`}>
-                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">{label}</p>
-                    <p className="text-xl font-bold text-gray-800">{value}</p>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          )}
-
-          {/* ── EQUIPAMENTOS ──────────────────────────────────────────────── */}
-          {sections.includes("equipamentos") && (
-            <Section title="Equipamentos">
-              {panel && (
-                <div className="no-break mb-6">
-                  <p className="text-sm font-bold text-[#0D2B45] mb-2 uppercase tracking-wider">Módulo Solar</p>
-                  <div className="bg-gray-50 rounded-lg p-4 border">
-                    <p className="font-semibold text-base">{panel.fabricante} {panel.nome}</p>
-                    <div className="grid grid-cols-3 gap-4 mt-3">
-                      {[
-                        { k: "Potência", v: `${panel.potencia} Wp`, hi: true },
-                        { k: "Voc", v: `${panel.voc} V` },
-                        { k: "Isc", v: `${panel.isc} A` },
-                        { k: "Vmp", v: `${panel.vmp} V` },
-                        { k: "Imp", v: `${panel.imp} A` },
-                        { k: "Quantidade", v: nPaineis ? `${nPaineis} un.` : "—" },
-                        ...(panel.noct ? [{ k: "NOCT", v: `${panel.noct} °C` }] : []),
-                        ...(panel.coeficienteTemperatura ? [{ k: "Coef. Temp.", v: `${panel.coeficienteTemperatura} %/°C` }] : []),
-                      ].map(({ k, v, hi }) => (
-                        <div key={k} className="text-center">
-                          <p className="text-xs text-gray-400">{k}</p>
-                          <p className={`font-bold ${hi ? "text-amber-600" : ""}`}>{v}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-              {inverters.length > 0 && (
-                <div className="mb-6">
-                  <p className="text-sm font-bold text-[#0D2B45] mb-2 uppercase tracking-wider">Inversor(es)</p>
-                  <div className="space-y-2">
-                    {inverters.map((inv) => (
-                      <div key={inv.id} className="no-break bg-gray-50 rounded-lg p-4 border">
-                        <p className="font-semibold">{inv.fabricante} {inv.nome}</p>
-                        <div className="grid grid-cols-4 gap-3 mt-2 text-center">
-                          <div><p className="text-xs text-gray-400">Pot. AC</p><p className="font-bold">{inv.potenciaAc} kW</p></div>
-                          <div><p className="text-xs text-gray-400">Pot. DC máx</p><p className="font-bold">{inv.potenciaDcMax} kW</p></div>
-                          <div><p className="text-xs text-gray-400">MPPT</p><p className="font-bold">{inv.numMppt}</p></div>
-                          <div><p className="text-xs text-gray-400">Strings/MPPT</p><p className="font-bold">{inv.stringsPorMppt}</p></div>
-                          <div><p className="text-xs text-gray-400">MPPT min</p><p className="font-bold">{inv.mpptMin} V</p></div>
-                          <div><p className="text-xs text-gray-400">MPPT max</p><p className="font-bold">{inv.mpptMax} V</p></div>
-                          {inv.vdcMax && <div><p className="text-xs text-gray-400">Vdc máx</p><p className="font-bold">{inv.vdcMax} V</p></div>}
-                          <div><p className="text-xs text-gray-400">I máx MPPT</p><p className="font-bold">{inv.corrMaxMppt} A</p></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {batteries.length > 0 && (
-                <div>
-                  <p className="text-sm font-bold text-[#0D2B45] mb-2 uppercase tracking-wider">Bateria(s)</p>
-                  <div className="space-y-2">
-                    {batteries.map((bat) => (
-                      <div key={bat.id} className="no-break bg-gray-50 rounded-lg p-4 border">
-                        <p className="font-semibold">{bat.fabricante} {bat.nome}</p>
-                        <div className="grid grid-cols-4 gap-3 mt-2 text-center">
-                          <div><p className="text-xs text-gray-400">Capacidade</p><p className="font-bold">{bat.capacidade} kWh</p></div>
-                          <div><p className="text-xs text-gray-400">Tensão</p><p className="font-bold">{bat.tensao} V</p></div>
-                          <div><p className="text-xs text-gray-400">Tecnologia</p><p className="font-bold">{bat.tecnologia}</p></div>
-                          <div><p className="text-xs text-gray-400">DoD</p><p className="font-bold">{bat.profundidadeDescarga}%</p></div>
-                          {bat.potenciaCarga > 0 && <div><p className="text-xs text-gray-400">Carga máx</p><p className="font-bold">{bat.potenciaCarga} kW</p></div>}
-                          {bat.potenciaDescarga > 0 && <div><p className="text-xs text-gray-400">Descarga máx</p><p className="font-bold">{bat.potenciaDescarga} kW</p></div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {!panel && inverters.length === 0 && batteries.length === 0 && (
-                <p className="text-sm text-gray-400 italic">Equipamentos não definidos — complete o passo 5 do wizard.</p>
-              )}
-            </Section>
-          )}
-
-          {/* ── PRODUÇÃO ANUAL ────────────────────────────────────────────── */}
-          {sections.includes("producao") && sz && producaoMensal.length > 0 && (
-            <Section title="Produção Anual Estimada">
-              <div className="no-break overflow-hidden rounded-lg border mb-6">
+        {sections.includes("page3Profile") && (
+          <Section title="3. Perfil de autoconsumo">
+            <div className="grid grid-cols-3 gap-3">
+              <Metric label="Cenário escolhido" value={text(draft?.selectedCenarioTipo) ??"-"} />
+              <Metric label="Cobertura prevista" value={fmt(sizing.coberturaPrevista ??sizing.coberturaReal, 1, "%")} />
+              <Metric label="Autoconsumo anual" value={int(sizing.autoconsumoAnual, "kWh")} />
+            </div>
+            {scenarios.length > 0 && (
+              <div className="mt-5 overflow-hidden rounded-lg border">
                 <table className="w-full text-sm">
-                  <thead className="bg-[#0D2B45] text-white">
+                  <thead className="bg-slate-950 text-white">
                     <tr>
-                      <th className="py-2 px-3 text-left font-medium">Mês</th>
-                      <th className="py-2 px-3 text-right font-medium">Produção (kWh)</th>
-                      <th className="py-2 px-3 text-right font-medium">% do Total</th>
+                      <th className="px-3 py-2 text-left">Cenário</th>
+                      <th className="px-3 py-2 text-right">Painéis</th>
+                      <th className="px-3 py-2 text-right">kWp</th>
+                      <th className="px-3 py-2 text-right">Produção</th>
+                      <th className="px-3 py-2 text-right">Cobertura</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {MESES.map((m, i) => {
-                      const v = producaoMensal[i] ?? 0;
-                      const total = producaoMensal.reduce((a, b) => a + b, 0) || 1;
-                      return (
-                        <tr key={m} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                          <td className="py-1.5 px-3">{m}</td>
-                          <td className="py-1.5 px-3 text-right font-mono">{v.toLocaleString("pt-PT")}</td>
-                          <td className="py-1.5 px-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="w-16 bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                                <div className="h-1.5 bg-amber-400 rounded-full" style={{ width: `${(v / total) * 100}%` }} />
-                              </div>
-                              <span className="text-xs text-gray-500 w-8 text-right">{((v / total) * 100).toFixed(1)}%</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    <tr className="border-t-2 border-[#0D2B45] bg-amber-50 font-bold">
-                      <td className="py-2 px-3">Total</td>
-                      <td className="py-2 px-3 text-right font-mono">{producaoMensal.reduce((a, b) => a + b, 0).toLocaleString("pt-PT")}</td>
-                      <td className="py-2 px-3 text-right">100%</td>
-                    </tr>
+                    {scenarios.map((scenario, index) => (
+                      <tr key={text(scenario.tipo) ??index} className={index % 2 ?"bg-slate-50" : "bg-white"}>
+                        <td className="px-3 py-2 font-semibold">{text(scenario.label) ??text(scenario.tipo)}</td>
+                        <td className="px-3 py-2 text-right">{int(scenario.numPaineis)}</td>
+                        <td className="px-3 py-2 text-right">{fmt(scenario.potenciaInstalada, 2)}</td>
+                        <td className="px-3 py-2 text-right">{int(scenario.energiaAnualEstimada, "kWh")}</td>
+                        <td className="px-3 py-2 text-right">{fmt(scenario.coberturaReal, 1, "%")}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-              <div className="no-break grid grid-cols-2 gap-4">
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
-                  <p className="text-xs text-amber-500 uppercase tracking-wider mb-1">Energia Anual Estimada</p>
-                  <p className="text-2xl font-extrabold text-amber-700">{fmt(sz.energiaAnualEstimada, 0, "kWh")}</p>
-                </div>
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
-                  <p className="text-xs text-emerald-500 uppercase tracking-wider mb-1">Cobertura Solar</p>
-                  <p className="text-2xl font-extrabold text-emerald-700">{fmt(sz.coberturaReal ?? sz.coberturaPrevista, 1, "%")}</p>
-                </div>
+            )}
+          </Section>
+        )}
+
+        {sections.includes("page4Sizing") && (
+          <Section title="4. Pré-dimensionamento fotovoltaico">
+            <div className="grid grid-cols-4 gap-3">
+              <Metric label="Potência instalada" value={fmt(installedKwp, 2, "kWp")} />
+              <Metric label="Painéis" value={panelCount ?int(panelCount) : "-"} />
+              <Metric label="HSP" value={fmt(sizing.hsp, 2, "h/dia")} />
+              <Metric label="Rendimento" value={fmt(num(sizing.fatorRendimento) ?Number(sizing.fatorRendimento) * 100 : null, 1, "%")} />
+            </div>
+            <div className="mt-5">
+              <h3 className="mb-2 text-sm font-bold text-slate-700">Produção Estimada vs Consumo Mensal</h3>
+              <SvgLineChart
+                data={productionChart}
+                series={[
+                  { key: "producao", label: "Produção kWh", color: "#f59e0b" },
+                  { key: "consumo", label: "Consumo kWh", color: "#2563eb" },
+                ]}
+              />
+            </div>
+          </Section>
+        )}
+
+        {sections.includes("page5Equipment") && (
+          <Section title="5. Equipamentos selecionados">
+            <div className="space-y-5">
+              <div className="rounded-lg border p-4">
+                <h3 className="font-bold">Módulo fotovoltaico</h3>
+                <DataTable
+                  rows={[
+                    ["Modelo", panel ?`${panel.fabricante} ${panel.nome}` : text(map?.panelSpec?.nome) ??"-"],
+                    ["Potência", fmt(panel?.potencia ??map?.panelSpec?.potenciaWp, 0, "Wp")],
+                    ["Dimensões", panel?.alturaMm && panel?.larguraMm ?`${fmt(Number(panel.alturaMm) / 1000, 3, "m")} x ${fmt(Number(panel.larguraMm) / 1000, 3, "m")}` : map ?`${fmt(map.panelSpec.alturaM, 3, "m")} x ${fmt(map.panelSpec.larguraM, 3, "m")}` : "-"],
+                    ["Voc / Vmp", panel ?`${fmt(panel.voc, 2, "V")} / ${fmt(panel.vmp, 2, "V")}` : "-"],
+                    ["Isc / Imp", panel ?`${fmt(panel.isc, 2, "A")} / ${fmt(panel.imp, 2, "A")}` : "-"],
+                  ]}
+                />
               </div>
-            </Section>
-          )}
+              {inverters.map((inverter) => (
+                <div key={inverter.id} className="rounded-lg border p-4">
+                  <h3 className="font-bold">{inverter.fabricante} {inverter.nome}</h3>
+                  <DataTable
+                    rows={[
+                      ["Potência AC", fmt(inverter.potenciaAc, 2, "kW")],
+                      ["Potência DC máx.", fmt(inverter.potenciaDcMax, 2, "kW")],
+                      ["MPPT", int(inverter.numMppt)],
+                      ["Strings por MPPT", int(inverter.stringsPorMppt)],
+                      ["Janela MPPT", `${fmt(inverter.mpptMin, 0, "V")} - ${fmt(inverter.mpptMax, 0, "V")}`],
+                    ]}
+                  />
+                </div>
+              ))}
+              {batteries.map((battery) => (
+                <div key={battery.id} className="rounded-lg border p-4">
+                  <h3 className="font-bold">{battery.fabricante} {battery.nome}</h3>
+                  <DataTable
+                    rows={[
+                      ["Capacidade", fmt(battery.capacidade, 2, "kWh")],
+                      ["Tecnologia", text(battery.tecnologia) ??"-"],
+                      ["Tensão", fmt(battery.tensao, 0, "V")],
+                      ["DoD", fmt(battery.profundidadeDescarga, 0, "%")],
+                    ]}
+                  />
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
 
-          {/* ── ESPAÇAMENTO / SOMBRAS ─────────────────────────────────────── */}
-          {sections.includes("espacamento") && spacingResults && (
-            <Section title="Espaçamento entre Painéis e Análise de Sombras">
-              <div className="no-break grid grid-cols-2 gap-6 mb-6">
-                <div>
-                  <p className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Parâmetros</p>
-                  <table className="w-full"><tbody>
-                    <KvRow k="Tipo de Estrutura" v={isCoplanar ? "Coplanar (telhado)" : "Triângulos"} />
-                    <KvRow k="Altura do Painel" v={fmt(spacingResults.panelHeight, 2, "m")} />
-                    <KvRow k="Largura do Painel" v={fmt(spacingResults.panelWidth, 2, "m")} />
-                    <KvRow k="Inclinação" v={fmt(spacingResults.panelAngle, 1, "°")} />
-                    <KvRow k="Latitude" v={`${spacingParams?.latitude ?? "—"}°`} />
-                    {spacingParams?.locationName && <KvRow k="Localização" v={spacingParams.locationName} />}
-                    <KvRow k="Fileiras × Colunas" v={`${spacingParams?.rows ?? "—"} × ${spacingParams?.cols ?? "—"}`} />
-                  </tbody></table>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Resultados (21 Dez)</p>
-                  <table className="w-full"><tbody>
-                    {!isCoplanar && <>
-                      <KvRow k="Distância Início→Início (d)" v={<span className="text-blue-700 font-bold">{fmt(spacingResults.rowSpacing, 3, "m")}</span>} />
-                      <KvRow k="Espaço Livre (Gap)" v={<span className={spacingResults.gap < 0.5 ? "text-red-600 font-bold" : "text-gray-900 font-bold"}>{fmt(spacingResults.gap, 3, "m")}</span>} />
-                      <KvRow k="Sombra (L)" v={fmt(spacingResults.shadowLength, 2, "m")} />
-                      <KvRow k="Projeção Horizontal" v={fmt(spacingResults.panelProjectedDepth, 2, "m")} />
-                      <KvRow k="Comprimento Total N-S" v={fmt(spacingResults.totalLength, 2, "m")} />
-                      <KvRow k="Largura Total E-O" v={fmt(spacingResults.totalWidth, 2, "m")} />
-                      <KvRow k="Ângulo Solar 21 Dez" v={<span className="text-amber-600 font-bold">{fmt(spacingResults.altitudeAngle, 1, "°")}</span>} />
-                      <KvRow k="Declinação" v={fmt(spacingResults.declinationAngle, 1, "°")} />
-                    </>}
-                    <KvRow k="Potência Total" v={<span className="text-amber-600 font-bold">{fmt(spacingResults.totalPowerWp / 1000, 2, "kWp")}</span>} />
-                  </tbody></table>
-                </div>
-              </div>
-              {!isCoplanar && spacingResults.gap < 0.5 && (
-                <div className="no-break bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">
-                  ⚠ Atenção: O espaço livre ({fmt(spacingResults.gap, 3, "m")}) pode ser insuficiente para manutenção segura. Recomenda-se mínimo de 0.5 m.
-                </div>
-              )}
-              {spacingCrossSvg && !isCoplanar && (
-                <div className="no-break mt-4">
-                  <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Perfil e Sombreamento (secção transversal)</p>
-                  <div className="bg-slate-50 rounded border p-2 overflow-hidden"
-                    dangerouslySetInnerHTML={{ __html: spacingCrossSvg }} />
-                </div>
-              )}
-              {spacingLayoutSvg && (
-                <div className="no-break mt-4">
-                  <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Disposição Top-down</p>
-                  <div className="bg-blue-50 rounded border p-2 overflow-hidden max-w-sm mx-auto"
-                    dangerouslySetInnerHTML={{ __html: spacingLayoutSvg }} />
-                </div>
-              )}
-            </Section>
-          )}
-
-          {/* ── MAPA SATÉLITE ─────────────────────────────────────────────── */}
-          {sections.includes("mapa") && (
-            <Section title="Mapa Satélite e Layout FV">
-              {!mapData ? (
-                <div className="bg-slate-50 rounded border p-8 text-center text-sm text-gray-400">
-                  <p className="font-medium mb-1">Dados de Mapa não disponíveis</p>
-                  <p>Aceda ao separador "Mapa Satélite", desenhe a área do telhado e os dados serão incluídos automaticamente no relatório.</p>
-                </div>
-              ) : (
-                <>
-                  {mapData.mapImageDataUrl && (
-                    <div className="no-break mb-6">
-                      <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Vista Satélite</p>
-                      <div className="rounded border overflow-hidden">
-                        <img src={mapData.mapImageDataUrl} alt="Mapa Satélite" className="w-full object-cover max-h-72" />
-                      </div>
-                    </div>
-                  )}
-                  {mapData.panelSvg && (
-                    <div className="no-break mb-6">
-                      <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Layout Painéis</p>
-                      <div className="bg-[#1a2744] rounded border overflow-hidden max-h-64 flex items-center justify-center p-2"
-                        dangerouslySetInnerHTML={{ __html: mapData.panelSvg }} />
-                    </div>
-                  )}
-                  <div className="no-break grid grid-cols-2 gap-6">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Telhado / Área</p>
-                      <table className="w-full"><tbody>
-                        {mapData.roofArea != null && <KvRow k="Área Telhado" v={fmt(mapData.roofArea, 1, "m²")} />}
-                        {mapData.roofBoundsW != null && <KvRow k="Largura (E-O)" v={fmt(mapData.roofBoundsW, 1, "m")} />}
-                        {mapData.roofBoundsH != null && <KvRow k="Comprimento (N-S)" v={fmt(mapData.roofBoundsH, 1, "m")} />}
-                        {mapData.azimuth != null && <KvRow k="Azimute" v={fmt(mapData.azimuth, 1, "°")} />}
-                        {mapData.orientationLabel && <KvRow k="Orientação" v={mapData.orientationLabel} />}
-                        {mapData.mountType && <KvRow k="Tipo Estrutura" v={mapData.mountType === "coplanar" ? "Coplanar" : "Triângulos"} />}
-                        {mapData.penaltyPct != null && mapData.penaltyPct > 0 && <KvRow k="Penalização Orientação" v={fmt(mapData.penaltyPct, 1, "%")} />}
-                      </tbody></table>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Sistema FV</p>
-                      <table className="w-full"><tbody>
-                        {mapData.panelCount != null && <KvRow k="Painéis" v={`${mapData.panelCount} un.`} />}
-                        {mapData.panelW != null && mapData.panelH != null && <KvRow k="Dimensões Painel" v={`${mapData.panelW} × ${mapData.panelH} m`} />}
-                        {mapData.powerWp != null && <KvRow k="Potência Painel" v={fmt(mapData.powerWp, 0, "Wp")} />}
-                        {mapData.totalKwp != null && <KvRow k="Potência Total" v={<span className="text-amber-600 font-bold">{fmt(mapData.totalKwp, 2, "kWp")}</span>} />}
-                        {mapData.adjKwp != null && mapData.adjKwp !== mapData.totalKwp && <KvRow k="Potência Ajustada" v={fmt(mapData.adjKwp, 2, "kWp")} />}
-                      </tbody></table>
-                    </div>
-                  </div>
-                  {!mapData.mapImageDataUrl && !mapData.panelSvg && (
-                    <div className="bg-slate-50 rounded border p-4 text-center text-sm text-gray-400 mt-4">
-                      <p>Aceda ao separador "Mapa Satélite" e desenhe a área do telhado para incluir a imagem satélite e o layout de painéis.</p>
-                    </div>
-                  )}
-                </>
-              )}
-            </Section>
-          )}
-
-          {/* ── STRINGS / MPPT ────────────────────────────────────────────── */}
-          {sections.includes("strings") && inverterUnits.length > 0 && (
-            <Section title="Configuração de Strings e MPPT">
+        {sections.includes("page6Technical") && (
+          <Section title="6. Técnica, inversores e strings">
+            {inverterUnits.length === 0 ?(
+              <p className="rounded-lg border border-dashed p-4 text-sm text-slate-500">Sem configuração técnica de strings guardada.</p>
+            ) : (
               <div className="space-y-4">
-                {inverterUnits.map((unit, ui) => {
-                  const inv = allInverters.find(i => i.id === unit.inverterId);
-                  const mppt = unit.mpptConfig;
-                  const totalModules = mppt
-                    ? mppt.reduce((s, row) => s + row.reduce((a, b) => a + b, 0), 0)
-                    : null;
+                {inverterUnits.map((unit, index) => {
+                  const inverter = allInverters.find((item) => item.id === unit.inverterId);
                   return (
-                    <div key={unit.key} className="no-break rounded-lg border overflow-hidden">
-                      <div className="bg-[#0D2B45] text-white px-4 py-2 flex items-center justify-between">
-                        <span className="font-semibold text-sm">
-                          Unidade {ui + 1} — {inv ? `${inv.fabricante} ${inv.nome}` : `Inversor #${unit.inverterId}`}
-                        </span>
-                        {unit.quantidade > 1 && (
-                          <span className="text-xs bg-blue-600 px-2 py-0.5 rounded">{unit.quantidade}×</span>
-                        )}
-                      </div>
-                      <div className="p-4">
-                        {inv && (
-                          <div className="grid grid-cols-3 gap-3 mb-4 text-sm">
-                            <div className="text-center bg-gray-50 rounded p-2">
-                              <p className="text-xs text-gray-400">Pot. AC</p>
-                              <p className="font-bold">{inv.potenciaAc} kW</p>
-                            </div>
-                            <div className="text-center bg-gray-50 rounded p-2">
-                              <p className="text-xs text-gray-400">Nº MPPT</p>
-                              <p className="font-bold">{inv.numMppt}</p>
-                            </div>
-                            <div className="text-center bg-gray-50 rounded p-2">
-                              <p className="text-xs text-gray-400">Módulos</p>
-                              <p className="font-bold text-amber-600">{totalModules ?? unit.numPaineisOverride ?? "—"}</p>
-                            </div>
-                          </div>
-                        )}
-                        {mppt && mppt.length > 0 ? (
-                          <div>
-                            <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Distribuição por MPPT</p>
-                            <div className="overflow-hidden rounded border">
-                              <table className="w-full text-sm">
-                                <thead className="bg-gray-100">
-                                  <tr>
-                                    <th className="py-1.5 px-3 text-left font-medium text-gray-600">MPPT</th>
-                                    <th className="py-1.5 px-3 text-center font-medium text-gray-600">Strings</th>
-                                    {mppt[0]?.map((_, si) => (
-                                      <th key={si} className="py-1.5 px-3 text-center font-medium text-gray-600">Str {si + 1} (mód.)</th>
-                                    ))}
-                                    <th className="py-1.5 px-3 text-right font-medium text-gray-600">Total</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {mppt.map((row, mi) => {
-                                    const rowTotal = row.reduce((a, b) => a + b, 0);
-                                    return (
-                                      <tr key={mi} className={mi % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                                        <td className="py-1.5 px-3 font-medium text-[#0D2B45]">MPPT {mi + 1}</td>
-                                        <td className="py-1.5 px-3 text-center">{row.length}</td>
-                                        {row.map((n, si) => (
-                                          <td key={si} className="py-1.5 px-3 text-center font-mono">{n}</td>
-                                        ))}
-                                        <td className="py-1.5 px-3 text-right font-bold text-amber-600">{rowTotal}</td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-400 italic">Configure as strings no passo de Técnica do wizard para ver a distribuição MPPT.</p>
-                        )}
-                      </div>
+                    <div key={unit.key ??index} className="rounded-lg border p-4">
+                      <h3 className="font-bold">Unidade {index + 1}: {inverter ?`${inverter.fabricante} ${inverter.nome}` : `Inversor ${unit.inverterId}`}</h3>
+                      <DataTable
+                        rows={[
+                          ["Quantidade", int(unit.quantidade ??1)],
+                          ["Painéis atribuídos", int(unit.numPaineisOverride)],
+                          ["MPPT configurados", int(unit.mpptConfig?.length)],
+                        ]}
+                      />
+                      {unit.mpptConfig && (
+                        <div className="mt-3 overflow-hidden rounded border">
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-100">
+                              <tr>
+                                <th className="px-3 py-2 text-left">MPPT</th>
+                                <th className="px-3 py-2 text-left">Strings</th>
+                                <th className="px-3 py-2 text-right">Total módulos</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {unit.mpptConfig.map((row, mpptIndex) => (
+                                <tr key={mpptIndex} className="border-t">
+                                  <td className="px-3 py-2 font-semibold">MPPT {mpptIndex + 1}</td>
+                                  <td className="px-3 py-2">{row.filter((value) => value > 0).join(" + ") || "-"}</td>
+                                  <td className="px-3 py-2 text-right font-semibold">{row.reduce((sum, value) => sum + value, 0)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            </Section>
-          )}
+            )}
+          </Section>
+        )}
 
-          {/* ── FINANCEIRO & ROI ──────────────────────────────────────────── */}
-          {sections.includes("financeiro") && sz && (
-            <Section title="Análise Financeira e Retorno do Investimento">
-              <div className="no-break grid grid-cols-2 gap-4 mb-6">
-                {[
-                  { label: "Poupança Anual", value: fmt(poupanca, 2, "€"), color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-                  { label: "Período de Retorno", value: fmt(payback, 1, "anos"), color: "bg-blue-50 border-blue-200 text-blue-700" },
-                  { label: "Investimento Estimado", value: fmt(investimento, 2, "€"), color: "bg-gray-50 border-gray-200 text-gray-700" },
-                  { label: "ROI (25 anos)", value: roi != null ? fmt(roi, 1, "%") : "—", color: "bg-amber-50 border-amber-200 text-amber-700" },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className={`rounded-xl border p-5 text-center ${color}`}>
-                    <p className="text-xs font-semibold uppercase tracking-wider opacity-70 mb-2">{label}</p>
-                    <p className="text-2xl font-extrabold">{value}</p>
-                  </div>
-                ))}
+        {sections.includes("page7Savings") && (
+          <Section title="7. Poupança e retorno">
+            <div className="grid grid-cols-4 gap-3">
+              <Metric label="Investimento" value={money(investment)} />
+              <Metric label="Poupança anual" value={money(annualSavings)} />
+              <Metric label="Payback" value={fmt(payback, 1, "anos")} />
+              <Metric label="Poupança 25 anos" value={money(p25)} />
+            </div>
+            <div className="mt-5">
+              <h3 className="mb-2 text-sm font-bold text-slate-700">Poupança mensal estimada</h3>
+              <SvgBarChart
+                label="Poupança estimada €"
+                data={MONTHS.map((month, index) => ({
+                  month,
+                  value: (monthlyProduction[index] ??0) * (num(consumo.precoKwh) ??0.18),
+                }))}
+              />
+            </div>
+            <div className="mt-6">
+              <h3 className="mb-2 text-sm font-bold text-slate-700">Poupança Acumulada a 25 Anos</h3>
+              <SvgLineChart
+                data={cumulativeSavingsData}
+                xAxisLabel="Anos"
+                series={[
+                  { key: "poupanca", label: "Poupança acumulada €", color: "#16a34a" },
+                  { key: "investimento", label: "Investimento €", color: "#ef4444" },
+                ]}
+              />
+            </div>
+            <div className="mt-6">
+              <h3 className="mb-4 text-base font-bold text-slate-950">Rentabilidade do Investimento</h3>
+              <div className="mb-5 grid grid-cols-4 gap-3">
+                <div className="rounded-lg bg-slate-50 p-4 text-center">
+                  <p className="text-xs text-slate-500">Payback simples</p>
+                  <p className="mt-1 text-xl font-bold text-slate-950">
+                    {paybackReal ?`${paybackReal} anos` : payback ?`${fmt(payback, 1)} anos` : "-"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-4 text-center">
+                  <p className="text-xs text-slate-500">VAL / NPV a 25 anos</p>
+                  <p className={`mt-1 text-xl font-bold ${num(npv25) != null && Number(npv25) >= 0 ?"text-green-600" : "text-red-600"}`}>
+                    {money(npv25)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-4 text-center">
+                  <p className="text-xs text-slate-500">TIR estimada</p>
+                  <p className="mt-1 text-xl font-bold text-slate-950">
+                    {irr != null ?`${fmt(irr * 100, 1)}%` : "-"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-4 text-center">
+                  <p className="text-xs text-slate-500">Redução da fatura</p>
+                  <p className="mt-1 text-xl font-bold text-blue-950">
+                    {billReduction != null ?`-${billReduction}%` : "-"}
+                  </p>
+                </div>
               </div>
-              <div className="no-break rounded-lg border overflow-hidden">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Detalhe anual (primeiros 10 anos)
+                </p>
+                <div className="overflow-hidden rounded-lg border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-slate-500">Ano</th>
+                        <th className="px-3 py-2 text-right font-medium text-slate-500">Poupança</th>
+                        <th className="px-3 py-2 text-right font-medium text-slate-500">Acumulado</th>
+                        <th className="px-3 py-2 text-right font-medium text-slate-500">VAL acum.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {annualProjection.slice(0, 10).map((row, index) => {
+                        const crossedPayback = row.accumulated >= 0 && (annualProjection[index - 1]?.accumulated ??-1) < 0;
+                        return (
+                          <tr key={row.year} className={`border-t ${crossedPayback ?"bg-green-50" : ""}`}>
+                            <td className="px-3 py-2 font-semibold">Ano {row.year}</td>
+                            <td className="px-3 py-2 text-right font-mono text-green-600">{signedMoney(row.yearlySaving)}</td>
+                            <td className={`px-3 py-2 text-right font-mono font-semibold ${row.accumulated >= 0 ?"text-green-600" : "text-red-600"}`}>
+                              {signedMoney(row.accumulated)}
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-slate-500">{signedMoney(row.npvAccumulated)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </Section>
+        )}
+
+        {sections.includes("page8Shading") && (
+          <Section title="8. Sombreamento e espaçamento">
+            <div className="grid grid-cols-4 gap-3">
+              <Metric label="Inclinação" value={fmt(loc.inclinacao ??map?.tiltDeg, 1, "º")} />
+              <Metric label="Pitch" value="4,32 m" />
+              <Metric label="Azimute" value={fmt(loc.azimute, 1, "º")} />
+              <Metric label="Tipo montagem" value={map?.areas?.[0]?.tipo === "coplanar" ?"Coplanar" : "Triângulos"} />
+            </div>
+            <div className="mt-5 rounded-lg border bg-slate-50 p-4">
+              <p className="text-sm text-slate-600">
+                O estudo considera a inclinação definida na localização/técnica e a disposição marcada no mapa.
+                Para estruturas em triângulos é usado o pitch início-início configurado no estudo de sombras.
+              </p>
+            </div>
+            <div className="mt-5">
+              {renderShadingSvg({
+                tilt: num(loc.inclinacao ?? map?.tiltDeg) ?? 30,
+                pitch: 4.32,
+                panelLength: num(map?.panelSpec?.alturaM) ?? (panel?.alturaMm ? Number(panel.alturaMm) / 1000 : 2.28),
+                mountType: map?.areas?.[0]?.tipo ?? "triangulos",
+              })}
+            </div>
+            {renderDispositionSvg({
+              panelCount: panelCount ?? map?.totals?.paineis ?? 1,
+              panelWidth: num(map?.panelSpec?.larguraM) ?? (panel?.larguraMm ? Number(panel.larguraMm) / 1000 : 1.13),
+              panelHeight: num(map?.panelSpec?.alturaM) ?? (panel?.alturaMm ? Number(panel.alturaMm) / 1000 : 2.28),
+              pitch: 4.32,
+              mountType: map?.areas?.[0]?.tipo ?? "triangulos",
+            })}
+          </Section>
+        )}
+
+        {sections.includes("page9Map") && (
+          <Section title="9. Mapa e implantação FV">
+            <div className="grid grid-cols-[1.4fr_.8fr] gap-6">
+              <div className="space-y-4">
+                {renderSatelliteMapSvg(map) ??<div className="rounded-lg border border-dashed p-8 text-center text-slate-500">Mapa satélite ainda não disponível. Abra o passo 9 e guarde a área.</div>}
+              </div>
+              <div>
+                <DataTable
+                  rows={[
+                    ["Morada", text(map?.morada) ?? text(cliente.morada) ?? "-"],
+                    ["Áreas desenhadas", int(map?.totals?.areas)],
+                    ["Área disponível", fmt(map?.totals?.areaM2, 2, "m²")],
+                    ["Painéis colocados", int(map?.totals?.paineis)],
+                    ["Strings", int(map?.totals?.strings)],
+                    ["Potência no mapa", fmt(map?.totals?.potenciaKwp, 2, "kWp")],
+                    ["Ocupação", fmt(map?.totals?.ocupacao, 0, "%")],
+                    ["Inclinação", fmt(map?.tiltDeg, 1, "º")],
+                  ]}
+                />
+              </div>
+            </div>
+            {map?.areas?.length ?(
+              <div className="mt-5 overflow-hidden rounded-lg border">
                 <table className="w-full text-sm">
-                  <thead className="bg-[#0D2B45] text-white">
+                  <thead className="bg-slate-950 text-white">
                     <tr>
-                      <th className="py-2 px-3 text-left font-medium">Indicador</th>
-                      <th className="py-2 px-3 text-right font-medium">Valor</th>
+                      <th className="px-3 py-2 text-left">Área</th>
+                      <th className="px-3 py-2 text-right">m²</th>
+                      <th className="px-3 py-2 text-right">Painéis</th>
+                      <th className="px-3 py-2 text-right">Rotação</th>
+                      <th className="px-3 py-2 text-left">Strings</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-b bg-white"><td className="py-2 px-3">Poupança Anual Estimada</td><td className="py-2 px-3 text-right font-semibold text-emerald-600">{fmt(poupanca, 2, "€")}</td></tr>
-                    <tr className="border-b bg-gray-50"><td className="py-2 px-3">Poupança a 25 anos (sem inflação)</td><td className="py-2 px-3 text-right font-semibold">{fmt(poupanca ? poupanca * 25 : null, 2, "€")}</td></tr>
-                    <tr className="border-b bg-white"><td className="py-2 px-3">Preço da Eletricidade</td><td className="py-2 px-3 text-right">{fmt(tarifa, 4, "€/kWh")}</td></tr>
-                    <tr className="border-b bg-gray-50"><td className="py-2 px-3">Investimento Estimado</td><td className="py-2 px-3 text-right">{fmt(investimento, 2, "€")}</td></tr>
-                    <tr className="border-b bg-white"><td className="py-2 px-3">Período de Retorno</td><td className="py-2 px-3 text-right font-semibold text-blue-600">{fmt(payback, 1, "anos")}</td></tr>
-                    {roi != null && <tr className="bg-amber-50"><td className="py-2 px-3 font-semibold">ROI a 25 anos</td><td className="py-2 px-3 text-right font-bold text-amber-700">{fmt(roi, 1, "%")}</td></tr>}
+                    {map.areas.map((area) => (
+                      <tr key={area.id} className="border-t">
+                        <td className="px-3 py-2 font-semibold">{area.nome}</td>
+                        <td className="px-3 py-2 text-right">{fmt(area.areaM2, 2)}</td>
+                        <td className="px-3 py-2 text-right">{area.paineis}</td>
+                        <td className="px-3 py-2 text-right">{fmt(area.rotacao, 0, "º")}</td>
+                        <td className="px-3 py-2">{area.strings.map((item) => `${item.nome}: ${item.paineis}`).join("; ")}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-            </Section>
-          )}
+            ) : null}
+          </Section>
+        )}
 
-          {/* ── NOTAS TÉCNICAS ────────────────────────────────────────────── */}
-          {sections.includes("notas") && (
-            <Section title="Notas Técnicas">
-              {notas.trim() ? (
-                <div className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed border rounded-lg p-4 bg-gray-50">{notas}</div>
-              ) : (
-                <div className="border rounded-lg p-4 bg-gray-50 text-gray-400 italic text-sm">
-                  Notas técnicas — edite este campo no painel lateral para adicionar observações, normas aplicáveis ou condicionamentos técnicos.
-                </div>
-              )}
-            </Section>
-          )}
+        {sections.includes("budget") && (
+          <Section title="Orçamento">
+            <div className="grid grid-cols-3 gap-3">
+              <Metric label="Subtotal" value={money(orcamento.subtotal ??orcamento.totalSemIva)} />
+              <Metric label="IVA" value={money(orcamento.valorIva)} />
+              <Metric label="Total" value={money(orcamento.totalComIva ?? orcamento.totalFinal ?? investment)} />
+            </div>
+          </Section>
+        )}
 
-          {/* bottom padding */}
-          <div className="h-8" />
-        </div>
-      )}
-    </div>
+        {sections.includes("notes") && (
+          <Section title="Notas e observações">
+            <div className="rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+              {notes || "Relatório gerado com base nos dados introduzidos nas páginas 1 a 9 do estudo. Recomenda-se validação final em obra das áreas úteis, sombreamentos reais, estrutura de fixação, distâncias regulamentares e condições de ligação elétrica."}
+            </div>
+          </Section>
+        )}
+      </div>
+    </article>
   );
 }

@@ -92,14 +92,14 @@ export default function TabEspacamento() {
                   <button
                     type="button"
                     onClick={() => setParams(prev => ({ ...prev, mountType: "triangulos" }))}
-                    className={`px-3 py-2.5 text-center transition-colors ${!isCoplanar ? "bg-[#0D2B45] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                    className={`px-3 py-2.5 text-center transition-colors ${!isCoplanar ?"bg-[#0D2B45] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
                   >
                     Estrutura Triângulos
                   </button>
                   <button
                     type="button"
                     onClick={() => setParams(prev => ({ ...prev, mountType: "coplanar" }))}
-                    className={`px-3 py-2.5 text-center border-l border-slate-200 transition-colors ${isCoplanar ? "bg-[#0D2B45] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                    className={`px-3 py-2.5 text-center border-l border-slate-200 transition-colors ${isCoplanar ?"bg-[#0D2B45] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
                   >
                     Telhado Coplanar
                   </button>
@@ -168,7 +168,7 @@ export default function TabEspacamento() {
                     <Input type="number" id="angle" name="angle" value={params.angle} onChange={handleChange} />
                   </div>
                 )}
-                <div className={`space-y-2 ${isCoplanar ? "col-span-2" : ""}`}>
+                <div className={`space-y-2 ${isCoplanar ?"col-span-2" : ""}`}>
                   <Label htmlFor="latitude">Latitude (°)</Label>
                   <Input type="number" id="latitude" name="latitude" value={params.latitude} onChange={handleChange} step="0.0001" />
                 </div>
@@ -202,17 +202,17 @@ export default function TabEspacamento() {
                     <Input type="number" id="inverterPower" name="inverterPower" value={params.inverterPower} onChange={handleChange} step="0.1" min="0" placeholder="Ex: 5.0" className="flex-1" />
                     <div className="grid grid-cols-2 gap-0 rounded-lg border border-slate-200 overflow-hidden text-xs font-medium shrink-0">
                       <button type="button" onClick={() => setParams(prev => ({ ...prev, inverterPhase: "mono" }))}
-                        className={`px-2.5 py-1.5 transition-colors ${params.inverterPhase === "mono" ? "bg-[#1E88E5] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                        className={`px-2.5 py-1.5 transition-colors ${params.inverterPhase === "mono" ?"bg-[#1E88E5] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
                         1F
                       </button>
                       <button type="button" onClick={() => setParams(prev => ({ ...prev, inverterPhase: "tri" }))}
-                        className={`px-2.5 py-1.5 border-l border-slate-200 transition-colors ${params.inverterPhase === "tri" ? "bg-[#1E88E5] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                        className={`px-2.5 py-1.5 border-l border-slate-200 transition-colors ${params.inverterPhase === "tri" ?"bg-[#1E88E5] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
                         3F
                       </button>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {params.inverterPhase === "mono" ? "Monofásico" : "Trifásico"}
+                    {params.inverterPhase === "mono" ?"Monofásico" : "Trifásico"}
                     {inverterPowerNum > 0 && ` · ${inverterPowerNum.toFixed(1)} kW`}
                   </p>
                 </div>
@@ -233,7 +233,7 @@ export default function TabEspacamento() {
 
         {/* ── Right: results ── */}
         <div className="lg:col-span-8 space-y-6">
-          {!isCoplanar ? (
+          {!isCoplanar ?(
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card className="border-[#1E88E5] shadow-md bg-[#F0F6FB]">
@@ -242,10 +242,10 @@ export default function TabEspacamento() {
                     <div className="text-4xl font-bold text-[#1E88E5] mt-1">{results.rowSpacing.toFixed(3)} m</div>
                   </CardContent>
                 </Card>
-                <Card className={results.gap < 0.5 ? "border-[#EF4444] bg-[#FEF2F2]" : "border-[#1a3d5c]/10"}>
+                <Card className={results.gap < 0.5 ?"border-[#EF4444] bg-[#FEF2F2]" : "border-[#1a3d5c]/10"}>
                   <CardContent className="pt-6">
                     <div className="text-sm text-muted-foreground font-medium">Espaço livre (Gap)</div>
-                    <div className={`text-4xl font-bold mt-1 ${results.gap < 0.5 ? "text-[#EF4444]" : "text-[#0D2B45]"}`}>
+                    <div className={`text-4xl font-bold mt-1 ${results.gap < 0.5 ?"text-[#EF4444]" : "text-[#0D2B45]"}`}>
                       {results.gap.toFixed(3)} m
                     </div>
                     {results.gap < 0.5 && (
@@ -334,7 +334,7 @@ export default function TabEspacamento() {
                 </div>
                 <div className="text-right">
                   <span className="text-2xl font-bold text-[#1E88E5]">
-                    {results.totalPowerWp >= 1000 ? `${totalPowerKwp.toFixed(2)} kWp` : `${results.totalPowerWp.toFixed(0)} Wp`}
+                    {results.totalPowerWp >= 1000 ?`${totalPowerKwp.toFixed(2)} kWp` : `${results.totalPowerWp.toFixed(0)} Wp`}
                   </span>
                   {results.totalPowerWp >= 1000 && (
                     <div className="text-xs text-muted-foreground">{results.totalPowerWp.toFixed(0)} Wp</div>
@@ -368,7 +368,7 @@ export default function TabEspacamento() {
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Espaçamento / Solar</div>
                     <div className="space-y-1">
                       <div className="flex justify-between gap-4"><span className="text-muted-foreground">Distância d</span><span className="font-medium text-[#1E88E5]">{results.rowSpacing.toFixed(3)} m</span></div>
-                      <div className="flex justify-between gap-4"><span className="text-muted-foreground">Gap livre</span><span className={`font-medium ${results.gap < 0.5 ? "text-[#EF4444]" : "text-[#0D2B45]"}`}>{results.gap.toFixed(3)} m</span></div>
+                      <div className="flex justify-between gap-4"><span className="text-muted-foreground">Gap livre</span><span className={`font-medium ${results.gap < 0.5 ?"text-[#EF4444]" : "text-[#0D2B45]"}`}>{results.gap.toFixed(3)} m</span></div>
                       <div className="flex justify-between gap-4"><span className="text-muted-foreground">Sombra (L)</span><span className="font-medium text-[#0D2B45]">{results.shadowLength.toFixed(2)} m</span></div>
                       <div className="flex justify-between gap-4"><span className="text-muted-foreground">Ângulo sol 21 Dez</span><span className="font-medium text-[#F5A623]">{results.altitudeAngle.toFixed(1)}°</span></div>
                     </div>

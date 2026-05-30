@@ -69,7 +69,7 @@ export default function OrcamentoPDF({ state, estudo }: Props) {
 
   /* company initials for logo placeholder */
   const initials = empresaNome
-    ? empresaNome.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()
+    ?empresaNome.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()
     : "☀";
 
   return (
@@ -161,9 +161,9 @@ export default function OrcamentoPDF({ state, estudo }: Props) {
         {/* Installation address */}
         <div style={{ flex: 1, border: "1px solid #e5e7eb", borderRadius: 6, padding: "10px 14px" }}>
           <div style={LABEL}>Local de Instalação</div>
-          {moradaInstalacao ? (
+          {moradaInstalacao ?(
             <div style={{ fontSize: 11, color: "#374151", marginTop: 4, whiteSpace: "pre-line" }}>{moradaInstalacao}</div>
-          ) : moradaCliente ? (
+          ) : moradaCliente ?(
             <div style={{ fontSize: 11, color: "#374151", marginTop: 4, whiteSpace: "pre-line" }}>{moradaCliente}</div>
           ) : (
             <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>—</div>
@@ -191,14 +191,14 @@ export default function OrcamentoPDF({ state, estudo }: Props) {
             {linhas.map((l, i) => {
               const lineTotal = l.quantidade * l.precoUnitario;
               return (
-                <tr key={l.id} style={{ background: i % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                <tr key={l.id} style={{ background: i % 2 === 0 ?"#fff" : "#f9fafb" }}>
                   <td style={TD as React.CSSProperties}>{l.codigo}</td>
                   <td style={TD as React.CSSProperties}>{l.descricao}</td>
-                  <td style={TDR as React.CSSProperties}>{l.precoUnitario > 0 ? fmt2(l.precoUnitario) : ""}</td>
-                  <td style={TDR as React.CSSProperties}>{l.quantidade > 0 ? l.quantidade : ""}</td>
-                  <td style={TDR as React.CSSProperties}>{l.ivaPerc > 0 ? `${l.ivaPerc}%` : ""}</td>
-                  <td style={{ ...(TDR as React.CSSProperties), fontWeight: lineTotal > 0 ? 600 : 400 }}>
-                    {lineTotal > 0 ? `${fmt2(lineTotal)} €` : ""}
+                  <td style={TDR as React.CSSProperties}>{l.precoUnitario > 0 ?fmt2(l.precoUnitario) : ""}</td>
+                  <td style={TDR as React.CSSProperties}>{l.quantidade > 0 ?l.quantidade : ""}</td>
+                  <td style={TDR as React.CSSProperties}>{l.ivaPerc > 0 ?`${l.ivaPerc}%` : ""}</td>
+                  <td style={{ ...(TDR as React.CSSProperties), fontWeight: lineTotal > 0 ?600 : 400 }}>
+                    {lineTotal > 0 ?`${fmt2(lineTotal)} €` : ""}
                   </td>
                 </tr>
               );
@@ -269,11 +269,11 @@ export default function OrcamentoPDF({ state, estudo }: Props) {
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               {[
                 { label: "Potência Instalada", val: `${estudo.potenciaInstalada.toFixed(2)} kWp` },
-                ...(estudo.numPaineis != null ? [{ label: "N.º de Painéis", val: `${estudo.numPaineis} un.` }] : []),
+                ...(estudo.numPaineis != null ?[{ label: "N.º de Painéis", val: `${estudo.numPaineis} un.` }] : []),
                 { label: "Produção Anual Est.", val: `${fmt0(estudo.producaoAnual)} kWh` },
-                ...(estudo.autoconsumoAnual != null ? [{ label: "Autoconsumo", val: `${fmt0(estudo.autoconsumoAnual)} kWh` }] : []),
-                ...(estudo.excessoAnual != null ? [{ label: "Excedente Injetado", val: `${fmt0(estudo.excessoAnual)} kWh` }] : []),
-                ...(estudo.co2Anual != null ? [{ label: "CO₂ Evitado/ano", val: `${estudo.co2Anual.toFixed(1)} t CO₂` }] : []),
+                ...(estudo.autoconsumoAnual != null ?[{ label: "Autoconsumo", val: `${fmt0(estudo.autoconsumoAnual)} kWh` }] : []),
+                ...(estudo.excessoAnual != null ?[{ label: "Excedente Injetado", val: `${fmt0(estudo.excessoAnual)} kWh` }] : []),
+                ...(estudo.co2Anual != null ?[{ label: "CO₂ Evitado/ano", val: `${estudo.co2Anual.toFixed(1)} t CO₂` }] : []),
               ].map(({ label, val }) => (
                 <div key={label} style={{
                   flex: 1, background: "#fff", border: "1px solid #fde68a",
@@ -298,7 +298,7 @@ export default function OrcamentoPDF({ state, estudo }: Props) {
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 9, color: "#fff", fontWeight: 700,
                   }}>
-                    {estudo.autoconsumoPerc > 10 ? `Autoconsumo ${estudo.autoconsumoPerc}%` : `${estudo.autoconsumoPerc}%`}
+                    {estudo.autoconsumoPerc > 10 ?`Autoconsumo ${estudo.autoconsumoPerc}%` : `${estudo.autoconsumoPerc}%`}
                   </div>
                   <div style={{
                     flex: 1,
@@ -307,7 +307,7 @@ export default function OrcamentoPDF({ state, estudo }: Props) {
                     fontSize: 9, color: "#fff", fontWeight: 700,
                   }}>
                     {(100 - estudo.autoconsumoPerc) > 10
-                      ? `Excedente ${100 - estudo.autoconsumoPerc}%`
+                      ?`Excedente ${100 - estudo.autoconsumoPerc}%`
                       : `${100 - estudo.autoconsumoPerc}%`}
                   </div>
                 </div>
@@ -345,7 +345,7 @@ export default function OrcamentoPDF({ state, estudo }: Props) {
               {estudo.npv25 != null && (
                 <div style={{ flex: 1, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 6, padding: "10px 12px", textAlign: "center" }}>
                   <div style={LABEL}>VAL a 25 Anos</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: estudo.npv25 >= 0 ? "#16a34a" : "#dc2626", marginTop: 4 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: estudo.npv25 >= 0 ?"#16a34a" : "#dc2626", marginTop: 4 }}>
                     {fmtEurPT(estudo.npv25)}
                   </div>
                   <div style={{ fontSize: 9, color: "#6b7280", marginTop: 2 }}>taxa de desconto 4%</div>
@@ -384,7 +384,7 @@ export default function OrcamentoPDF({ state, estudo }: Props) {
                     {estudo.poupanca10 != null && (
                       <tr style={{ background: "#fff" }}>
                         <td style={TD as React.CSSProperties}>10 anos</td>
-                        <td style={{ ...(TDR as React.CSSProperties), color: estudo.poupanca10 >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+                        <td style={{ ...(TDR as React.CSSProperties), color: estudo.poupanca10 >= 0 ?"#16a34a" : "#dc2626", fontWeight: 600 }}>
                           {fmtEurPT(estudo.poupanca10)}
                         </td>
                         {estudo.npv25 != null && <td style={TDR as React.CSSProperties}>—</td>}
@@ -394,7 +394,7 @@ export default function OrcamentoPDF({ state, estudo }: Props) {
                     {estudo.poupanca15 != null && (
                       <tr style={{ background: "#f9fafb" }}>
                         <td style={TD as React.CSSProperties}>15 anos</td>
-                        <td style={{ ...(TDR as React.CSSProperties), color: estudo.poupanca15 >= 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+                        <td style={{ ...(TDR as React.CSSProperties), color: estudo.poupanca15 >= 0 ?"#16a34a" : "#dc2626", fontWeight: 600 }}>
                           {fmtEurPT(estudo.poupanca15)}
                         </td>
                         {estudo.npv25 != null && <td style={TDR as React.CSSProperties}>—</td>}

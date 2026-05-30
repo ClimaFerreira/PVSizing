@@ -245,6 +245,292 @@
   }
 }
 
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  html,
+  body,
+  #root {
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #report-content,
+  #report-content * {
+    visibility: visible !important;
+  }
+
+  #report-content {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    width: 190mm !important;
+    max-width: none !important;
+    margin: 0 auto !important;
+    overflow: visible !important;
+    background: white !important;
+    box-shadow: none !important;
+    z-index: auto !important;
+  }
+
+  #report-content,
+  #report-content .report-root,
+  #report-content .report-page,
+  #report-content .report-section {
+    transform: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  #report-content .report-root {
+    display: block !important;
+    width: 190mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+
+  #report-content .report-page {
+    display: block !important;
+    width: 190mm !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  #report-content .report-page:first-child {
+    min-height: 277mm !important;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  #report-content .report-section {
+    break-inside: auto;
+    page-break-inside: auto;
+    margin-top: 8mm !important;
+  }
+
+  #report-content .report-section h2,
+  #report-content h3,
+  #report-content thead {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  #report-content table,
+  #report-content svg,
+  #report-content img {
+    max-width: 100% !important;
+  }
+
+  #report-content tr,
+  #report-content .no-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  html,
+  body,
+  #root {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .report-builder,
+  .report-builder *,
+  .report-print-main,
+  .report-print-main *,
+  .report-print-frame,
+  .report-print-frame *,
+  #report-content,
+  #report-content * {
+    visibility: visible !important;
+  }
+
+  body > #root > *:has(#report-content),
+  .report-builder,
+  .report-print-main,
+  .report-print-frame {
+    display: block !important;
+    position: static !important;
+    float: none !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  .report-controls,
+  .report-builder aside,
+  .report-builder nav,
+  .report-builder header,
+  .report-builder footer,
+  .report-builder .print\:hidden {
+    display: none !important;
+  }
+
+  #report-content {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    width: 190mm !important;
+    max-width: 190mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    transform: none !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  #report-content .report-root,
+  #report-content .report-page,
+  #report-content .report-section {
+    display: block !important;
+    position: static !important;
+    width: 190mm !important;
+    max-width: 190mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  #report-content .report-page {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  #report-content .report-page:first-child {
+    min-height: 277mm !important;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  #report-content .report-section {
+    margin-top: 8mm !important;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  #report-content h1,
+  #report-content h2,
+  #report-content h3,
+  #report-content thead {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  #report-content tr,
+  #report-content svg,
+  #report-content img,
+  #report-content .no-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  #report-content .report-satellite-map {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    overflow: hidden !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  #report-content .report-satellite-viewport {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    aspect-ratio: 16 / 9 !important;
+    overflow: hidden !important;
+  }
+
+  #report-content .report-satellite-tile-grid {
+    display: grid !important;
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    width: 150% !important;
+    aspect-ratio: 1 / 1 !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
+    transform: translate(-50%, -50%) !important;
+    overflow: hidden !important;
+  }
+
+  #report-content .report-satellite-tile-grid img {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  #report-content .report-satellite-tile-grid svg {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  #report-content .report-satellite-svg {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: hidden !important;
+  }
+}
+
 /* Screen: A4-like cover page */
 .capa-page {
   width: 21cm;
@@ -269,4 +555,26 @@
   background: white;
   box-shadow: 0 4px 24px rgba(0,0,0,0.12);
   border-radius: 4px;
+}
+
+.map-drawing-mode,
+.map-drawing-mode *,
+.map-drawing-active .leaflet-container,
+.map-drawing-active .leaflet-container *,
+.map-drawing-active .leaflet-grab,
+.map-drawing-active .leaflet-dragging,
+.map-drawing-active .leaflet-interactive,
+.map-drawing-active path,
+.map-drawing-mode.leaflet-container,
+.map-drawing-mode .leaflet-container,
+.map-drawing-mode .leaflet-pane,
+.map-drawing-mode .leaflet-tile-container,
+.map-drawing-mode .leaflet-tile,
+.map-drawing-mode .leaflet-grab,
+.map-drawing-mode.leaflet-grab,
+.map-drawing-mode .leaflet-dragging,
+.map-drawing-mode.leaflet-dragging,
+.map-drawing-mode .leaflet-interactive,
+.map-drawing-mode path {
+  cursor: default !important;
 }

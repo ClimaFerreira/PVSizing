@@ -80,7 +80,7 @@ export function calcUpgradeValidacoes(
 ): UpgradeValidacoes {
   const totalDC = existente.potenciaFVkWp + novaPotenciaFVkWp;
   const totalAC = novoInversorACkW != null
-    ? existente.potenciaACkW + novoInversorACkW
+    ?existente.potenciaACkW + novoInversorACkW
     : existente.potenciaACkW;
 
   // New DC fits in existing inverter headroom
@@ -104,7 +104,7 @@ export function calcUpgradeValidacoes(
   const podeBateriaRetrofit = !existente.temBateria;
 
   const limitePotenciaOk = novoInversorDCMaxkW != null
-    ? novaPotenciaFVkWp <= novoInversorDCMaxkW * 1.55
+    ?novaPotenciaFVkWp <= novoInversorDCMaxkW * 1.55
     : podeReutilizarStrings || novoInversorACkW != null;
 
   // Average 1 350 kWh/kWp/yr for Portugal
@@ -113,7 +113,7 @@ export function calcUpgradeValidacoes(
 
   const paybackUpgradeAnos =
     poupancaAdicionalEstEuro > 0 && investimentoUpgrade > 0
-      ? investimentoUpgrade / poupancaAdicionalEstEuro
+      ?investimentoUpgrade / poupancaAdicionalEstEuro
       : null;
 
   return {

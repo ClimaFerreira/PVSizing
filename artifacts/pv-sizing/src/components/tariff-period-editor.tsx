@@ -39,7 +39,7 @@ export default function TariffPeriodEditor({ percVazio, percCheio, percPonta, co
 
   function updatePeriodKwh(periodKey: "vazio" | "cheio" | "ponta", rawKwh: string) {
     const n = parseFloat(rawKwh);
-    const newKwh = isNaN(n) || n < 0 ? 0 : Math.round(n);
+    const newKwh = isNaN(n) || n < 0 ?0 : Math.round(n);
     const next = { ...kwhByPeriod, [periodKey]: newKwh };
     const total = next.vazio + next.cheio + next.ponta;
     if (total <= 0) return;
@@ -69,8 +69,8 @@ export default function TariffPeriodEditor({ percVazio, percCheio, percPonta, co
       {/* Per-period editable kWh inputs */}
       <div className="grid grid-cols-3 gap-2">
         {PERIODS.map(p => {
-          const k = p.key === "percVazio" ? "vazio" : p.key === "percCheio" ? "cheio" : "ponta";
-          const pct = p.key === "percVazio" ? percVazio : p.key === "percCheio" ? percCheio : percPonta;
+          const k = p.key === "percVazio" ?"vazio" : p.key === "percCheio" ?"cheio" : "ponta";
+          const pct = p.key === "percVazio" ?percVazio : p.key === "percCheio" ?percCheio : percPonta;
           const Icon = p.Icon;
           return (
             <div key={p.key} className={cn(

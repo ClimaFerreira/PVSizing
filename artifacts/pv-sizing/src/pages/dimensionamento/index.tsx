@@ -1,26 +1,14 @@
-import { lazy, Suspense, useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { lazy, Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Wand2, Ruler, Map, FileText } from "lucide-react";
-import TabEspacamento from "./tab-espacamento";
-import ReportBuilder from "@/components/report/ReportBuilder";
 
-const TabMapa = lazy(() => import("./tab-mapa"));
 const WizardPage = lazy(() => import("@/pages/wizard"));
-
-function readProjectIdFromUrl(): number | null {
-  if (typeof window === "undefined") return null;
-  const id = new URLSearchParams(window.location.search).get("projectId");
-  const n = id ? Number(id) : NaN;
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
 
 function LoadingSkeleton() {
   return (
     <div className="space-y-4 p-4">
       <Skeleton className="h-8 w-64" />
       <Skeleton className="h-4 w-96" />
-      <div className="grid grid-cols-3 gap-4 mt-6">
+      <div className="mt-6 grid grid-cols-3 gap-4">
         <Skeleton className="h-32" />
         <Skeleton className="h-32" />
         <Skeleton className="h-32" />
@@ -30,76 +18,20 @@ function LoadingSkeleton() {
 }
 
 export default function DimensionamentoPage() {
-  const [activeTab, setActiveTab] = useState("dados-fv");
-  const projectId = readProjectIdFromUrl();
-
   return (
     <div className="space-y-0">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-[#0D2B45] tracking-tight">Dimensionamento FV</h1>
-        <p className="text-muted-foreground mt-1">Simulação de consumo, espaçamento de painéis e mapeamento de telhado.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-[#0D2B45]">
+          Dimensionamento FV
+        </h1>
+        <p className="mt-1 text-muted-foreground">
+          Fluxo passo a passo para o estudo fotovoltaico.
+        </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="mb-6 h-auto p-1 bg-slate-100 rounded-xl w-full sm:w-auto overflow-x-auto flex gap-1">
-          <TabsTrigger
-            value="dados-fv"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-[#0D2B45] data-[state=active]:shadow-sm whitespace-nowrap"
-          >
-            <Wand2 size={16} />
-            Dados FV
-          </TabsTrigger>
-          <TabsTrigger
-            value="espacamento"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-[#0D2B45] data-[state=active]:shadow-sm whitespace-nowrap"
-          >
-            <Ruler size={16} />
-            Espaçamento / Sombras
-          </TabsTrigger>
-          <TabsTrigger
-            value="mapa"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-[#0D2B45] data-[state=active]:shadow-sm whitespace-nowrap"
-          >
-            <Map size={16} />
-            Mapa Satélite
-          </TabsTrigger>
-          <TabsTrigger
-            value="relatorio"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-[#0D2B45] data-[state=active]:shadow-sm whitespace-nowrap"
-          >
-            <FileText size={16} />
-            Relatório Técnico
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Force-mount so wizard autosave captures mapData changes from other tabs */}
-        <TabsContent value="dados-fv" className="mt-0" forceMount>
-          <div className={activeTab === "dados-fv" ? "block" : "hidden"}>
-            <Suspense fallback={<LoadingSkeleton />}>
-              <WizardPage />
-            </Suspense>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="espacamento" className="mt-0">
-          <TabEspacamento />
-        </TabsContent>
-
-        {/* Keep mapa mounted always after first activation to avoid re-init */}
-        <TabsContent value="mapa" className="mt-0" forceMount>
-          <div className={activeTab === "mapa" ? "block" : "hidden"}>
-            <Suspense fallback={<LoadingSkeleton />}>
-              <TabMapa isActive={activeTab === "mapa"} />
-            </Suspense>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="relatorio" className="mt-0">
-          <div className="border rounded-xl bg-card overflow-hidden" style={{ minHeight: "75vh" }}>
-            <ReportBuilder projectId={projectId} />
-          </div>
-        </TabsContent>
-      </Tabs>
+      <Suspense fallback={<LoadingSkeleton />}>
+        <WizardPage />
+      </Suspense>
     </div>
   );
 }

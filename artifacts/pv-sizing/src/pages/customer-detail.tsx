@@ -42,7 +42,7 @@ export default function CustomerDetail() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">{customer.nome}</h1>
           <div className="flex items-center gap-2 mt-2">
-            <Badge variant={customer.tipoCliente === "Residencial" ? "default" : customer.tipoCliente === "Comercial" ? "secondary" : "outline"}>
+            <Badge variant={customer.tipoCliente === "Residencial" ?"default" : customer.tipoCliente === "Comercial" ?"secondary" : "outline"}>
               {customer.tipoCliente}
             </Badge>
             <span className="text-sm text-muted-foreground">Cliente desde {format(new Date(customer.createdAt), "dd/MM/yyyy")}</span>
@@ -85,11 +85,11 @@ export default function CustomerDetail() {
               </div>
               <div className="space-y-1">
                 <span className="text-sm text-muted-foreground flex items-center gap-1.5"><Activity className="h-4 w-4" /> Consumo Mensal</span>
-                <p className="font-medium">{customer.consumoMensal ? `${customer.consumoMensal} kWh` : "Não definido"}</p>
+                <p className="font-medium">{customer.consumoMensal ?`${customer.consumoMensal} kWh` : "Não definido"}</p>
               </div>
               <div className="space-y-1">
                 <span className="text-sm text-muted-foreground flex items-center gap-1.5"><Activity className="h-4 w-4" /> Consumo Anual</span>
-                <p className="font-medium">{customer.consumoAnual ? `${customer.consumoAnual} kWh` : "Não definido"}</p>
+                <p className="font-medium">{customer.consumoAnual ?`${customer.consumoAnual} kWh` : "Não definido"}</p>
               </div>
             </div>
           </CardContent>
@@ -103,12 +103,12 @@ export default function CustomerDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoadingSystems ? (
+            {isLoadingSystems ?(
               <div className="space-y-2">
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
               </div>
-            ) : customerSystems.length === 0 ? (
+            ) : customerSystems.length === 0 ?(
               <div className="text-center py-6 text-muted-foreground">
                 <p>Nenhum sistema dimensionado.</p>
               </div>

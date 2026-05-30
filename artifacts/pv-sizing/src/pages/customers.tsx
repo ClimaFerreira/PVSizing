@@ -240,7 +240,7 @@ export default function Customers() {
                 </div>
                 <div className="flex justify-end">
                   <Button type="submit" disabled={createCustomer.isPending}>
-                    {createCustomer.isPending ? "A guardar..." : "Guardar Cliente"}
+                    {createCustomer.isPending ?"A guardar..." : "Guardar Cliente"}
                   </Button>
                 </div>
               </form>
@@ -274,7 +274,7 @@ export default function Customers() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {isLoading ?(
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-4 w-32" /></TableCell>
@@ -285,7 +285,7 @@ export default function Customers() {
                   <TableCell className="text-right"><Skeleton className="h-8 w-24 inline-block" /></TableCell>
                 </TableRow>
               ))
-            ) : filtered?.length === 0 ? (
+            ) : filtered?.length === 0 ?(
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   Nenhum cliente encontrado.
@@ -296,7 +296,7 @@ export default function Customers() {
                 <TableRow key={cust.id}>
                   <TableCell className="font-medium">{cust.nome}</TableCell>
                   <TableCell>
-                    <Badge variant={cust.tipoCliente === "Residencial" ? "default" : cust.tipoCliente === "Comercial" ? "secondary" : "outline"}>
+                    <Badge variant={cust.tipoCliente === "Residencial" ?"default" : cust.tipoCliente === "Comercial" ?"secondary" : "outline"}>
                       {cust.tipoCliente}
                     </Badge>
                   </TableCell>
@@ -385,7 +385,7 @@ export default function Customers() {
                               </div>
                               <div className="flex justify-end">
                                 <Button type="submit" disabled={updateCustomer.isPending}>
-                                  {updateCustomer.isPending ? "A atualizar..." : "Atualizar Cliente"}
+                                  {updateCustomer.isPending ?"A atualizar..." : "Atualizar Cliente"}
                                 </Button>
                               </div>
                             </form>

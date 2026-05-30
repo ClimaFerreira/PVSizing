@@ -31,6 +31,14 @@ interface Props {
 
 export default function WizardStep1Cliente({ clienteForm, locForm }: Props) {
   const { data: locations } = useListLocations();
+  const currentLatitude = Number(locForm.watch("latitude"));
+  const currentLongitude = Number(locForm.watch("longitude"));
+  const selectedLocationName =
+    locations?.find(
+      (loc) =>
+        Math.abs(Number(loc.latitude) - currentLatitude) < 0.0001 &&
+        Math.abs(Number(loc.longitude) - currentLongitude) < 0.0001,
+    )?.nome ??"";
 
   return (
     <div className="space-y-4">
@@ -106,11 +114,17 @@ export default function WizardStep1Cliente({ clienteForm, locForm }: Props) {
           {locations && locations.length > 0 && (
             <div>
               <label className="text-sm font-medium">Localidade (pré-definida)</label>
-              <Select onValueChange={v => {
+              <Select value={selectedLocationName} onValueChange={v => {
                 const loc = locations.find(l => l.nome === v);
                 if (loc) {
-                  locForm.setValue("latitude",  loc.latitude);
-                  locForm.setValue("longitude", loc.longitude);
+                  locForm.setValue("latitude", loc.latitude, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                  locForm.setValue("longitude", loc.longitude, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
                 }
               }}>
                 <SelectTrigger className="mt-1.5"><SelectValue placeholder="Selecionar localidade..." /></SelectTrigger>

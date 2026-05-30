@@ -130,7 +130,7 @@ export default function BatteryWarnings({ warnings }: { warnings: BatteryWarning
         <CardDescription>Alertas inteligentes com base na simulação horária mensal</CardDescription>
       </CardHeader>
       <CardContent>
-        {warnings.length === 0 ? (
+        {warnings.length === 0 ?(
           <div className="flex items-center gap-2 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 text-sm">
             <CheckCircle2 size={16} className="text-emerald-600" />
             Bateria coerente com o consumo e excedente solar.

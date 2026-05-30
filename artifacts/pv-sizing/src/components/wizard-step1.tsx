@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,9 +13,10 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Upload, FileText, Loader2, CheckCircle2, XCircle, Pencil, Trash2,
   Save, X, Battery, TrendingUp, AlertTriangle, ChevronDown, ChevronUp,
-  Zap, Car, Thermometer, Wind, Waves, Flame,
+  Zap, Car, Thermometer, Wind, Waves, Flame, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getAiHeaders } from "@/lib/ai-key";
 import MonthlyHistoryGrid, { type MesOrigem } from "@/components/monthly-history-grid";
 import TariffPeriodEditor from "@/components/tariff-period-editor";
 import ConfidenceIndicator, { calcConfidence } from "@/components/confidence-indicator";
@@ -104,7 +106,7 @@ const MES_MAP: Record<string, number> = {
 };
 const MES_LABELS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 function parseMesIndex(mes: string): number {
-  return (MES_MAP[mes.toLowerCase().slice(0,3)] ?? 1) - 1;
+  return (MES_MAP[mes.toLowerCase().slice(0,3)] ??1) - 1;
 }
 
 // ─── Consolidation ────────────────────────────────────────────────────────────
@@ -177,20 +179,20 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
     }
 
     // Build monthly bar chart: prefer chart history over text readings
-    const historico = (d.historicoMensalGrafico?.length ?? 0) > 0
-      ? d.historicoMensalGrafico!
-      : (d.leiturasMensais ?? []);
+    const historico = (d.historicoMensalGrafico?.length ??0) > 0
+      ?d.historicoMensalGrafico!
+      : (d.leiturasMensais ??[]);
 
     for (const l of historico) {
       const idx = parseMesIndex(l.mes);
       if (idx >= 0 && idx < 12) {
-        monthlyKwh[idx] = (monthlyKwh[idx] ?? 0) + l.consumo;
+        monthlyKwh[idx] = (monthlyKwh[idx] ??0) + l.consumo;
         monthlyOrigins[idx] = "fatura";
       }
     }
 
     // Accumulate unique chart readings from array (de-dup by parsed month index)
-    for (const l of d.historicoMensalGrafico ?? []) {
+    for (const l of d.historicoMensalGrafico ??[]) {
       const idx = parseMesIndex(l.mes);
       if (!graficoMeses.some(g => parseMesIndex(g.mes) === idx)) graficoMeses.push(l);
     }
@@ -235,9 +237,9 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
     fonteEstimativa = "faturas_multiplas";
     mesesNoGraficoFinal = 0;
   } else {
-    const media = totalMonths > 0 ? totalKwh / totalMonths : 0;
+    const media = totalMonths > 0 ?totalKwh / totalMonths : 0;
     consumoAnualEstimado = Math.round(media * 12);
-    fonteEstimativa = totalMonths === 1 ? "fatura_unica" : "extrapolacao";
+    fonteEstimativa = totalMonths === 1 ?"fatura_unica" : "extrapolacao";
     mesesNoGraficoFinal = 0;
   }
 
@@ -245,7 +247,7 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
 
   const alertas: string[] = [];
   if (fonteEstimativa === "grafico_parcial") {
-    alertas.push(`Gráfico com ${mesesNoGraficoFinal} ${mesesNoGraficoFinal === 1 ? "mês" : "meses"} — consumo anual estimado por média mensal × 12.`);
+    alertas.push(`Gráfico com ${mesesNoGraficoFinal} ${mesesNoGraficoFinal === 1 ?"mês" : "meses"} — consumo anual estimado por média mensal × 12.`);
   } else if (fonteEstimativa === "fatura_unica" || fonteEstimativa === "extrapolacao") {
     alertas.push(`Sem gráfico de histórico na fatura — estimativa anual por extrapolação do mês atual. Considere carregar mais faturas para maior precisão.`);
   }
@@ -253,7 +255,7 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
 
   // Determine dominant seasonality
   const sazonalidade = sazonalidades.length > 0
-    ? sazonalidades.sort((a, b) =>
+    ?sazonalidades.sort((a, b) =>
         sazonalidades.filter(s => s === b).length - sazonalidades.filter(s => s === a).length
       )[0]
     : undefined;
@@ -261,14 +263,14 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
   return {
     consumoAnualEstimado,
     consumoMensalMedio,
-    mesesCobertos: Math.min(mesesNoGraficoFinal > 0 ? mesesNoGraficoFinal : totalMonths, 12),
-    percVazio:  tarifaCount > 0 ? Math.round(vazioTotal  / tarifaCount) : null,
-    percCheio:  tarifaCount > 0 ? Math.round(cheioTotal  / tarifaCount) : null,
-    percPonta:  tarifaCount > 0 ? Math.round(pontaTotal  / tarifaCount) : null,
+    mesesCobertos: Math.min(mesesNoGraficoFinal > 0 ?mesesNoGraficoFinal : totalMonths, 12),
+    percVazio:  tarifaCount > 0 ?Math.round(vazioTotal  / tarifaCount) : null,
+    percCheio:  tarifaCount > 0 ?Math.round(cheioTotal  / tarifaCount) : null,
+    percPonta:  tarifaCount > 0 ?Math.round(pontaTotal  / tarifaCount) : null,
     operador:            [...operadoresSet].join(", ") || undefined,
     tarifario:           [...tarifariosSet].join(", ") || undefined,
     potenciaContratada:  potencias[0],
-    precoKwh:            precos.length ? precos.reduce((a,b)=>a+b,0)/precos.length : undefined,
+    precoKwh:            precos.length ?precos.reduce((a,b)=>a+b,0)/precos.length : undefined,
     monthlyKwh,
     monthlyOrigins,
     sazonalidade,
@@ -290,6 +292,8 @@ export default function WizardStep1({ data, onChange }: Props) {
   const [showMonthlyGrid, setShowMonthlyGrid] = useState(false);
   const [invoices, setInvoices] = useState<ParsedInvoice[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [invoiceText, setInvoiceText] = useState("");
+  const [isParsingText, setIsParsingText] = useState(false);
   const [showAppliances, setShowAppliances] = useState(false);
   const [autoApplied, setAutoApplied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -329,7 +333,7 @@ export default function WizardStep1({ data, onChange }: Props) {
   const extraKwh = APPLIANCES
     .filter(a => data.equipamentosFuturos.includes(a.id))
     .reduce((s, a) => s + a.kwhAno, 0);
-  const extraPerc = data.consumoAnual > 0 ? Math.round((extraKwh / data.consumoAnual) * 100) : 0;
+  const extraPerc = data.consumoAnual > 0 ?Math.round((extraKwh / data.consumoAnual) * 100) : 0;
 
   // ── Invoice parsing ─────────────────────────────────────────────────────────
   const parseFile = useCallback(async (file: File) => {
@@ -338,12 +342,12 @@ export default function WizardStep1({ data, onChange }: Props) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const resp = await fetch(`${BASE}/api/tools/parse-invoice`, { method: "POST", body: fd });
+      const resp = await fetch(`${BASE}/api/tools/parse-invoice`, { method: "POST", headers: getAiHeaders(), body: fd });
       if (!resp.ok) throw new Error();
       const invData: InvoiceData = await resp.json();
-      setInvoices(prev => prev.map(i => i.id === id ? { ...i, status: "done", data: invData } : i));
+      setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "done", data: invData } : i));
     } catch {
-      setInvoices(prev => prev.map(i => i.id === id ? { ...i, status: "error" } : i));
+      setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "error" } : i));
       toast({ title: `Erro ao processar ${file.name}`, variant: "destructive" });
     }
   }, [toast]);
@@ -357,6 +361,32 @@ export default function WizardStep1({ data, onChange }: Props) {
     valid.forEach(parseFile);
   }, [parseFile, toast]);
 
+  const parseInvoiceText = useCallback(async () => {
+    if (invoiceText.trim().length < 20) {
+      toast({ title: "Cole texto da fatura primeiro", variant: "destructive" });
+      return;
+    }
+    const id = Math.random().toString(36).slice(2);
+    setIsParsingText(true);
+    setInvoices(prev => [...prev, { id, fileName: "Texto da fatura", status: "parsing" }]);
+    try {
+      const resp = await fetch(`${BASE}/api/tools/parse-invoice-text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAiHeaders() },
+        body: JSON.stringify({ texto: invoiceText }),
+      });
+      if (!resp.ok) throw new Error();
+      const invData: InvoiceData = await resp.json();
+      setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "done", data: invData } : i));
+      toast({ title: "Texto da fatura analisado com IA" });
+    } catch {
+      setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "error" } : i));
+      toast({ title: "Erro ao analisar texto da fatura", variant: "destructive" });
+    } finally {
+      setIsParsingText(false);
+    }
+  }, [invoiceText, toast]);
+
   const applyConsolidated = useCallback(() => {
     const c = consolidateInvoices(invoices);
     if (!c) return;
@@ -369,14 +399,14 @@ export default function WizardStep1({ data, onChange }: Props) {
   }, [invoices, data, onChange, toast]);
 
   const saveInvoiceEdit = useCallback((id: string, edits: Partial<InvoiceData>) => {
-    setInvoices(prev => prev.map(i => i.id === id ? { ...i, edits, showEdit: false } : i));
+    setInvoices(prev => prev.map(i => i.id === id ?{ ...i, edits, showEdit: false } : i));
   }, []);
 
   // Tariff sliders — Vazio + Cheio; Ponta = 100 - V - C (min 0)
   const setTarifa = (field: "percVazio" | "percCheio", val: number) => {
-    const other = field === "percVazio" ? data.percCheio : data.percVazio;
+    const other = field === "percVazio" ?data.percCheio : data.percVazio;
     const cap = Math.min(val, 100 - other);
-    const ponta = Math.max(0, 100 - (field === "percVazio" ? cap : data.percVazio) - (field === "percCheio" ? cap : data.percCheio));
+    const ponta = Math.max(0, 100 - (field === "percVazio" ?cap : data.percVazio) - (field === "percCheio" ?cap : data.percCheio));
     set({ [field]: cap, percPonta: ponta });
   };
 
@@ -398,14 +428,14 @@ export default function WizardStep1({ data, onChange }: Props) {
   const handleMonthlyGridChange = (vals: (number | null)[], origs: MesOrigem[]) => {
     const filled = vals.filter((v): v is number => v != null && v > 0);
     const newAnnual = filled.length === 12
-      ? filled.reduce((s, v) => s + v, 0)
+      ?filled.reduce((s, v) => s + v, 0)
       : filled.length > 0
-        ? Math.round((filled.reduce((s, v) => s + v, 0) / filled.length) * 12)
+        ?Math.round((filled.reduce((s, v) => s + v, 0) / filled.length) * 12)
         : data.consumoAnual;
     set({
       historicoMensal: vals,
       mesesOrigem: origs,
-      consumoAnual: newAnnual > 0 ? newAnnual : data.consumoAnual,
+      consumoAnual: newAnnual > 0 ?newAnnual : data.consumoAnual,
     });
   };
 
@@ -432,7 +462,7 @@ export default function WizardStep1({ data, onChange }: Props) {
           <div
             className={cn(
               "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors select-none",
-              isDragging ? "border-primary bg-primary/5" : "border-muted hover:border-primary/50"
+              isDragging ?"border-primary bg-primary/5" : "border-muted hover:border-primary/50"
             )}
             onClick={() => fileInputRef.current?.click()}
             onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
@@ -448,6 +478,27 @@ export default function WizardStep1({ data, onChange }: Props) {
             />
           </div>
 
+          <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+            <Textarea
+              value={invoiceText}
+              onChange={(event) => setInvoiceText(event.target.value)}
+              placeholder="Ou cole aqui texto da fatura: consumo, potência contratada, período, preço/kWh, leituras por período..."
+              rows={3}
+            />
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={parseInvoiceText}
+                disabled={isParsingText || invoiceText.trim().length < 20}
+              >
+                {isParsingText ?<Loader2 size={14} className="mr-1.5 animate-spin" /> : <Sparkles size={14} className="mr-1.5" />}
+                Analisar texto com IA
+              </Button>
+            </div>
+          </div>
+
           {/* Invoice list */}
           {invoices.length > 0 && (
             <div className="space-y-2">
@@ -456,7 +507,7 @@ export default function WizardStep1({ data, onChange }: Props) {
                   key={inv.id}
                   inv={inv}
                   onRemove={() => setInvoices(prev => prev.filter(i => i.id !== inv.id))}
-                  onToggleEdit={() => setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, showEdit: !i.showEdit } : i))}
+                  onToggleEdit={() => setInvoices(prev => prev.map(i => i.id === inv.id ?{ ...i, showEdit: !i.showEdit } : i))}
                   onSaveEdit={edits => saveInvoiceEdit(inv.id, edits)}
                 />
               ))}
@@ -469,7 +520,7 @@ export default function WizardStep1({ data, onChange }: Props) {
               <div className="px-4 py-3 bg-muted/50 flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold">Resumo Consolidado</p>
-                  <Badge variant="outline" className="text-xs">{doneInvoices.length} {doneInvoices.length === 1 ? "fatura" : "faturas"}</Badge>
+                  <Badge variant="outline" className="text-xs">{doneInvoices.length} {doneInvoices.length === 1 ?"fatura" : "faturas"}</Badge>
                   {/* Source badge */}
                   {consolidated.fonteEstimativa === "grafico_12m" && (
                     <Badge className="text-xs bg-emerald-500 hover:bg-emerald-500 gap-1">
@@ -493,7 +544,7 @@ export default function WizardStep1({ data, onChange }: Props) {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {autoApplied ? (
+                  {autoApplied ?(
                     <div className="flex items-center gap-1.5">
                       <Badge variant="secondary" className="text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800 gap-1">
                         <CheckCircle2 size={11} /> Aplicado ao estudo
@@ -511,21 +562,21 @@ export default function WizardStep1({ data, onChange }: Props) {
                   {[
                     { label: "Consumo Mensal Médio", value: `${consolidated.consumoMensalMedio} kWh` },
                     { label: "Consumo Anual Estimado", value: `${consolidated.consumoAnualEstimado.toLocaleString("pt-PT")} kWh`, highlight: true },
-                    consolidated.potenciaContratada ? { label: "Potência Contratada", value: `${consolidated.potenciaContratada} kVA` } : null,
-                    consolidated.precoKwh ? { label: "Preço Médio (fatura)", value: `${consolidated.precoKwh.toFixed(4)} €/kWh`, isPrice: true } : null,
+                    consolidated.potenciaContratada ?{ label: "Potência Contratada", value: `${consolidated.potenciaContratada} kVA` } : null,
+                    consolidated.precoKwh ?{ label: "Preço Médio (fatura)", value: `${consolidated.precoKwh.toFixed(4)} €/kWh`, isPrice: true } : null,
                   ].filter(Boolean).map(s => s && (
                     <div
                       key={s.label}
                       onClick={() => s.isPrice && consolidated.precoKwh && set({ precoKwh: consolidated.precoKwh })}
                       className={cn(
                         "rounded-lg p-3 text-center",
-                        s.highlight ? "bg-primary/10 border border-primary/20" : "bg-background border",
-                        s.isPrice ? "cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors" : ""
+                        s.highlight ?"bg-primary/10 border border-primary/20" : "bg-background border",
+                        s.isPrice ?"cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors" : ""
                       )}
-                      title={s.isPrice ? "Clique para usar este preço no cálculo financeiro" : undefined}
+                      title={s.isPrice ?"Clique para usar este preço no cálculo financeiro" : undefined}
                     >
-                      <p className="text-xs text-muted-foreground">{s.label}{s.isPrice ? " ↗" : ""}</p>
-                      <p className={cn("font-bold text-sm mt-0.5", s.highlight ? "text-primary" : s.isPrice ? "text-amber-600 dark:text-amber-400" : "")}>{s.value}</p>
+                      <p className="text-xs text-muted-foreground">{s.label}{s.isPrice ?" ↗" : ""}</p>
+                      <p className={cn("font-bold text-sm mt-0.5", s.highlight ?"text-primary" : s.isPrice ?"text-amber-600 dark:text-amber-400" : "")}>{s.value}</p>
                       {s.isPrice && <p className="text-[10px] text-muted-foreground mt-0.5">toque para usar</p>}
                     </div>
                   ))}
@@ -535,7 +586,7 @@ export default function WizardStep1({ data, onChange }: Props) {
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   {(consolidated.operador || consolidated.tarifario) && (
                     <p className="text-xs text-muted-foreground">
-                      {consolidated.operador && <><span className="font-medium">{consolidated.operador}</span>{consolidated.tarifario ? " · " : ""}</>}
+                      {consolidated.operador && <><span className="font-medium">{consolidated.operador}</span>{consolidated.tarifario ?" · " : ""}</>}
                       {consolidated.tarifario && consolidated.tarifario}
                     </p>
                   )}
@@ -543,7 +594,7 @@ export default function WizardStep1({ data, onChange }: Props) {
                     <p className="text-xs text-muted-foreground">
                       Sazonalidade:{" "}
                       <span className="font-medium">
-                        {consolidated.sazonalidade === "verao_pico" ? "pico no verão ☀️" : "pico no inverno 🌧️"}
+                        {consolidated.sazonalidade === "verao_pico" ?"pico no verão ☀️" : "pico no inverno 🌧️"}
                       </span>
                     </p>
                   )}
@@ -599,7 +650,7 @@ export default function WizardStep1({ data, onChange }: Props) {
             ] as const).map(m => (
               <button key={m.id} onClick={() => setManualSubMode(m.id)}
                 className={cn("px-4 py-1.5 rounded-full text-sm font-medium border transition-colors",
-                  manualSubMode === m.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50")}>
+                  manualSubMode === m.id ?"bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50")}>
                 {m.label}
               </button>
             ))}
@@ -691,7 +742,7 @@ export default function WizardStep1({ data, onChange }: Props) {
                   {data.equipamentosFuturos.length > 0 && (
                     <Badge variant="secondary" className="ml-1 text-xs">{data.equipamentosFuturos.length}</Badge>
                   )}
-                  {showAppliances ? <ChevronUp size={14} className="ml-auto" /> : <ChevronDown size={14} className="ml-auto" />}
+                  {showAppliances ?<ChevronUp size={14} className="ml-auto" /> : <ChevronDown size={14} className="ml-auto" />}
                 </button>
                 {showAppliances && (
                   <div className="space-y-2 pl-5">
@@ -701,16 +752,16 @@ export default function WizardStep1({ data, onChange }: Props) {
                       return (
                         <label key={id} className={cn(
                           "flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors",
-                          selected ? "border-orange-400 bg-orange-50 dark:bg-orange-950/20" : "border-border hover:border-orange-300"
+                          selected ?"border-orange-400 bg-orange-50 dark:bg-orange-950/20" : "border-border hover:border-orange-300"
                         )}>
                           <input type="checkbox" checked={selected} className="sr-only"
-                            onChange={() => set({ equipamentosFuturos: selected ? data.equipamentosFuturos.filter(e => e !== id) : [...data.equipamentosFuturos, id] })} />
-                          <Icon size={16} className={selected ? "text-orange-500" : "text-muted-foreground"} />
+                            onChange={() => set({ equipamentosFuturos: selected ?data.equipamentosFuturos.filter(e => e !== id) : [...data.equipamentosFuturos, id] })} />
+                          <Icon size={16} className={selected ?"text-orange-500" : "text-muted-foreground"} />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium">{label}</p>
                             <p className="text-xs text-muted-foreground">{hint}</p>
                           </div>
-                          <span className={cn("text-xs font-semibold shrink-0", selected ? "text-orange-600" : "text-muted-foreground")}>
+                          <span className={cn("text-xs font-semibold shrink-0", selected ?"text-orange-600" : "text-muted-foreground")}>
                             +{kwhAno.toLocaleString("pt-PT")} kWh/ano
                           </span>
                         </label>
@@ -762,7 +813,7 @@ export default function WizardStep1({ data, onChange }: Props) {
               }}
               onBlur={e => {
                 const v = parseFloat(e.target.value);
-                const clamped = isNaN(v) || v <= 0 ? 0.18 : Math.min(2, Math.round(v * 10000) / 10000);
+                const clamped = isNaN(v) || v <= 0 ?0.18 : Math.min(2, Math.round(v * 10000) / 10000);
                 if (clamped !== data.precoKwh) set({ precoKwh: clamped });
                 e.target.value = String(clamped);
               }}
@@ -797,8 +848,8 @@ export default function WizardStep1({ data, onChange }: Props) {
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">Para VE, nova divisão, ar condicionado, etc.</p>
           </div>
-          <span className={cn("text-sm font-bold", data.crescimentoFuturo > 0 ? "text-orange-500" : "text-muted-foreground")}>
-            {data.crescimentoFuturo > 0 ? `+${data.crescimentoFuturo}%` : "0%"}
+          <span className={cn("text-sm font-bold", data.crescimentoFuturo > 0 ?"text-orange-500" : "text-muted-foreground")}>
+            {data.crescimentoFuturo > 0 ?`+${data.crescimentoFuturo}%` : "0%"}
           </span>
         </div>
         <Slider min={0} max={100} step={5} value={[data.crescimentoFuturo]} onValueChange={([v]) => set({ crescimentoFuturo: v })} />
@@ -851,7 +902,7 @@ function InvoiceCard({ inv, onRemove, onToggleEdit, onSaveEdit }: InvoiceCardPro
   const [editConsimo, setEditConsumo] = useState(String(d.consumoTotal ?? d.consumoMensal ?? ""));
   const [editPonta, setEditPonta] = useState(String(d.consumoPonta ?? ""));
   const [editCheio, setEditCheio] = useState(String(d.consumoCheio ?? ""));
-  const [editVazio, setEditVazio] = useState(String(d.consumoVazio ?? ""));
+  const [editVazio, setEditVazio] = useState(String(d.consumoVazio ??""));
 
   const statusConfig = {
     parsing: { icon: <Loader2 size={14} className="animate-spin text-primary" />, label: "A processar...", cls: "border-primary/30 bg-primary/5" },
@@ -873,7 +924,7 @@ function InvoiceCard({ inv, onRemove, onToggleEdit, onSaveEdit }: InvoiceCardPro
           </div>
           {inv.status === "done" && (
             <button onClick={onToggleEdit} className="p-1 rounded hover:bg-muted transition-colors">
-              {inv.showEdit ? <X size={14} /> : <Pencil size={14} className="text-muted-foreground" />}
+              {inv.showEdit ?<X size={14} /> : <Pencil size={14} className="text-muted-foreground" />}
             </button>
           )}
           <button onClick={onRemove} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
@@ -885,7 +936,7 @@ function InvoiceCard({ inv, onRemove, onToggleEdit, onSaveEdit }: InvoiceCardPro
         {inv.status === "done" && !inv.showEdit && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {d.consumoTotal != null && <Badge variant="secondary" className="text-xs">{d.consumoTotal} kWh</Badge>}
-            {d.periodoMeses != null && <Badge variant="outline" className="text-xs">{d.periodoMeses} mês{d.periodoMeses > 1 ? "es" : ""}</Badge>}
+            {d.periodoMeses != null && <Badge variant="outline" className="text-xs">{d.periodoMeses} mês{d.periodoMeses > 1 ?"es" : ""}</Badge>}
             {d.dataInicio && d.dataFim && (
               <Badge variant="outline" className="text-xs">{d.dataInicio} → {d.dataFim}</Badge>
             )}
@@ -896,7 +947,7 @@ function InvoiceCard({ inv, onRemove, onToggleEdit, onSaveEdit }: InvoiceCardPro
               </Badge>
             )}
             {/* Chart extraction result */}
-            {(d.mesesNoGrafico != null && d.mesesNoGrafico > 0) ? (
+            {(d.mesesNoGrafico != null && d.mesesNoGrafico > 0) ?(
               <Badge className="text-xs bg-emerald-500 hover:bg-emerald-500 gap-1">
                 <CheckCircle2 size={10} /> Gráfico: {d.mesesNoGrafico}m · {d.consumoAnualGrafico?.toLocaleString("pt-PT")} kWh/ano
               </Badge>
@@ -933,10 +984,10 @@ function InvoiceCard({ inv, onRemove, onToggleEdit, onSaveEdit }: InvoiceCardPro
               </div>
             </div>
             <Button size="sm" className="w-full" onClick={() => onSaveEdit({
-              consumoTotal: editConsimo ? Number(editConsimo) : undefined,
-              consumoPonta: editPonta ? Number(editPonta) : undefined,
-              consumoCheio: editCheio ? Number(editCheio) : undefined,
-              consumoVazio: editVazio ? Number(editVazio) : undefined,
+              consumoTotal: editConsimo ?Number(editConsimo) : undefined,
+              consumoPonta: editPonta ?Number(editPonta) : undefined,
+              consumoCheio: editCheio ?Number(editCheio) : undefined,
+              consumoVazio: editVazio ?Number(editVazio) : undefined,
             })}>
               <Save size={13} className="mr-1.5" /> Guardar Alterações
             </Button>

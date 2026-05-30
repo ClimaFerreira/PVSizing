@@ -102,7 +102,7 @@ export default function Systems() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {isLoading ?(
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-4 w-8" /></TableCell>
@@ -113,7 +113,7 @@ export default function Systems() {
                   <TableCell className="text-right"><Skeleton className="h-8 w-20 inline-block" /></TableCell>
                 </TableRow>
               ))
-            ) : filteredSystems?.length === 0 ? (
+            ) : filteredSystems?.length === 0 ?(
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   Nenhum sistema encontrado.

@@ -66,7 +66,7 @@ function WizardOrcamento({ state, onChange, estudo }: Props) {
   function setLinha(id: string, key: keyof LinhaOrcamento, value: string | number) {
     onChange({
       ...state,
-      linhas: state.linhas.map(l => l.id === id ? { ...l, [key]: value } : l),
+      linhas: state.linhas.map(l => l.id === id ?{ ...l, [key]: value } : l),
     });
   }
 
@@ -316,10 +316,10 @@ function WizardOrcamento({ state, onChange, estudo }: Props) {
                       <Button
                         size="icon" variant="ghost"
                         className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                        onClick={() => moveLinha(l.id, idx === 0 ? 1 : -1)}
+                        onClick={() => moveLinha(l.id, idx === 0 ?1 : -1)}
                         title="Mover"
                       >
-                        {idx === 0 ? <ArrowDown size={13} /> : <ArrowUp size={13} />}
+                        {idx === 0 ?<ArrowDown size={13} /> : <ArrowUp size={13} />}
                       </Button>
                       <Button
                         size="icon" variant="ghost"
@@ -400,7 +400,7 @@ function WizardOrcamento({ state, onChange, estudo }: Props) {
           <div ref={printRef} className="border rounded-lg overflow-auto bg-white shadow-sm">
             <OrcamentoPDF
               state={state}
-              estudo={state.incluirEstudoEnergetico ? estudo : null}
+              estudo={state.incluirEstudoEnergetico ?estudo : null}
             />
           </div>
           <p className="text-xs text-muted-foreground text-center mt-2">

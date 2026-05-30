@@ -44,12 +44,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
           <div className="pt-3 mt-3 border-t border-[#1a3d5c]">
-            <a href="/">
-              <div className="flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors text-[#b4c6d6] hover:bg-[#1a3d5c] hover:text-white">
-                <Sun size={18} className="text-[#8ca3b8]" />
-                Dimensionamento FV
-              </div>
-            </a>
+              <Link href="/dimensionamento">
+  <div className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
+    location === "/dimensionamento"
+      ? "bg-[#1E88E5] text-white font-medium"
+      : "text-[#b4c6d6] hover:bg-[#1a3d5c] hover:text-white"
+  }`}>
+    <Sun size={18} className={location === "/dimensionamento" ? "text-white" : "text-[#8ca3b8]"} />
+    Dimensionamento FV
+  </div>
+</Link>
             <Link href="/empresa">
               <div className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
                 location === "/empresa" ? "bg-[#1E88E5] text-white font-medium" : "text-[#b4c6d6] hover:bg-[#1a3d5c] hover:text-white"

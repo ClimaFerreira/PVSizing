@@ -50,7 +50,7 @@ function computeSolar(params: SolarParams): SolarResult {
   const panelPower = parseFloat(params.panelPower) || 400;
 
   const toRad = (deg: number) => deg * Math.PI / 180;
-  const dec = lat >= 0 ? -23.45 : 23.45;
+  const dec = lat >= 0 ?-23.45 : 23.45;
   const altDeg = 90 - Math.abs(lat) + dec;
   const altRad = toRad(Math.max(altDeg, 1));
 
@@ -112,7 +112,7 @@ export function SolarProvider({ children }: { children: React.ReactNode }) {
       panelPower: panel.panelPower,
       ...localParams,
     };
-    const next = typeof updater === "function" ? updater(current) : updater;
+    const next = typeof updater === "function" ?updater(current) : updater;
     setPanel(p => ({
       ...p,
       panelHeight: next.height,

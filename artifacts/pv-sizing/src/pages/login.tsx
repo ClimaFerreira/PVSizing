@@ -27,7 +27,7 @@ export default function LoginPage() {
       await login(email.trim(), password);
       navigate("/painel");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao iniciar sessão");
+      setError(err instanceof Error ?err.message : "Erro ao iniciar sessão");
     } finally {
       setBusy(false);
     }
@@ -57,7 +57,7 @@ export default function LoginPage() {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? "A entrar…" : "Entrar"}
+              {busy ?"A entrar…" : "Entrar"}
             </Button>
           </form>
         </CardContent>

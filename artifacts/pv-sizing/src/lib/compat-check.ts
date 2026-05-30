@@ -57,7 +57,7 @@ export function checkPanelData(panel: PanelCompat): CompatResult {
     descricao: "Tensão em circuito aberto deve ser superior à tensão de máxima potência",
     valorObtido: `Voc ${panel.voc} V / Vmp ${panel.vmp} V`,
     valorLimite: "Voc > Vmp",
-    status: vocVmpOk ? "ok" : "erro",
+    status: vocVmpOk ?"ok" : "erro",
   });
 
   const iscImpOk = panel.isc > panel.imp;
@@ -66,18 +66,18 @@ export function checkPanelData(panel: PanelCompat): CompatResult {
     descricao: "Corrente de curto-circuito deve ser superior à corrente de máxima potência",
     valorObtido: `Isc ${panel.isc} A / Imp ${panel.imp} A`,
     valorLimite: "Isc > Imp",
-    status: iscImpOk ? "ok" : "erro",
+    status: iscImpOk ?"ok" : "erro",
   });
 
   const pmppConsistente = panel.vmp > 0 && panel.imp > 0
-    ? Math.abs(panel.vmp * panel.imp - panel.potencia) / panel.potencia < 0.15
+    ?Math.abs(panel.vmp * panel.imp - panel.potencia) / panel.potencia < 0.15
     : true;
   itens.push({
     categoria: "Pmpp consistência",
     descricao: "Potência Vmp × Imp deve aproximar-se da Pmpp declarada (tolerância ±15%)",
     valorObtido: `${(panel.vmp * panel.imp).toFixed(0)} W`,
     valorLimite: `~${panel.potencia} Wp`,
-    status: pmppConsistente ? "ok" : "aviso",
+    status: pmppConsistente ?"ok" : "aviso",
   });
 
   return buildResult(itens);
@@ -90,7 +90,7 @@ export function checkPanelInverter(
 ): CompatResult {
   const itens: CompatItem[] = [];
 
-  const vdcMax = inv.vdcMax && inv.vdcMax > 0 ? inv.vdcMax : inv.mpptMax * 1.2;
+  const vdcMax = inv.vdcMax && inv.vdcMax > 0 ?inv.vdcMax : inv.mpptMax * 1.2;
   const potenciaDC = numPaineis * panel.potencia;
   const dcAcRatio = potenciaDC / (inv.potenciaAc * 1000);
   const iscString = panel.isc;
@@ -100,8 +100,8 @@ export function checkPanelInverter(
     descricao: "Rácio de oversizing DC/AC (90–130% excelente · 80–140% aceitável)",
     valorObtido: `${(dcAcRatio * 100).toFixed(0)}%`,
     valorLimite: "90–130%",
-    status: (dcAcRatio < 0.6 || dcAcRatio > 1.7) ? "erro"
-          : (dcAcRatio < 0.8 || dcAcRatio > 1.4) ? "aviso"
+    status: (dcAcRatio < 0.6 || dcAcRatio > 1.7) ?"erro"
+          : (dcAcRatio < 0.8 || dcAcRatio > 1.4) ?"aviso"
           : "ok",
   });
 
@@ -110,7 +110,7 @@ export function checkPanelInverter(
     descricao: "Potência DC total vs. limite do inversor",
     valorObtido: `${(potenciaDC / 1000).toFixed(2)} kWp`,
     valorLimite: `${inv.potenciaDcMax} kW`,
-    status: potenciaDC / 1000 > inv.potenciaDcMax * 1.1 ? "aviso" : "ok",
+    status: potenciaDC / 1000 > inv.potenciaDcMax * 1.1 ?"aviso" : "ok",
   });
 
   itens.push({
@@ -118,7 +118,7 @@ export function checkPanelInverter(
     descricao: "Voc de 1 painel vs. janela MPPT",
     valorObtido: `${panel.voc} V`,
     valorLimite: `< ${vdcMax.toFixed(0)} V`,
-    status: panel.voc > vdcMax ? "erro" : panel.voc < inv.mpptMin ? "aviso" : "ok",
+    status: panel.voc > vdcMax ?"erro" : panel.voc < inv.mpptMin ?"aviso" : "ok",
   });
 
   itens.push({
@@ -126,7 +126,7 @@ export function checkPanelInverter(
     descricao: "Vmp de 1 painel enquadrado na janela MPPT",
     valorObtido: `${panel.vmp} V`,
     valorLimite: `${inv.mpptMin}–${inv.mpptMax} V`,
-    status: panel.vmp < inv.mpptMin || panel.vmp > inv.mpptMax ? "info" : "ok",
+    status: panel.vmp < inv.mpptMin || panel.vmp > inv.mpptMax ?"info" : "ok",
   });
 
   itens.push({
@@ -134,7 +134,7 @@ export function checkPanelInverter(
     descricao: "Isc por string vs. corrente máxima MPPT",
     valorObtido: `${iscString.toFixed(1)} A`,
     valorLimite: `${inv.corrMaxMppt} A`,
-    status: iscString > inv.corrMaxMppt ? "erro" : iscString > inv.corrMaxMppt * 0.9 ? "aviso" : "ok",
+    status: iscString > inv.corrMaxMppt ?"erro" : iscString > inv.corrMaxMppt * 0.9 ?"aviso" : "ok",
   });
 
   itens.push({
@@ -142,7 +142,7 @@ export function checkPanelInverter(
     descricao: "Número de MPPTs disponíveis",
     valorObtido: `${inv.numMppt} MPPTs × ${inv.stringsPorMppt} strings`,
     valorLimite: "≥ 1 MPPT",
-    status: inv.numMppt >= 1 ? "ok" : "erro",
+    status: inv.numMppt >= 1 ?"ok" : "erro",
   });
 
   return buildResult(itens);
@@ -159,7 +159,7 @@ export function checkBatteryInverter(
     descricao: "Tensão nominal da bateria",
     valorObtido: `${bat.tensao} V`,
     valorLimite: "48 V / 51.2 V típico",
-    status: bat.tensao >= 40 && bat.tensao <= 60 ? "ok" : "aviso",
+    status: bat.tensao >= 40 && bat.tensao <= 60 ?"ok" : "aviso",
   });
 
   itens.push({
@@ -185,7 +185,7 @@ export function checkBatteryInverter(
       descricao: "Tipo de química da bateria",
       valorObtido: bat.tecnologia,
       valorLimite: "LiFePO4 recomendado",
-      status: bat.tecnologia === "LiFePO4" ? "ok" : "aviso",
+      status: bat.tecnologia === "LiFePO4" ?"ok" : "aviso",
     });
   }
 

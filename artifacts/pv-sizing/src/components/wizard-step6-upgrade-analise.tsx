@@ -72,26 +72,26 @@ export default function WizardStep6UpgradeAnalise({
   const val = useMemo<UpgradeValidacoes>(() => calcUpgradeValidacoes(
     existente,
     novaPotenciaFVkWp,
-    novoInversor ? Number(novoInversor.potenciaAc) : null,
-    novoInversor ? Number(novoInversor.potenciaDcMax) : null,
+    novoInversor ?Number(novoInversor.potenciaAc) : null,
+    novoInversor ?Number(novoInversor.potenciaDcMax) : null,
     precoKwh,
     investimentoUpgrade,
   ), [existente, novaPotenciaFVkWp, novoInversor, precoKwh, investimentoUpgrade]);
 
   const existingPanelLabel = existingPanel
-    ? `${existingPanel.fabricante} ${existingPanel.nome} (${existingPanel.potencia} W)`
+    ?`${existingPanel.fabricante} ${existingPanel.nome} (${existingPanel.potencia} W)`
     : existente.panelModeloManual || "Não especificado";
 
   const existingInvLabel = existingInverter
-    ? `${existingInverter.fabricante} ${existingInverter.nome} (${existingInverter.potenciaAc} kW AC)`
+    ?`${existingInverter.fabricante} ${existingInverter.nome} (${existingInverter.potenciaAc} kW AC)`
     : existente.inversorModeloManual || `${existente.potenciaACkW} kW AC`;
 
   const newPanelLabel = novoPanel
-    ? `${novoPanel.fabricante} ${novoPanel.nome} (${novoPanel.potencia} W)`
+    ?`${novoPanel.fabricante} ${novoPanel.nome} (${novoPanel.potencia} W)`
     : "—";
 
   const newInvLabel = novoInversor
-    ? `${novoInversor.fabricante} ${novoInversor.nome} (${novoInversor.potenciaAc} kW AC)`
+    ?`${novoInversor.fabricante} ${novoInversor.nome} (${novoInversor.potenciaAc} kW AC)`
     : "Reutilizar inversor existente";
 
   return (
@@ -158,8 +158,8 @@ export default function WizardStep6UpgradeAnalise({
               </div>
             )}
             <div className="flex items-center gap-2">
-              <Battery size={13} className={existente.temBateria ? "text-orange-500" : "text-muted-foreground"} />
-              <span className="text-xs">{existente.temBateria ? "Com bateria" : "Sem bateria"}</span>
+              <Battery size={13} className={existente.temBateria ?"text-orange-500" : "text-muted-foreground"} />
+              <span className="text-xs">{existente.temBateria ?"Com bateria" : "Sem bateria"}</span>
             </div>
             <div className="text-[10px] text-muted-foreground mt-1 italic">
               {REGIME_LABELS[existente.regimeInjecao]}
@@ -243,41 +243,41 @@ export default function WizardStep6UpgradeAnalise({
           {novaPotenciaFVkWp > 0 && (
             <CheckRow
               label="Reutilização das strings existentes"
-              ok={val.podeReutilizarStrings ? "ok" : "aviso"}
+              ok={val.podeReutilizarStrings ?"ok" : "aviso"}
               info={val.podeReutilizarStrings
-                ? `Os novos painéis (${novaPotenciaFVkWp} kWp) cabem no headroom DC do inversor existente.`
+                ?`Os novos painéis (${novaPotenciaFVkWp} kWp) cabem no headroom DC do inversor existente.`
                 : "A adição ultrapassa a capacidade DC do inversor existente. Recomenda-se novo inversor ou AC coupling."}
             />
           )}
           {novaPotenciaFVkWp > 0 && (
             <CheckRow
               label="Inversor existente suficiente"
-              ok={val.precisaNovoInversor ? "aviso" : "ok"}
+              ok={val.precisaNovoInversor ?"aviso" : "ok"}
               info={val.precisaNovoInversor
-                ? `DC/AC ratio total seria ${((val.totalDCkWpFinal / Math.max(existente.potenciaACkW, 0.001)) * 100).toFixed(0)}% — acima do limite. Considere novo inversor ou AC coupling.`
+                ?`DC/AC ratio total seria ${((val.totalDCkWpFinal / Math.max(existente.potenciaACkW, 0.001)) * 100).toFixed(0)}% — acima do limite. Considere novo inversor ou AC coupling.`
                 : `DC/AC ratio global: ${((val.totalDCkWpFinal / Math.max(val.totalACkWFinal, 0.001)) * 100).toFixed(0)}% — dentro dos limites recomendados.`}
             />
           )}
           <CheckRow
             label="AC Coupling possível"
-            ok={val.podeACCoupling ? "ok" : "info"}
+            ok={val.podeACCoupling ?"ok" : "info"}
             info={val.podeACCoupling
-              ? "O inversor existente tem capacidade AC disponível para ligação de micro-inversor ou inversor de bateria em AC coupling."
+              ?"O inversor existente tem capacidade AC disponível para ligação de micro-inversor ou inversor de bateria em AC coupling."
               : "O inversor existente está a operar próximo da potência nominal. AC coupling poderá não ser viável."}
           />
           <CheckRow
             label="Retrofit de bateria"
-            ok={val.podeBateriaRetrofit ? "ok" : "info"}
+            ok={val.podeBateriaRetrofit ?"ok" : "info"}
             info={val.podeBateriaRetrofit
-              ? "Não existe bateria instalada — é possível adicionar sistema de armazenamento."
+              ?"Não existe bateria instalada — é possível adicionar sistema de armazenamento."
               : "Já existe bateria no sistema. Verifique compatibilidade para expansão de capacidade."}
           />
           {novaPotenciaFVkWp > 0 && (
             <CheckRow
               label="Limites de potência"
-              ok={val.limitePotenciaOk ? "ok" : "aviso"}
+              ok={val.limitePotenciaOk ?"ok" : "aviso"}
               info={val.limitePotenciaOk
-                ? "A potência dos novos painéis está dentro dos limites admissíveis do inversor seleccionado."
+                ?"A potência dos novos painéis está dentro dos limites admissíveis do inversor seleccionado."
                 : "A potência adicionada excede os limites do inversor. Verifique a configuração."}
             />
           )}
@@ -302,7 +302,7 @@ export default function WizardStep6UpgradeAnalise({
                 {
                   label: "Prod. adicional",
                   value: val.producaoAdicionalEstkWh > 0
-                    ? `${val.producaoAdicionalEstkWh.toLocaleString("pt-PT")} kWh`
+                    ?`${val.producaoAdicionalEstkWh.toLocaleString("pt-PT")} kWh`
                     : "—",
                   sub: "por ano (est.)",
                   color: "emerald",
@@ -310,7 +310,7 @@ export default function WizardStep6UpgradeAnalise({
                 {
                   label: "Produção total",
                   value: existente.producaoAnualkWh > 0
-                    ? `${(existente.producaoAnualkWh + val.producaoAdicionalEstkWh).toLocaleString("pt-PT")} kWh`
+                    ?`${(existente.producaoAnualkWh + val.producaoAdicionalEstkWh).toLocaleString("pt-PT")} kWh`
                     : "—",
                   sub: "após upgrade (est.)",
                   color: "primary",
@@ -318,7 +318,7 @@ export default function WizardStep6UpgradeAnalise({
                 {
                   label: "Poupança adicional",
                   value: val.poupancaAdicionalEstEuro > 0
-                    ? `${val.poupancaAdicionalEstEuro.toLocaleString("pt-PT", { maximumFractionDigits: 0 })} €`
+                    ?`${val.poupancaAdicionalEstEuro.toLocaleString("pt-PT", { maximumFractionDigits: 0 })} €`
                     : "—",
                   sub: "por ano (est.)",
                   color: "emerald",
@@ -326,10 +326,10 @@ export default function WizardStep6UpgradeAnalise({
                 {
                   label: "Payback upgrade",
                   value: val.paybackUpgradeAnos != null
-                    ? `${val.paybackUpgradeAnos.toFixed(1)} anos`
+                    ?`${val.paybackUpgradeAnos.toFixed(1)} anos`
                     : "—",
-                  sub: investimentoUpgrade > 0 ? `invest. ${investimentoUpgrade.toLocaleString("pt-PT")} €` : "defina o investimento",
-                  color: val.paybackUpgradeAnos != null && val.paybackUpgradeAnos <= 10 ? "emerald" : "amber",
+                  sub: investimentoUpgrade > 0 ?`invest. ${investimentoUpgrade.toLocaleString("pt-PT")} €` : "defina o investimento",
+                  color: val.paybackUpgradeAnos != null && val.paybackUpgradeAnos <= 10 ?"emerald" : "amber",
                 },
               ].map(b => (
                 <div key={b.label} className="rounded-lg bg-muted/40 p-3 text-center">

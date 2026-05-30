@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { 
+import {
   useListCustomers,
   useListPanels,
   useListInverters,
@@ -64,10 +64,10 @@ export default function SystemNew() {
   const { data: batteries, isLoading: loadingBatteries } = useListBatteries();
   const createSystem = useCreateSystem();
 
-  // URL search params logic is not natively supported by wouter's useLocation hook easily, 
+  // URL search params logic is not natively supported by wouter's useLocation hook easily,
   // so we'll just extract from window.location
   const urlParams = new URLSearchParams(window.location.search);
-  const initialCustomerId = urlParams.get("customerId") ? parseInt(urlParams.get("customerId")!, 10) : 0;
+  const initialCustomerId = urlParams.get("customerId") ?parseInt(urlParams.get("customerId")!, 10) : 0;
 
   const form = useForm<SystemFormValues>({
     resolver: zodResolver(systemSchema),
@@ -85,7 +85,7 @@ export default function SystemNew() {
   });
 
   const watchAll = form.watch();
-  
+
   const onSubmit = (data: SystemFormValues) => {
     createSystem.mutate(
       { data },
@@ -100,7 +100,7 @@ export default function SystemNew() {
   };
 
   const selectedPanel = panels?.find(p => p.id === watchAll.panelId);
-  const totalPowerWp = selectedPanel ? selectedPanel.potencia * watchAll.numPaineis : 0;
+  const totalPowerWp = selectedPanel ?selectedPanel.potencia * watchAll.numPaineis : 0;
   const totalPowerkWp = (totalPowerWp / 1000).toFixed(2);
 
   const isLoading = loadingCustomers || loadingPanels || loadingInverters || loadingBatteries;
@@ -132,7 +132,7 @@ export default function SystemNew() {
         <div className="lg:col-span-2 space-y-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              
+
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Dados do Cliente</CardTitle>
@@ -141,9 +141,9 @@ export default function SystemNew() {
                   <FormField control={form.control} name="customerId" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Cliente</FormLabel>
-                      <Select 
-                        onValueChange={(val) => field.onChange(parseInt(val, 10))} 
-                        value={field.value ? field.value.toString() : ""}
+                      <Select
+                        onValueChange={(val) => field.onChange(parseInt(val, 10))}
+                        value={field.value ?field.value.toString() : ""}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -173,9 +173,9 @@ export default function SystemNew() {
                     <FormField control={form.control} name="panelId" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Painel Solar</FormLabel>
-                        <Select 
-                          onValueChange={(val) => field.onChange(parseInt(val, 10))} 
-                          value={field.value ? field.value.toString() : ""}
+                        <Select
+                          onValueChange={(val) => field.onChange(parseInt(val, 10))}
+                          value={field.value ?field.value.toString() : ""}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -197,9 +197,9 @@ export default function SystemNew() {
                     <FormField control={form.control} name="inverterId" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Inversor</FormLabel>
-                        <Select 
-                          onValueChange={(val) => field.onChange(parseInt(val, 10))} 
-                          value={field.value ? field.value.toString() : ""}
+                        <Select
+                          onValueChange={(val) => field.onChange(parseInt(val, 10))}
+                          value={field.value ?field.value.toString() : ""}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -222,9 +222,9 @@ export default function SystemNew() {
                   <FormField control={form.control} name="batteryId" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Bateria (Opcional)</FormLabel>
-                      <Select 
-                        onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val, 10))} 
-                        value={field.value ? field.value.toString() : "none"}
+                      <Select
+                        onValueChange={(val) => field.onChange(val === "none" ?null : parseInt(val, 10))}
+                        value={field.value ?field.value.toString() : "none"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -315,7 +315,7 @@ export default function SystemNew() {
                 <Button variant="outline" type="button" onClick={() => window.history.back()}>Cancelar</Button>
                 <Button type="submit" disabled={createSystem.isPending}>
                   <Save className="mr-2 h-4 w-4" />
-                  {createSystem.isPending ? "A guardar..." : "Guardar e Calcular"}
+                  {createSystem.isPending ?"A guardar..." : "Guardar e Calcular"}
                 </Button>
               </div>
             </form>
@@ -332,12 +332,12 @@ export default function SystemNew() {
                 <span className="text-muted-foreground text-sm flex items-center gap-2"><Sun className="h-4 w-4"/> Potência DC</span>
                 <span className="font-semibold">{totalPowerkWp} kWp</span>
               </div>
-              
+
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground text-sm flex items-center gap-2"><Zap className="h-4 w-4"/> Potência AC</span>
                 <span className="font-semibold">
-                  {watchAll.inverterId && inverters 
-                    ? (inverters.find(i => i.id === watchAll.inverterId)?.potenciaAc! / 1000).toFixed(2) + " kW" 
+                  {watchAll.inverterId && inverters
+                    ?(inverters.find(i => i.id === watchAll.inverterId)?.potenciaAc! / 1000).toFixed(2) + " kW"
                     : "-"}
                 </span>
               </div>

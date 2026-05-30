@@ -71,24 +71,24 @@ export function defaultOrcamentoState(p: OrcamentoDefaultParams = {}): Orcamento
     moradaInstalacao = "",
   } = p;
 
-  const panelDesc = [panelFabricante, panelNome, panelPotencia ? `${panelPotencia}W` : null]
+  const panelDesc = [panelFabricante, panelNome, panelPotencia ?`${panelPotencia}W` : null]
     .filter(Boolean).join(" ");
   const invDesc = [inversorFabricante, inversorNome].filter(Boolean).join(" ");
-  const batDesc = bateriaNome ? [bateriaFabricante, bateriaNome].filter(Boolean).join(" ") : null;
+  const batDesc = bateriaNome ?[bateriaFabricante, bateriaNome].filter(Boolean).join(" ") : null;
 
   const kwp = numeroPaineis > 0 && panelPotencia
-    ? `${((numeroPaineis * panelPotencia) / 1000).toFixed(2)} kWp`
+    ?`${((numeroPaineis * panelPotencia) / 1000).toFixed(2)} kWp`
     : null;
 
   const linhas: LinhaOrcamento[] = [
     linha(
-      kwp ? `Kit Solar Fotovoltaico ${kwp}` : "Kit Solar Fotovoltaico P/Autoconsumo",
+      kwp ?`Kit Solar Fotovoltaico ${kwp}` : "Kit Solar Fotovoltaico P/Autoconsumo",
       1,
-      investimentoTotal > 0 ? investimentoTotal : 0,
+      investimentoTotal > 0 ?investimentoTotal : 0,
     ),
     linha(panelDesc || "Módulos Fotovoltaicos", numeroPaineis || 1),
     linha(invDesc || "Inversor", 1),
-    ...(batDesc ? [linha(batDesc, 1)] : []),
+    ...(batDesc ?[linha(batDesc, 1)] : []),
     linha("Medidor Inteligente", 1),
     linha("Estrutura de Suporte Coplanar", 1),
     linha("Cabo Solar DC (RVK 1×6mm²) [m]", 0),

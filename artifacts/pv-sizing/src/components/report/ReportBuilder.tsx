@@ -1,308 +1,320 @@
-import { useState, useMemo, useCallback } from "react";
+import { useMemo, useState } from "react";
 import {
   useGetProject,
-  useListCustomers,
-  useListPanels,
-  useListInverters,
   useListBatteries,
+  useListCustomers,
+  useListInverters,
+  useListPanels,
 } from "@workspace/api-client-react";
-import type { SolarPanel, Inverter, Battery } from "@workspace/api-client-react";
-import type { MapData } from "@/contexts/MapaContext";
-import { useSolar } from "@/contexts/SolarContext";
-import { useMapa } from "@/contexts/MapaContext";
-import { buildCrossSectionSvg, buildLayoutSvg, buildCoplanarLayoutSvg } from "@/lib/svg-utils";
-import type { InverterUnit } from "@/lib/multi-inverter";
-
+import type {
+  Battery,
+  Customer,
+  Inverter,
+  SolarPanel,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Printer, Eye, EyeOff, ChevronUp, ChevronDown, FileText, RefreshCw,
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-
+import { Separator } from "@/components/ui/separator";
+import { Eye, EyeOff, FileText, Printer, RefreshCw } from "lucide-react";
+import type { InverterUnit } from "@/lib/multi-inverter";
+import type { BatteryUnit } from "@/components/wizard-battery-study";
+import type { MapReportData } from "@/components/wizard-map-step";
 import { DEFAULT_SECTIONS, TEMPLATE_SETS, type ReportSection, type SectionId } from "./types";
-import ReportPreview, { type ReportData } from "./ReportPreview";
+import ReportPreview, { type NewReportData } from "./ReportPreview";
+
+type DraftData = Record<string, unknown> & {
+  clienteData?: Record<string, unknown> | null;
+  consumoData?: Record<string, unknown> | null;
+  locData?: Record<string, unknown> | null;
+  sizing?: Record<string, unknown> | null;
+  manual?: Record<string, unknown> | null;
+  equipFormValues?: { panelId?: number; inverterId?: number; batteryId?: number };
+  inverterUnits?: InverterUnit[];
+  batteryUnits?: BatteryUnit[];
+  reportMapData?: MapReportData | null;
+  orcamentoState?: Record<string, unknown> | null;
+  selectedCenarioTipo?: string;
+  investimentoManual?: number | null;
+  numPaineisStep5?: number | null;
+  panelRefId?: number | null;
+  tipoProjeto?: string;
+};
 
 interface Props {
   projectId: number | null;
 }
 
+function findById<T extends { id: number }>(items: T[] | undefined, id: number | null | undefined) {
+  if (!id) return null;
+  return items?.find((item) => item.id === id) ??null;
+}
+
 export default function ReportBuilder({ projectId }: Props) {
   const [sections, setSections] = useState<ReportSection[]>(DEFAULT_SECTIONS);
-  const [showPreview, setShowPreview] = useState(true);
-  const [notas, setNotas] = useState("");
   const [template, setTemplate] = useState("completo");
-  const { toast } = useToast();
+  const [showPreview, setShowPreview] = useState(true);
+  const [notes, setNotes] = useState("");
 
-  /* ── API data ── */
-  const { data: projectRow, isLoading: loadingProject } = useGetProject(projectId ?? 0);
+  const { data: project, isLoading } = useGetProject(projectId ??0);
   const { data: customers } = useListCustomers();
-  const { data: allPanels } = useListPanels();
-  const { data: allInverters } = useListInverters();
-  const { data: allBatteries } = useListBatteries();
+  const { data: panels } = useListPanels();
+  const { data: inverters } = useListInverters();
+  const { data: batteries } = useListBatteries();
 
-  /* ── Shared contexts (spacing + map tabs) ── */
-  const { params: spacingParams, results: spacingResults } = useSolar();
-  const { mapData } = useMapa();
+  const draft = (project?.draftData as DraftData | null | undefined) ??null;
+  const customer: Customer | null = findById(customers, project?.customerId ??null);
 
-  /* ── Derive data from draftData ── */
-  const draftData = projectRow?.draftData as Record<string, unknown> | null | undefined;
-  const sizing = (draftData?.sizing as Record<string, unknown> | null) ?? null;
-  const consumoData = (draftData?.consumoData as Record<string, unknown> | null) ?? null;
-  const locData = (draftData?.locData as Record<string, unknown> | null) ?? null;
-  const equipFormValues = (draftData?.equipFormValues as Record<string, unknown> | null) ?? null;
-  const inverterUnitsRaw = (draftData?.inverterUnits as InverterUnit[] | null) ?? [];
-  const batteryUnitsRaw = (draftData?.batteryUnits as Array<{ batteryId?: number }> | null) ?? [];
+  const selectedPanelId =
+    draft?.equipFormValues?.panelId ??
+    draft?.panelRefId ??
+    project?.panelId ??
+    null;
+  const panel: SolarPanel | null = findById(panels, selectedPanelId);
 
-  const customerId = projectRow?.customerId ?? null;
-  const customer = customers?.find((c) => c.id === customerId) ?? null;
+  const inverterUnits = (draft?.inverterUnits ??[]) as InverterUnit[];
+  const batteryUnits = (draft?.batteryUnits ??[]) as BatteryUnit[];
 
-  const panelId = (equipFormValues?.panelId as number | null | undefined)
-    ?? (draftData?.panelRefId as number | null | undefined)
-    ?? projectRow?.panelId ?? null;
-  const panel: SolarPanel | null = allPanels?.find((p) => p.id === panelId) ?? null;
+  const selectedInverters: Inverter[] = useMemo(() => {
+    const ids = inverterUnits
+      .map((unit) => unit.inverterId)
+      .filter((id): id is number => Number.isFinite(id) && id > 0);
+    const fallbackId = draft?.equipFormValues?.inverterId;
+    if (fallbackId) ids.push(fallbackId);
+    return [...new Set(ids)]
+      .map((id) => findById(inverters, id))
+      .filter((item): item is Inverter => Boolean(item));
+  }, [draft?.equipFormValues?.inverterId, inverterUnits, inverters]);
 
-  const inverters: Inverter[] = useMemo(() => {
-    const ids = inverterUnitsRaw.map((u) => u.inverterId).filter((id): id is number => id > 0);
-    return [...new Set(ids)].map((id) => allInverters?.find((inv) => inv.id === id))
-      .filter((inv): inv is Inverter => inv != null);
-  }, [inverterUnitsRaw, allInverters]);
+  const selectedBatteries: Battery[] = useMemo(() => {
+    const ids = batteryUnits
+      .map((unit) => unit.batteryId)
+      .filter((id): id is number => Number.isFinite(id) && id > 0);
+    const fallbackId = draft?.equipFormValues?.batteryId;
+    if (fallbackId) ids.push(fallbackId);
+    return [...new Set(ids)]
+      .map((id) => findById(batteries, id))
+      .filter((item): item is Battery => Boolean(item));
+  }, [batteryUnits, batteries, draft?.equipFormValues?.batteryId]);
 
-  const batteries: Battery[] = useMemo(() => {
-    const ids = batteryUnitsRaw.map((u) => u.batteryId).filter((id): id is number => id != null && id > 0);
-    return [...new Set(ids)].map((id) => allBatteries?.find((b) => b.id === id))
-      .filter((b): b is Battery => b != null);
-  }, [batteryUnitsRaw, allBatteries]);
+  const enabledSections = sections
+    .filter((section) => section.enabled)
+    .map((section) => section.id);
 
-  /* ── Generate SVG diagrams from live spacing context ── */
-  const spacingCrossSvg = useMemo(() => {
-    if (!spacingResults || spacingParams?.mountType === "coplanar") return "";
-    try { return buildCrossSectionSvg(spacingResults); } catch { return ""; }
-  }, [spacingResults, spacingParams?.mountType]);
-
-  const spacingLayoutSvg = useMemo(() => {
-    if (!spacingResults || !spacingParams) return "";
-    try {
-      if (spacingParams.mountType === "coplanar") {
-        return buildCoplanarLayoutSvg(
-          parseFloat(spacingParams.height) || 1,
-          parseFloat(spacingParams.width) || 1,
-          parseInt(spacingParams.rows) || 1,
-          parseInt(spacingParams.cols) || 1,
-        );
-      }
-      return buildLayoutSvg(
-        spacingResults,
-        parseInt(spacingParams.rows) || 1,
-        parseInt(spacingParams.cols) || 1,
-      );
-    } catch { return ""; }
-  }, [spacingResults, spacingParams]);
-
-  /* ── Build report data ── */
-  const reportData: ReportData = useMemo(() => ({
-    projectName: projectRow?.nome ?? "Projeto Solar",
-    date: new Date().toLocaleDateString("pt-PT", { day: "2-digit", month: "long", year: "numeric" }),
-    customer,
-    panel,
-    inverters,
-    batteries,
-    sizing,
-    consumoData,
-    locData,
-    numPaineis: projectRow?.numPaineis ?? null,
-    potenciaKwp: projectRow?.potenciaKwp ?? null,
-    investimentoManual: (draftData?.investimentoManual as number | null) ?? null,
-    notas,
-    spacingParams,
-    spacingResults,
-    spacingCrossSvg,
-    spacingLayoutSvg,
-    mapData: mapData ?? (draftData?.mapData as MapData | null) ?? null,
-    inverterUnits: inverterUnitsRaw,
-    allInverters: allInverters ?? [],
-  }), [projectRow, customer, panel, inverters, batteries, sizing, consumoData, locData,
-      notas, spacingParams, spacingResults, spacingCrossSvg, spacingLayoutSvg,
-      mapData, inverterUnitsRaw, allInverters, draftData]);
-
-  const enabledSections: SectionId[] = sections.filter((s) => s.enabled).map((s) => s.id);
-
-  const applyTemplate = (t: string) => {
-    setTemplate(t);
-    const ids = TEMPLATE_SETS[t] ?? TEMPLATE_SETS.completo;
-    setSections((prev) => prev.map((s) => ({ ...s, enabled: ids.includes(s.id) })));
+  const applyTemplate = (value: string) => {
+    setTemplate(value);
+    const enabled = TEMPLATE_SETS[value] ??TEMPLATE_SETS.completo;
+    setSections((prev) =>
+      prev.map((section) => ({ ...section, enabled: enabled.includes(section.id) })),
+    );
   };
 
-  const toggleSection = (id: SectionId) =>
-    setSections((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)));
+  const toggleSection = (id: SectionId) => {
+    setSections((prev) =>
+      prev.map((section) =>
+        section.id === id ?{ ...section, enabled: !section.enabled } : section,
+      ),
+    );
+  };
 
-  const moveSection = useCallback((id: SectionId, dir: -1 | 1) => {
-    setSections((prev) => {
-      const idx = prev.findIndex((s) => s.id === id);
-      const next = idx + dir;
-      if (next < 0 || next >= prev.length) return prev;
-      const copy = [...prev];
-      [copy[idx], copy[next]] = [copy[next], copy[idx]];
-      return copy;
-    });
-  }, []);
+  const printReport = () => {
+    const report = document.getElementById("report-content");
+    if (!report) {
+      window.print();
+      return;
+    }
 
-  const handlePrint = () => window.print();
-  const handleDocx = () =>
-    toast({ title: "Em breve", description: "Exportação DOCX estará disponível numa próxima versão." });
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((node) => node.outerHTML)
+      .join("\n");
+    const printWindow = window.open("", "_blank", "width=1000,height=900");
 
-  /* ── Data availability indicators ── */
-  const hasSpacing = !!spacingResults && (spacingResults.rowSpacing > 0 || spacingResults.totalPowerWp > 0);
-  const hasMap = !!(mapData?.panelCount || mapData?.mapImageDataUrl || mapData?.panelSvg);
-  const hasStrings = inverterUnitsRaw.some((u) => u.mpptConfig && u.mpptConfig.length > 0);
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    printWindow.document.write(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${project?.nome ??"Relatorio FV"}</title>
+    ${styles}
+    <style>
+      @page { size: A4 portrait; margin: 10mm; }
+      html, body { margin: 0; padding: 0; background: white; overflow: visible; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      #report-print-root { width: 190mm; margin: 0 auto; background: white; }
+      #report-content { display: block !important; position: static !important; width: 190mm !important; max-width: 190mm !important; margin: 0 auto !important; box-shadow: none !important; overflow: visible !important; }
+      #report-content .report-page { display: block !important; width: 190mm !important; max-width: 190mm !important; height: auto !important; min-height: 0 !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
+      #report-content .report-page:first-child { min-height: 277mm !important; break-after: page; page-break-after: always; }
+      #report-content .report-section { margin-top: 8mm !important; break-inside: auto; page-break-inside: auto; }
+      #report-content h1, #report-content h2, #report-content h3, #report-content thead { break-after: avoid; page-break-after: avoid; }
+      #report-content tr, #report-content svg, #report-content img, #report-content .no-break { break-inside: avoid; page-break-inside: avoid; }
+      #report-content .report-satellite-map { display: block !important; position: relative !important; width: 100% !important; overflow: hidden !important; break-inside: avoid !important; page-break-inside: avoid !important; }
+      #report-content .report-satellite-viewport { display: block !important; position: relative !important; width: 100% !important; aspect-ratio: 16 / 9 !important; overflow: hidden !important; }
+      #report-content .report-satellite-tile-grid { display: grid !important; position: absolute !important; left: 50% !important; top: 50% !important; width: 150% !important; aspect-ratio: 1 / 1 !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; grid-template-rows: repeat(3, minmax(0, 1fr)) !important; transform: translate(-50%, -50%) !important; overflow: hidden !important; }
+      #report-content .report-satellite-tile-grid img { display: block !important; width: 100% !important; height: 100% !important; object-fit: cover !important; break-inside: auto !important; page-break-inside: auto !important; }
+      #report-content .report-satellite-tile-grid svg { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; break-inside: auto !important; page-break-inside: auto !important; }
+      #report-content .report-satellite-svg { display: block !important; width: 100% !important; height: auto !important; max-height: none !important; overflow: hidden !important; }
+    </style>
+  </head>
+  <body>
+    <div id="report-print-root">${report.outerHTML}</div>
+  </body>
+</html>`);
+    printWindow.document.close();
+
+    window.setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 700);
+  };
+
+  const reportData: NewReportData = {
+    projectName: project?.nome ??"Estudo fotovoltaico",
+    generatedAt: new Date().toLocaleDateString("pt-PT", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }),
+    project,
+    customer: customer as unknown as Record<string, unknown> | null,
+    draft,
+    panel,
+    inverters: selectedInverters,
+    batteries: selectedBatteries,
+    allInverters: inverters ??[],
+    inverterUnits,
+    batteryUnits,
+    notes,
+  };
 
   if (projectId == null) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center text-muted-foreground gap-4">
-        <FileText className="h-12 w-12 opacity-30" />
-        <p className="text-base">Abra um estudo no Wizard para gerar o relatório técnico.</p>
-        <p className="text-sm">O relatório sincroniza automaticamente com todos os separadores.</p>
+      <div className="grid h-full place-items-center p-8 text-center text-slate-500">
+        <div>
+          <FileText className="mx-auto mb-3 h-10 w-10 opacity-40" />
+          <p className="font-semibold">Abra um projeto para gerar o relatório.</p>
+        </div>
       </div>
     );
   }
 
-  if (loadingProject) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-24 gap-2 text-muted-foreground">
-        <RefreshCw className="h-5 w-5 animate-spin" />
-        <span>A carregar dados do projeto…</span>
+      <div className="grid h-full place-items-center p-8 text-slate-500">
+        <div className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          A carregar dados do estudo...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex gap-0 h-full min-h-0">
-      {/* ── Left sidebar ────────────────────────────────────────────────── */}
-      <div className="w-56 shrink-0 border-r bg-slate-50 flex flex-col">
-        <div className="p-4 border-b">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-0.5">Relatório Técnico</p>
-          {projectRow?.nome && (
-            <p className="text-sm font-semibold text-[#0D2B45] truncate" title={projectRow.nome}>{projectRow.nome}</p>
-          )}
-          {/* Data sync badges */}
-          <div className="flex flex-wrap gap-1 mt-2">
-            <Badge variant={sizing ? "default" : "outline"} className="text-[9px] py-0 px-1.5">
-              {sizing ? "✓ Wizard" : "× Wizard"}
-            </Badge>
-            <Badge variant={hasSpacing ? "default" : "outline"} className="text-[9px] py-0 px-1.5">
-              {hasSpacing ? "✓ Espaç." : "× Espaç."}
-            </Badge>
-            <Badge variant={hasMap ? "default" : "outline"} className="text-[9px] py-0 px-1.5">
-              {hasMap ? "✓ Mapa" : "× Mapa"}
-            </Badge>
-            <Badge variant={hasStrings ? "default" : "outline"} className="text-[9px] py-0 px-1.5">
-              {hasStrings ? "✓ Strings" : "× Strings"}
-            </Badge>
+    <div className="report-builder flex h-full min-h-0 bg-slate-100">
+      <aside className="report-controls flex w-72 shrink-0 flex-col border-r bg-white">
+        <div className="border-b p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Relatório profissional
+          </p>
+          <h2 className="mt-1 truncate text-lg font-bold text-slate-950">
+            {project?.nome ??"Estudo FV"}
+          </h2>
+          <div className="mt-3 flex flex-wrap gap-1">
+            <Badge variant={draft?.sizing ?"default" : "outline"}>Dimensionamento</Badge>
+            <Badge variant={draft?.reportMapData ?"default" : "outline"}>Mapa</Badge>
+            <Badge variant={inverterUnits.length ?"default" : "outline"}>Strings</Badge>
           </div>
         </div>
 
-        <div className="p-3 border-b">
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Template</p>
+        <div className="border-b p-4">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Modelo
+          </label>
           <Select value={template} onValueChange={applyTemplate}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="completo">Completo</SelectItem>
-              <SelectItem value="comercial">Comercial</SelectItem>
               <SelectItem value="tecnico">Técnico</SelectItem>
-              <SelectItem value="executivo">Executivo</SelectItem>
-              <SelectItem value="simplificado">Simplificado</SelectItem>
+              <SelectItem value="comercial">Comercial</SelectItem>
+              <SelectItem value="mapa">Mapa e sombras</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="p-3">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Secções</p>
-            <div className="space-y-1">
-              {sections.map((s, idx) => (
-                <div key={s.id}
-                  className={`flex items-center gap-1.5 rounded px-2 py-1.5 text-xs group transition-colors ${s.enabled ? "bg-white border shadow-sm" : "text-slate-400"}`}
-                >
-                  <Checkbox
-                    checked={s.enabled}
-                    onCheckedChange={() => toggleSection(s.id)}
-                    className="h-3.5 w-3.5"
-                    id={`sec-${s.id}`}
-                  />
-                  <label htmlFor={`sec-${s.id}`} className="flex-1 cursor-pointer leading-tight select-none">{s.label}</label>
-                  <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => moveSection(s.id, -1)} disabled={idx === 0}
-                      className="h-3 w-3 flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-20">
-                      <ChevronUp className="h-2.5 w-2.5" />
-                    </button>
-                    <button onClick={() => moveSection(s.id, 1)} disabled={idx === sections.length - 1}
-                      className="h-3 w-3 flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-20">
-                      <ChevronDown className="h-2.5 w-2.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="space-y-2 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Campos no PDF
+            </p>
+            {sections.map((section) => (
+              <label
+                key={section.id}
+                className="flex cursor-pointer items-center gap-3 rounded-md border bg-slate-50 px-3 py-2 text-sm"
+              >
+                <Checkbox
+                  checked={section.enabled}
+                  onCheckedChange={() => toggleSection(section.id)}
+                />
+                <span>{section.label}</span>
+              </label>
+            ))}
           </div>
         </ScrollArea>
 
         <Separator />
 
-        <div className="p-3 space-y-2">
-          <Button size="sm" variant="outline" className="w-full text-xs h-8 gap-1.5" onClick={() => setShowPreview((v) => !v)}>
-            {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-            {showPreview ? "Ocultar Preview" : "Pré-visualizar"}
+        <div className="space-y-2 p-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full justify-start"
+            onClick={() => setShowPreview((value) => !value)}
+          >
+            {showPreview ?<EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+            {showPreview ?"Ocultar pré-visualização" : "Mostrar pré-visualização"}
           </Button>
-          <Button size="sm" className="w-full text-xs h-8 gap-1.5" onClick={handlePrint}>
-            <Printer className="h-3.5 w-3.5" /> Gerar PDF / Imprimir
-          </Button>
-          <Button size="sm" variant="outline" className="w-full text-xs h-8 gap-1.5 text-slate-500" onClick={handleDocx}>
-            <FileText className="h-3.5 w-3.5" /> Exportar DOCX
+          <Button type="button" className="w-full justify-start" onClick={printReport}>
+            <Printer className="mr-2 h-4 w-4" />
+            Gerar PDF / Imprimir
           </Button>
         </div>
-      </div>
+      </aside>
 
-      {/* ── Preview area ─────────────────────────────────────────────────── */}
-      {showPreview ? (
-        <div className="flex-1 min-h-0 overflow-auto bg-slate-200 p-6">
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <Badge variant="outline" className="text-[10px]">{enabledSections.length} secções</Badge>
-            {customer && <Badge variant="secondary" className="text-[10px]">{customer.nome}</Badge>}
-            {projectRow?.potenciaKwp && (
-              <Badge className="text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-100">
-                {projectRow.potenciaKwp.toFixed(2)} kWp
-              </Badge>
-            )}
-            <span className="ml-auto text-[10px] text-slate-500">Ctrl+P / ⌘+P → Guardar como PDF</span>
+      <main className="report-print-main min-h-0 flex-1 overflow-auto p-6">
+        <div className="report-print-frame mx-auto max-w-[21cm]">
+          <div className="mb-4 rounded-lg border bg-white p-4 print:hidden">
+            <label className="mb-2 block text-sm font-semibold">Notas finais do relatório</label>
+            <Textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="Observações, condicionantes de obra, validações pendentes ou notas comerciais..."
+              rows={3}
+            />
           </div>
 
-          <div className="max-w-[21cm] mx-auto shadow-xl">
-            {enabledSections.includes("notas") && (
-              <div className="bg-white border border-b-0 rounded-t-lg px-6 py-4 print:hidden">
-                <p className="text-xs font-semibold text-slate-500 mb-2">Notas Técnicas (editável)</p>
-                <Textarea rows={3} placeholder="Observações técnicas, normas, condicionamentos…"
-                  className="text-sm resize-none" value={notas} onChange={(e) => setNotas(e.target.value)} />
-              </div>
-            )}
+          {showPreview ?(
             <ReportPreview sections={enabledSections} data={reportData} />
-          </div>
+          ) : (
+            <div className="grid h-96 place-items-center rounded-lg border bg-white text-slate-500">
+              Pré-visualização ocultada.
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground bg-slate-100">
-          <Eye className="h-10 w-10 opacity-30" />
-          <p className="text-sm">Preview ocultado.</p>
-          <Button size="sm" onClick={() => setShowPreview(true)}>
-            <Eye className="h-4 w-4 mr-2" /> Mostrar Preview
-          </Button>
-        </div>
-      )}
+      </main>
     </div>
   );
 }

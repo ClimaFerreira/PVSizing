@@ -1,15 +1,16 @@
 export type SectionId =
-  | "capa"
-  | "cliente"
-  | "consumos"
-  | "dimensionamento"
-  | "equipamentos"
-  | "producao"
-  | "espacamento"
-  | "mapa"
-  | "strings"
-  | "financeiro"
-  | "notas";
+  | "cover"
+  | "page1Client"
+  | "page2Consumption"
+  | "page3Profile"
+  | "page4Sizing"
+  | "page5Equipment"
+  | "page6Technical"
+  | "page7Savings"
+  | "page8Shading"
+  | "page9Map"
+  | "budget"
+  | "notes";
 
 export interface ReportSection {
   id: SectionId;
@@ -18,23 +19,40 @@ export interface ReportSection {
 }
 
 export const DEFAULT_SECTIONS: ReportSection[] = [
-  { id: "capa",            label: "Capa",                  enabled: true },
-  { id: "cliente",         label: "Dados Cliente",          enabled: true },
-  { id: "consumos",        label: "Consumos",               enabled: true },
-  { id: "dimensionamento", label: "Dimensionamento FV",     enabled: true },
-  { id: "equipamentos",    label: "Equipamentos",           enabled: true },
-  { id: "producao",        label: "Produção Anual",         enabled: true },
-  { id: "espacamento",     label: "Espaçamento / Sombras",  enabled: true },
-  { id: "mapa",            label: "Mapa Satélite",          enabled: true },
-  { id: "strings",         label: "Strings / MPPT",         enabled: true },
-  { id: "financeiro",      label: "Financeiro & ROI",       enabled: true },
-  { id: "notas",           label: "Notas Técnicas",         enabled: true },
+  { id: "cover", label: "Capa", enabled: true },
+  { id: "page1Client", label: "1. Cliente e localização", enabled: true },
+  { id: "page2Consumption", label: "2. Consumos", enabled: true },
+  { id: "page3Profile", label: "3. Perfil", enabled: true },
+  { id: "page4Sizing", label: "4. Pré-dimensionamento", enabled: true },
+  { id: "page5Equipment", label: "5. Equipamentos", enabled: true },
+  { id: "page6Technical", label: "6. Técnica / strings", enabled: true },
+  { id: "page7Savings", label: "7. Poupança", enabled: true },
+  { id: "page8Shading", label: "8. Sombras", enabled: true },
+  { id: "page9Map", label: "9. Mapa", enabled: true },
+  { id: "budget", label: "Orçamento", enabled: true },
+  { id: "notes", label: "Notas", enabled: true },
 ];
 
 export const TEMPLATE_SETS: Record<string, SectionId[]> = {
-  completo:    ["capa","cliente","consumos","dimensionamento","equipamentos","producao","espacamento","mapa","strings","financeiro","notas"],
-  comercial:   ["capa","cliente","dimensionamento","producao","financeiro"],
-  tecnico:     ["capa","dimensionamento","equipamentos","espacamento","strings","producao","notas"],
-  executivo:   ["capa","cliente","financeiro"],
-  simplificado:["capa","dimensionamento","financeiro"],
+  completo: DEFAULT_SECTIONS.map((section) => section.id),
+  tecnico: [
+    "cover",
+    "page1Client",
+    "page4Sizing",
+    "page5Equipment",
+    "page6Technical",
+    "page8Shading",
+    "page9Map",
+    "notes",
+  ],
+  comercial: [
+    "cover",
+    "page1Client",
+    "page2Consumption",
+    "page4Sizing",
+    "page7Savings",
+    "budget",
+    "notes",
+  ],
+  mapa: ["cover", "page8Shading", "page9Map", "notes"],
 };

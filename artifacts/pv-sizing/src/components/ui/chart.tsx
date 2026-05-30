@@ -86,7 +86,7 @@ ${colorConfig
     const color =
       itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
       itemConfig.color
-    return color ? `  --color-${key}: ${color};` : null
+    return color ?`  --color-${key}: ${color};` : null
   })
   .join("\n")}
 }
@@ -141,7 +141,7 @@ const ChartTooltipContent = React.forwardRef<
       const itemConfig = getPayloadConfigFromPayload(config, item, key)
       const value =
         !labelKey && typeof label === "string"
-          ? config[label as keyof typeof config]?.label || label
+          ?config[label as keyof typeof config]?.label || label
           : itemConfig?.label
 
       if (labelFormatter) {
@@ -181,7 +181,7 @@ const ChartTooltipContent = React.forwardRef<
           className
         )}
       >
-        {!nestLabel ? tooltipLabel : null}
+        {!nestLabel ?tooltipLabel : null}
         <div className="grid gap-1.5">
           {payload
             .filter((item) => item.type !== "none")
@@ -198,11 +198,11 @@ const ChartTooltipContent = React.forwardRef<
                     indicator === "dot" && "items-center"
                   )}
                 >
-                  {formatter && item?.value !== undefined && item.name ? (
+                  {formatter && item?.value !== undefined && item.name ?(
                     formatter(item.value, item.name, item, index, item.payload)
                   ) : (
                     <>
-                      {itemConfig?.icon ? (
+                      {itemConfig?.icon ?(
                         <itemConfig.icon />
                       ) : (
                         !hideIndicator && (
@@ -229,11 +229,11 @@ const ChartTooltipContent = React.forwardRef<
                       <div
                         className={cn(
                           "flex flex-1 justify-between leading-none",
-                          nestLabel ? "items-end" : "items-center"
+                          nestLabel ?"items-end" : "items-center"
                         )}
                       >
                         <div className="grid gap-1.5">
-                          {nestLabel ? tooltipLabel : null}
+                          {nestLabel ?tooltipLabel : null}
                           <span className="text-muted-foreground">
                             {itemConfig?.label || item.name}
                           </span>
@@ -281,7 +281,7 @@ const ChartLegendContent = React.forwardRef<
         ref={ref}
         className={cn(
           "flex items-center justify-center gap-4",
-          verticalAlign === "top" ? "pb-3" : "pt-3",
+          verticalAlign === "top" ?"pb-3" : "pt-3",
           className
         )}
       >
@@ -298,7 +298,7 @@ const ChartLegendContent = React.forwardRef<
                   "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground"
                 )}
               >
-                {itemConfig?.icon && !hideIcon ? (
+                {itemConfig?.icon && !hideIcon ?(
                   <itemConfig.icon />
                 ) : (
                   <div
@@ -332,7 +332,7 @@ function getPayloadConfigFromPayload(
     "payload" in payload &&
     typeof payload.payload === "object" &&
     payload.payload !== null
-      ? payload.payload
+      ?payload.payload
       : undefined
 
   let configLabelKey: string = key
@@ -353,7 +353,7 @@ function getPayloadConfigFromPayload(
   }
 
   return configLabelKey in config
-    ? config[configLabelKey]
+    ?config[configLabelKey]
     : config[key as keyof typeof config]
 }
 

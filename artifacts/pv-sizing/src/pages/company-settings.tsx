@@ -6,19 +6,22 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { getStoredAnthropicKey, setStoredAnthropicKey } from "@/lib/ai-key";
 
 export default function CompanySettingsPage() {
   const { company, setCompany, refresh } = useAuth();
   const { toast } = useToast();
   const [form, setForm] = useState<Company | null>(company);
+  const [anthropicKey, setAnthropicKey] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { setForm(company); }, [company]);
+  useEffect(() => { setAnthropicKey(getStoredAnthropicKey()); }, []);
 
   if (!form) return <div className="text-muted-foreground">A carregar…</div>;
 
   function update<K extends keyof Company>(k: K, v: Company[K]) {
-    setForm(f => f ? { ...f, [k]: v } : f);
+    setForm(f => f ?{ ...f, [k]: v } : f);
   }
 
   async function onLogoChange(e: ChangeEvent<HTMLInputElement>) {
@@ -39,11 +42,12 @@ export default function CompanySettingsPage() {
     setSaving(true);
     try {
       const updated = await updateCompany(form);
+      setStoredAnthropicKey(anthropicKey);
       setCompany(updated);
       await refresh();
       toast({ title: "Definições guardadas" });
     } catch (err) {
-      toast({ title: "Erro", description: err instanceof Error ? err.message : "Falha ao guardar", variant: "destructive" });
+      toast({ title: "Erro", description: err instanceof Error ?err.message : "Falha ao guardar", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -63,17 +67,17 @@ export default function CompanySettingsPage() {
             <div className="space-y-1.5 md:col-span-2"><Label>Nome</Label>
               <Input value={form.nome} onChange={e => update("nome", e.target.value)} required /></div>
             <div className="space-y-1.5"><Label>NIF</Label>
-              <Input value={form.nif ?? ""} onChange={e => update("nif", e.target.value || null)} /></div>
+              <Input value={form.nif ??""} onChange={e => update("nif", e.target.value || null)} /></div>
             <div className="space-y-1.5"><Label>Telefone</Label>
-              <Input value={form.telefone ?? ""} onChange={e => update("telefone", e.target.value || null)} /></div>
+              <Input value={form.telefone ??""} onChange={e => update("telefone", e.target.value || null)} /></div>
             <div className="space-y-1.5 md:col-span-2"><Label>Morada</Label>
-              <Input value={form.morada ?? ""} onChange={e => update("morada", e.target.value || null)} /></div>
+              <Input value={form.morada ??""} onChange={e => update("morada", e.target.value || null)} /></div>
             <div className="space-y-1.5"><Label>Email</Label>
-              <Input type="email" value={form.email ?? ""} onChange={e => update("email", e.target.value || null)} /></div>
+              <Input type="email" value={form.email ??""} onChange={e => update("email", e.target.value || null)} /></div>
             <div className="space-y-1.5"><Label>Website</Label>
-              <Input value={form.website ?? ""} onChange={e => update("website", e.target.value || null)} /></div>
+              <Input value={form.website ??""} onChange={e => update("website", e.target.value || null)} /></div>
             <div className="space-y-1.5 md:col-span-2"><Label>IBAN</Label>
-              <Input value={form.iban ?? ""} onChange={e => update("iban", e.target.value || null)} /></div>
+              <Input value={form.iban ??""} onChange={e => update("iban", e.target.value || null)} /></div>
           </CardContent>
         </Card>
 
@@ -107,13 +111,46 @@ export default function CompanySettingsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Rodapé personalizado da proposta</Label>
-              <Textarea value={form.rodapeProposta ?? ""} rows={3}
+              <Textarea value={form.rodapeProposta ??""} rows={3}
                 onChange={e => update("rodapeProposta", e.target.value || null)} />
             </div>
           </CardContent>
         </Card>
 
-        <Button type="submit" disabled={saving}>{saving ? "A guardar…" : "Guardar alterações"}</Button>
+        <Card>
+          <CardHeader><CardTitle>Inteligência Artificial</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Chave API Anthropic</Label>
+              <Input
+                type="password"
+                value={anthropicKey}
+                onChange={e => setAnthropicKey(e.target.value)}
+                placeholder="sk-ant-api..."
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground">
+                Guardada apenas neste navegador. Será usada para analisar faturas e fichas técnicas com IA.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => {
+                setStoredAnthropicKey(anthropicKey);
+                toast({ title: anthropicKey.trim() ?"Chave de IA guardada" : "Chave de IA removida" });
+              }}>
+                Guardar chave IA
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => {
+                setAnthropicKey("");
+                setStoredAnthropicKey("");
+                toast({ title: "Chave de IA removida" });
+              }}>
+                Remover
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+        <Button type="submit" disabled={saving}>{saving ?"A guardar…" : "Guardar alterações"}</Button>
       </form>
     </div>
   );
