@@ -18,43 +18,55 @@ interface SeedUser {
   };
 }
 
-const SEED_USERS: SeedUser[] = [
-  {
-    email: "geralmarciof@gmail.com",
-    pass: "123456MF",
-    nome: "Márcio Ferreira",
-    companyName: "Márcio Ferreira",
-    companyDefaults: {
-      nome: "Márcio Ferreira",
-      corPrimaria: "#0D2B45",
-      corSecundaria: "#F5A623",
+function getBootstrapUsers(): SeedUser[] {
+  const usersJson = process.env["BOOTSTRAP_USERS_JSON"];
+  if (usersJson) {
+    const parsed = JSON.parse(usersJson) as SeedUser[];
+    if (!Array.isArray(parsed)) {
+      throw new Error("BOOTSTRAP_USERS_JSON must be an array");
+    }
+    return parsed;
+  }
+
+  const email = process.env["BOOTSTRAP_ADMIN_EMAIL"];
+  const pass = process.env["BOOTSTRAP_ADMIN_PASSWORD"];
+  if (!email || !pass) {
+    if (process.env["NODE_ENV"] === "production") {
+      throw new Error("BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD are required in production");
+    }
+
+    logger.warn(
+      "bootstrap: no admin credentials configured; set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD to create a local login",
+    );
+    return [];
+  }
+
+  const companyName = process.env["BOOTSTRAP_COMPANY_NAME"] ?? "SolarDim";
+  return [
+    {
+      email,
+      pass,
+      nome: process.env["BOOTSTRAP_ADMIN_NAME"] ?? "Administrador",
+      companyName,
+      companyDefaults: {
+        nome: companyName,
+        nif: process.env["BOOTSTRAP_COMPANY_NIF"],
+        telefone: process.env["BOOTSTRAP_COMPANY_PHONE"],
+        morada: process.env["BOOTSTRAP_COMPANY_ADDRESS"],
+        corPrimaria: process.env["BOOTSTRAP_COMPANY_PRIMARY_COLOR"] ?? "#0D2B45",
+        corSecundaria: process.env["BOOTSTRAP_COMPANY_SECONDARY_COLOR"] ?? "#F5A623",
+      },
     },
-  },
-  {
-    email: "pinheiro.iec@gmail.com",
-    pass: "Pinheiro506505170",
-    nome: "Pinheiro IEC",
-    companyName: "Pinheiro Instalações Eléctricas e Canalizações Unipessoal Lda",
-    companyDefaults: {
-      nome: "Pinheiro Instalações Eléctricas e Canalizações Unipessoal Lda",
-      nif: "506505170",
-      telefone: "964 119 508",
-      morada: "São Pedro do Sul",
-      corPrimaria: "#1a3d5c",
-      corSecundaria: "#e67e22",
-    },
-  },
-];
+  ];
+}
 
 /**
- * Idempotent bootstrap: ensures the multi-tenant session table, the two
- * canonical companies, and the two canonical users exist. Always re-syncs
- * the password hash so credentials stay in sync with the source code.
- * Logs only emails and outcomes — never passwords.
+ * Idempotent bootstrap: ensures the multi-tenant session table and configured
+ * admin users exist. Always re-syncs the password hash from environment
+ * variables. Logs only emails and outcomes, never passwords.
  */
 export async function ensureBootstrapSeed(): Promise<void> {
   try {
-    // Session store table (connect-pg-simple expects this).
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "session" (
         "sid" varchar NOT NULL COLLATE "default",
@@ -73,7 +85,7 @@ export async function ensureBootstrapSeed(): Promise<void> {
     `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");`);
 
-    for (const u of SEED_USERS) {
+    for (const u of getBootstrapUsers()) {
       const [existingCompany] = await db
         .select()
         .from(companiesTable)

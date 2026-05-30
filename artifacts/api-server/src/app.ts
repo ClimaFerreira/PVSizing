@@ -55,9 +55,11 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // ── Session middleware (PG-backed) ─────────────────────────────────────────────
 const PgStore = connectPgSimple(session);
-const sessionSecret = process.env["SESSION_SECRET"];
+const sessionSecret =
+  process.env["SESSION_SECRET"] ??
+  (process.env["NODE_ENV"] === "production" ? undefined : "solardim-local-dev-secret-change-me");
 if (!sessionSecret) {
-  throw new Error("SESSION_SECRET environment variable is required");
+  throw new Error("SESSION_SECRET environment variable is required in production");
 }
 app.set("trust proxy", 1);
 app.use(

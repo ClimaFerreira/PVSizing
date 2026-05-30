@@ -17,14 +17,14 @@ import bcrypt from "bcryptjs";
 
 async function main() {
   const existing = await db.select().from(companiesTable);
-  let company1 = existing.find((c) => c.nome.includes("Márcio"));
+  let company1 = existing.find((c) => c.nome.includes("Marcio") || c.nome.includes("MÃ¡rcio"));
   let company2 = existing.find((c) => c.nome.includes("Pinheiro"));
 
   if (!company1) {
     [company1] = await db
       .insert(companiesTable)
       .values({
-        nome: "Márcio Ferreira",
+        nome: process.env["BOOTSTRAP_COMPANY_NAME"] ?? "SolarDim",
         corPrimaria: "#0D2B45",
         corSecundaria: "#F5A623",
       })
@@ -35,10 +35,10 @@ async function main() {
     [company2] = await db
       .insert(companiesTable)
       .values({
-        nome: "Pinheiro Instalações Eléctricas e Canalizações Unipessoal Lda",
-        nif: "506505170",
-        telefone: "964 119 508",
-        morada: "São Pedro do Sul",
+        nome: process.env["BOOTSTRAP_PARTNER_COMPANY_NAME"] ?? "Parceiro SolarDim",
+        nif: process.env["BOOTSTRAP_PARTNER_COMPANY_NIF"],
+        telefone: process.env["BOOTSTRAP_PARTNER_COMPANY_PHONE"],
+        morada: process.env["BOOTSTRAP_PARTNER_COMPANY_ADDRESS"],
         corPrimaria: "#1a3d5c",
         corSecundaria: "#e67e22",
       })
@@ -52,9 +52,23 @@ async function main() {
     nome: string;
     companyId: number;
   }> = [
-    { email: "geralmarciof@gmail.com", pass: "123456MF", nome: "Márcio Ferreira", companyId: company1!.id },
-    { email: "pinheiro.iec@gmail.com", pass: "Pinheiro506505170", nome: "Pinheiro IEC", companyId: company2!.id },
-  ];
+    {
+      email: process.env["BOOTSTRAP_ADMIN_EMAIL"] ?? "admin@example.local",
+      pass: process.env["BOOTSTRAP_ADMIN_PASSWORD"] ?? "",
+      nome: process.env["BOOTSTRAP_ADMIN_NAME"] ?? "Administrador",
+      companyId: company1!.id,
+    },
+    {
+      email: process.env["BOOTSTRAP_PARTNER_EMAIL"] ?? "partner@example.local",
+      pass: process.env["BOOTSTRAP_PARTNER_PASSWORD"] ?? "",
+      nome: process.env["BOOTSTRAP_PARTNER_NAME"] ?? "Parceiro",
+      companyId: company2!.id,
+    },
+  ].filter((u) => u.pass.length > 0);
+
+  if (seedUsers.length === 0) {
+    throw new Error("Set BOOTSTRAP_ADMIN_PASSWORD and/or BOOTSTRAP_PARTNER_PASSWORD before running this seed.");
+  }
 
   for (const u of seedUsers) {
     const found = await db.select().from(usersTable).where(eq(usersTable.email, u.email));
@@ -73,7 +87,6 @@ async function main() {
     }
   }
 
-  // Backfill: assign all existing rows without a companyId to company1 (Márcio).
   const defaultCompanyId = company1!.id;
   const tables = [
     { t: customersTable, name: "customers" },
@@ -95,7 +108,6 @@ async function main() {
     console.log(`Backfilled ${r.length} rows in ${name}`);
   }
 
-  // Ensure session store table exists (connect-pg-simple format)
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS "session" (
       "sid" varchar NOT NULL COLLATE "default",
