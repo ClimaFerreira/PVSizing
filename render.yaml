@@ -1,0 +1,31 @@
+databases:
+  - name: pv-sizing-db
+    databaseName: pv_sizing
+    user: pv_sizing_user
+    plan: free
+
+services:
+  - type: web
+    name: pv-sizing-tool
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && export PORT=5173 BASE_PATH=/ NODE_ENV=production && pnpm --filter @workspace/pv-sizing build && pnpm --filter @workspace/api-server build
+    startCommand: pnpm --filter @workspace/db push && pnpm --filter @workspace/api-server start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pv-sizing-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+      - key: BASE_PATH
+        value: /
+      - key: AI_INTEGRATIONS_ANTHROPIC_BASE_URL
+        value: https://api.anthropic.com
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AI_INTEGRATIONS_ANTHROPIC_API_KEY
+        sync: false

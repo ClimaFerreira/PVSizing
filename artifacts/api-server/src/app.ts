@@ -3,6 +3,9 @@ import cors from "cors";
 import compression from "compression";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { pool } from "@workspace/db";
 import { pinoHttp } from "pino-http";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -72,7 +75,7 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: false, // behind Replit proxy in dev; OK to keep false in prod too because the proxy terminates TLS
+      secure: process.env["NODE_ENV"] === "production",
       maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
     },
   }),
@@ -80,6 +83,34 @@ app.use(
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api", router);
+
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const frontendDistCandidates = [
+  path.resolve(moduleDir, "../../pv-sizing/dist/public"),
+  path.resolve(process.cwd(), "../pv-sizing/dist/public"),
+  path.resolve(process.cwd(), "artifacts/pv-sizing/dist/public"),
+];
+const frontendDist = frontendDistCandidates.find((candidate) =>
+  fs.existsSync(path.join(candidate, "index.html")),
+);
+
+if (frontendDist) {
+  logger.info({ frontendDist }, "Serving PV Sizing frontend");
+  app.use(express.static(frontendDist, { index: false }));
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== "GET" || req.path.startsWith("/api")) {
+      next();
+      return;
+    }
+
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+} else {
+  logger.warn(
+    { candidates: frontendDistCandidates },
+    "PV Sizing frontend build not found; API-only mode",
+  );
+}
 
 // ── Global error handler ──────────────────────────────────────────────────────
 // Must be last — Express identifies error middleware by 4-arg signature.
