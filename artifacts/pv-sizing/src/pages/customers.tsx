@@ -66,6 +66,76 @@ const customerSchema = z.object({
 
 type CustomerFormValues = z.infer<typeof customerSchema>;
 
+type Coordinates = {
+  latitude: number;
+  longitude: number;
+};
+
+type NominatimResult = {
+  lat: string;
+  lon: string;
+  display_name?: string;
+};
+
+const parseCoordinates = (value: string): Coordinates | null => {
+  let decodedValue = value.trim();
+
+  try {
+    decodedValue = decodeURIComponent(decodedValue);
+  } catch {
+    decodedValue = value.trim();
+  }
+
+  const match =
+    decodedValue.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/) ??
+    decodedValue.match(/(-?\d+(?:[.,]\d+)?)\s*[,;]\s*(-?\d+(?:[.,]\d+)?)/);
+
+  if (!match) {
+    return null;
+  }
+
+  const latitude = Number(match[1].replace(",", "."));
+  const longitude = Number(match[2].replace(",", "."));
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return null;
+  }
+
+  return { latitude, longitude };
+};
+
+const buildAddressQueries = (address: string) => {
+  const cleanAddress = address.replace(/\s+/g, " ").trim();
+  const expandedAddress = cleanAddress
+    .replace(/\bAv\.?\b/gi, "Avenida")
+    .replace(/\bMal\.?\b/gi, "Marechal")
+    .replace(/\bMarech\.?\b/gi, "Marechal");
+  const withoutPostcode = expandedAddress
+    .replace(/\b\d{4}-\d{3}\b/g, "")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/,\s*,/g, ",")
+    .replace(/,\s*$/g, "")
+    .trim();
+
+  return Array.from(
+    new Set(
+      [cleanAddress, expandedAddress, withoutPostcode]
+        .filter(Boolean)
+        .flatMap((query) => [
+          query,
+          query.toLowerCase().includes("portugal") ? query : `${query}, Portugal`,
+        ])
+    )
+  );
+};
+
 export default function Customers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -132,28 +202,13 @@ export default function Customers() {
   const applyCoordinatesText = (value: string) => {
     setCoordinatesText(value);
 
-    const match = value
-      .trim()
-      .match(/^(-?\d+(?:[.,]\d+)?)\s*[,;]\s*(-?\d+(?:[.,]\d+)?)$/);
-
-    if (!match) {
+    const coordinates = parseCoordinates(value);
+    if (!coordinates) {
       return;
     }
 
-    const latitude = Number(match[1].replace(",", "."));
-    const longitude = Number(match[2].replace(",", "."));
-
-    if (
-      Number.isFinite(latitude) &&
-      Number.isFinite(longitude) &&
-      latitude >= -90 &&
-      latitude <= 90 &&
-      longitude >= -180 &&
-      longitude <= 180
-    ) {
-      form.setValue("latitude", latitude, { shouldDirty: true, shouldValidate: true });
-      form.setValue("longitude", longitude, { shouldDirty: true, shouldValidate: true });
-    }
+    form.setValue("latitude", coordinates.latitude, { shouldDirty: true, shouldValidate: true });
+    form.setValue("longitude", coordinates.longitude, { shouldDirty: true, shouldValidate: true });
   };
 
   const findCoordinatesByAddress = async () => {
@@ -170,21 +225,35 @@ export default function Customers() {
     setIsGeocoding(true);
 
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`,
-        {
+      let firstResult: NominatimResult | undefined;
+
+      for (const query of buildAddressQueries(address)) {
+        const searchParams = new URLSearchParams({
+          q: query,
+          format: "jsonv2",
+          addressdetails: "1",
+          limit: "1",
+          countrycodes: "pt",
+          "accept-language": "pt",
+        });
+
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?${searchParams}`, {
           headers: {
             Accept: "application/json",
           },
+        });
+
+        if (!response.ok) {
+          continue;
         }
-      );
 
-      if (!response.ok) {
-        throw new Error("Geocoding request failed");
+        const results: NominatimResult[] = await response.json();
+        firstResult = results[0];
+
+        if (firstResult) {
+          break;
+        }
       }
-
-      const results: Array<{ lat: string; lon: string; display_name?: string }> = await response.json();
-      const firstResult = results[0];
 
       if (!firstResult) {
         toast({
@@ -260,7 +329,7 @@ export default function Customers() {
             id="customer-coordinates"
             value={coordinatesText}
             onChange={(event) => applyCoordinatesText(event.target.value)}
-            placeholder="38.70476291364403, -9.415706227415274"
+            placeholder="38.70476291364403, -9.415706227415274 ou URL do Google Maps"
           />
           <Button
             type="button"
