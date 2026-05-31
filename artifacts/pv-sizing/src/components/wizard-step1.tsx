@@ -343,12 +343,19 @@ export default function WizardStep1({ data, onChange }: Props) {
       const fd = new FormData();
       fd.append("file", file);
       const resp = await fetch(`${BASE}/api/tools/parse-invoice`, { method: "POST", headers: getAiHeaders(), body: fd });
-      if (!resp.ok) throw new Error();
+      if (!resp.ok) {
+        const errorBody = await resp.json().catch(() => null);
+        const message = errorBody && typeof errorBody.error === "string"
+          ? errorBody.error
+          : "Não foi possível processar a fatura.";
+        throw new Error(message);
+      }
       const invData: InvoiceData = await resp.json();
       setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "done", data: invData } : i));
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Não foi possível processar a fatura.";
       setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "error" } : i));
-      toast({ title: `Erro ao processar ${file.name}`, variant: "destructive" });
+      toast({ title: `Erro ao processar ${file.name}`, description: message, variant: "destructive" });
     }
   }, [toast]);
 
@@ -375,13 +382,20 @@ export default function WizardStep1({ data, onChange }: Props) {
         headers: { "Content-Type": "application/json", ...getAiHeaders() },
         body: JSON.stringify({ texto: invoiceText }),
       });
-      if (!resp.ok) throw new Error();
+      if (!resp.ok) {
+        const errorBody = await resp.json().catch(() => null);
+        const message = errorBody && typeof errorBody.error === "string"
+          ? errorBody.error
+          : "Não foi possível analisar o texto da fatura.";
+        throw new Error(message);
+      }
       const invData: InvoiceData = await resp.json();
       setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "done", data: invData } : i));
       toast({ title: "Texto da fatura analisado com IA" });
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Não foi possível analisar o texto da fatura.";
       setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "error" } : i));
-      toast({ title: "Erro ao analisar texto da fatura", variant: "destructive" });
+      toast({ title: "Erro ao analisar texto da fatura", description: message, variant: "destructive" });
     } finally {
       setIsParsingText(false);
     }
