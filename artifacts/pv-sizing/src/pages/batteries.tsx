@@ -14,6 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -57,9 +58,62 @@ const batterySchema = z.object({
   capacidade: z.coerce.number().min(0.1, "Obrigatório"),
   tensao: z.coerce.number().min(1, "Obrigatório"),
   tecnologia: z.enum(TECNOLOGIAS),
+  potenciaCarga: z.coerce.number().min(0).optional(),
+  potenciaDescarga: z.coerce.number().min(0).optional(),
+  profundidadeDescarga: z.coerce.number().min(0).max(100).optional(),
+  eficienciaRoundTrip: z.coerce.number().min(0).max(100).optional(),
+  ciclosVida: z.coerce.number().int().min(0).optional(),
+  correnteCargaMax: z.coerce.number().min(0).optional(),
+  correnteDescargaMax: z.coerce.number().min(0).optional(),
+  garantiaAnos: z.coerce.number().int().min(0).optional(),
+  compatibilidade: z.string().optional(),
+  observacoesTecnicas: z.string().optional(),
 });
 
 type BatteryFormValues = z.infer<typeof batterySchema>;
+
+const DEFAULT_BATTERY_VALUES: BatteryFormValues = {
+  nome: "",
+  fabricante: "",
+  capacidade: 0,
+  tensao: 48,
+  tecnologia: "LiFePO4",
+  potenciaCarga: 0,
+  potenciaDescarga: 0,
+  profundidadeDescarga: 80,
+  eficienciaRoundTrip: 90,
+  ciclosVida: 0,
+  correnteCargaMax: 0,
+  correnteDescargaMax: 0,
+  garantiaAnos: 0,
+  compatibilidade: "",
+  observacoesTecnicas: "",
+};
+
+const toNumber = (value: unknown, fallback = 0) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+};
+
+const toText = (value: unknown) => value == null ? "" : String(value);
+
+const toTecnologia = (value: unknown, fallback: typeof TECNOLOGIAS[number] = "LiFePO4") =>
+  TECNOLOGIAS.includes(value as typeof TECNOLOGIAS[number])
+    ? (value as typeof TECNOLOGIAS[number])
+    : fallback;
+
+const calcCapacidadeUtil = (capacidade: number, profundidadeDescarga = 80) =>
+  Math.round(capacidade * (profundidadeDescarga / 100) * 100) / 100;
+
+const buildBatteryPayload = (data: BatteryFormValues) => {
+  const profundidadeDescarga = data.profundidadeDescarga ?? 80;
+  return {
+    ...data,
+    capacidadeUtil: calcCapacidadeUtil(data.capacidade, profundidadeDescarga),
+    compatibilidade: data.compatibilidade?.trim() || null,
+    observacoesTecnicas: data.observacoesTecnicas?.trim() || null,
+  };
+};
 
 export default function Batteries() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -75,37 +129,32 @@ export default function Batteries() {
 
   const form = useForm<BatteryFormValues>({
     resolver: zodResolver(batterySchema),
-    defaultValues: {
-      nome: "",
-      fabricante: "",
-      capacidade: 0,
-      tensao: 48,
-      tecnologia: "LiFePO4",
-    },
+    defaultValues: DEFAULT_BATTERY_VALUES,
   });
 
   const onSubmit = (data: BatteryFormValues) => {
+    const payload = buildBatteryPayload(data);
     if (editingBattery) {
       updateBattery.mutate(
-        { id: editingBattery.id, data },
+        { id: editingBattery.id, data: payload },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListBatteriesQueryKey() });
             toast({ title: "Bateria atualizada com sucesso" });
             setEditingBattery(null);
-            form.reset();
+            form.reset(DEFAULT_BATTERY_VALUES);
           },
         }
       );
     } else {
       createBattery.mutate(
-        { data },
+        { data: payload },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListBatteriesQueryKey() });
             toast({ title: "Bateria criada com sucesso" });
             setIsCreateOpen(false);
-            form.reset();
+            form.reset(DEFAULT_BATTERY_VALUES);
           },
         }
       );
@@ -134,6 +183,16 @@ export default function Batteries() {
       capacidade: bat.capacidade,
       tensao: bat.tensao,
       tecnologia: bat.tecnologia,
+      potenciaCarga: bat.potenciaCarga ?? 0,
+      potenciaDescarga: bat.potenciaDescarga ?? 0,
+      profundidadeDescarga: bat.profundidadeDescarga ?? 80,
+      eficienciaRoundTrip: bat.eficienciaRoundTrip ?? 90,
+      ciclosVida: bat.ciclosVida ?? 0,
+      correnteCargaMax: bat.correnteCargaMax ?? 0,
+      correnteDescargaMax: bat.correnteDescargaMax ?? 0,
+      garantiaAnos: bat.garantiaAnos ?? 0,
+      compatibilidade: bat.compatibilidade ?? "",
+      observacoesTecnicas: bat.observacoesTecnicas ?? "",
     });
   };
 
@@ -142,7 +201,13 @@ export default function Batteries() {
     p.fabricante.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const BatteryForm = ({ isEdit = false }: { isEdit?: boolean }) => (
+  const BatteryForm = ({ isEdit = false }: { isEdit?: boolean }) => {
+    const capacidadeUtil = calcCapacidadeUtil(
+      Number(form.watch("capacidade") ?? 0),
+      Number(form.watch("profundidadeDescarga") ?? 80),
+    );
+
+    return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
@@ -169,6 +234,48 @@ export default function Batteries() {
             <FormMessage /></FormItem>
           )} />
         </div>
+        <div className="rounded-lg border p-4 space-y-3">
+          <div>
+            <p className="text-sm font-semibold">Dados técnicos avançados</p>
+            <p className="text-xs text-muted-foreground">Usados no dimensionamento de bateria e no relatório quando disponíveis.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField control={form.control} name="profundidadeDescarga" render={({ field }) => (
+              <FormItem><FormLabel>DoD (%)</FormLabel><FormControl><Input type="number" step="1" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormItem>
+              <FormLabel>Capacidade útil calculada (kWh)</FormLabel>
+              <FormControl><Input value={capacidadeUtil || 0} readOnly /></FormControl>
+            </FormItem>
+            <FormField control={form.control} name="eficienciaRoundTrip" render={({ field }) => (
+              <FormItem><FormLabel>Eficiência round-trip (%)</FormLabel><FormControl><Input type="number" step="1" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="ciclosVida" render={({ field }) => (
+              <FormItem><FormLabel>Ciclos / vida útil</FormLabel><FormControl><Input type="number" step="100" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="potenciaCarga" render={({ field }) => (
+              <FormItem><FormLabel>Potência carga máx. (kW)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="potenciaDescarga" render={({ field }) => (
+              <FormItem><FormLabel>Potência descarga máx. (kW)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="correnteCargaMax" render={({ field }) => (
+              <FormItem><FormLabel>Corrente carga máx. (A)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="correnteDescargaMax" render={({ field }) => (
+              <FormItem><FormLabel>Corrente descarga máx. (A)</FormLabel><FormControl><Input type="number" step="0.1" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="garantiaAnos" render={({ field }) => (
+              <FormItem><FormLabel>Garantia (anos)</FormLabel><FormControl><Input type="number" step="1" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="compatibilidade" render={({ field }) => (
+              <FormItem><FormLabel>Compatibilidade / tensão</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+          </div>
+          <FormField control={form.control} name="observacoesTecnicas" render={({ field }) => (
+            <FormItem><FormLabel>Observações técnicas</FormLabel><FormControl><Textarea rows={3} {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
+        </div>
         {!isEdit && (
           <DatasheetImport
             tipoEquipamento="bateria"
@@ -179,31 +286,47 @@ export default function Batteries() {
                 fabricante:  data.fabricante  ? String(data.fabricante)  : cur.fabricante,
                 capacidade:  Number(data.capacidade) > 0 ? Number(data.capacidade) : cur.capacidade,
                 tensao:      Number(data.tensao)      > 0 ? Number(data.tensao)      : cur.tensao,
-                tecnologia:  TECNOLOGIAS.includes(data.tecnologia as typeof TECNOLOGIAS[number])
-                               ? (data.tecnologia as typeof TECNOLOGIAS[number])
-                               : cur.tecnologia,
+                tecnologia:  toTecnologia(data.tecnologia, cur.tecnologia),
+                potenciaCarga: toNumber(data.potenciaCarga, cur.potenciaCarga ?? 0),
+                potenciaDescarga: toNumber(data.potenciaDescarga, cur.potenciaDescarga ?? 0),
+                profundidadeDescarga: toNumber(data.profundidadeDescarga, cur.profundidadeDescarga ?? 80),
+                eficienciaRoundTrip: toNumber(data.eficienciaRoundTrip, cur.eficienciaRoundTrip ?? 90),
+                ciclosVida: toNumber(data.ciclosVida, cur.ciclosVida ?? 0),
+                correnteCargaMax: toNumber(data.correnteCargaMax, cur.correnteCargaMax ?? 0),
+                correnteDescargaMax: toNumber(data.correnteDescargaMax, cur.correnteDescargaMax ?? 0),
+                garantiaAnos: toNumber(data.garantiaAnos, cur.garantiaAnos ?? 0),
+                compatibilidade: toText(data.compatibilidade) || cur.compatibilidade,
+                observacoesTecnicas: toText(data.observacoesTecnicas) || cur.observacoesTecnicas,
               });
             }}
             onBatchCreate={async (modelos) => {
               let ok = 0;
               for (const d of modelos) {
-                const tec = TECNOLOGIAS.includes(d.tecnologia as typeof TECNOLOGIAS[number])
-                  ? (d.tecnologia as typeof TECNOLOGIAS[number])
-                  : "LiFePO4";
                 try {
                   await createBattery.mutateAsync({ data: {
                     nome: String(d.nome ?? ""),
                     fabricante: String(d.fabricante ?? ""),
                     capacidade: Number(d.capacidade ?? 0),
                     tensao: Number(d.tensao ?? 48),
-                    tecnologia: tec,
+                    tecnologia: toTecnologia(d.tecnologia),
+                    potenciaCarga: toNumber(d.potenciaCarga),
+                    potenciaDescarga: toNumber(d.potenciaDescarga),
+                    profundidadeDescarga: toNumber(d.profundidadeDescarga, 80),
+                    eficienciaRoundTrip: toNumber(d.eficienciaRoundTrip, 90),
+                    ciclosVida: toNumber(d.ciclosVida),
+                    correnteCargaMax: toNumber(d.correnteCargaMax),
+                    correnteDescargaMax: toNumber(d.correnteDescargaMax),
+                    capacidadeUtil: calcCapacidadeUtil(Number(d.capacidade ?? 0), toNumber(d.profundidadeDescarga, 80)),
+                    garantiaAnos: toNumber(d.garantiaAnos),
+                    compatibilidade: toText(d.compatibilidade) || null,
+                    observacoesTecnicas: toText(d.observacoesTecnicas) || null,
                   }});
                   ok++;
                 } catch { /* skip failed */ }
               }
               queryClient.invalidateQueries({ queryKey: getListBatteriesQueryKey() });
               toast({ title: `${ok} bateria(s) criada(s) com sucesso` });
-              if (ok > 0) { setIsCreateOpen(false); form.reset(); }
+              if (ok > 0) { setIsCreateOpen(false); form.reset(DEFAULT_BATTERY_VALUES); }
             }}
           />
         )}
@@ -216,7 +339,8 @@ export default function Batteries() {
         </div>
       </form>
     </Form>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -227,7 +351,7 @@ export default function Batteries() {
         </div>
 
         <Dialog open={isCreateOpen} onOpenChange={(open) => {
-          if (!open) form.reset();
+          if (!open) form.reset(DEFAULT_BATTERY_VALUES);
           setIsCreateOpen(open);
         }}>
           <DialogTrigger asChild>
@@ -236,7 +360,7 @@ export default function Batteries() {
               Nova Bateria
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[560px]">
+          <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Nova Bateria</DialogTitle>
             </DialogHeader>
@@ -264,6 +388,8 @@ export default function Batteries() {
               <TableHead>Capacidade</TableHead>
               <TableHead>Tensão</TableHead>
               <TableHead>Tecnologia</TableHead>
+              <TableHead>DoD / Ef.</TableHead>
+              <TableHead>Potência</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -276,12 +402,14 @@ export default function Batteries() {
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell className="text-right"><Skeleton className="h-8 w-16 inline-block" /></TableCell>
                 </TableRow>
               ))
             ) : filtered?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   Nenhuma bateria encontrada.
                 </TableCell>
               </TableRow>
@@ -290,12 +418,27 @@ export default function Batteries() {
                 <TableRow key={bat.id}>
                   <TableCell className="font-medium">{bat.fabricante}</TableCell>
                   <TableCell>{bat.nome}</TableCell>
-                  <TableCell>{bat.capacidade} kWh</TableCell>
+                  <TableCell>
+                    <div>{bat.capacidade} kWh</div>
+                    {bat.capacidadeUtil != null && (
+                      <div className="text-xs text-muted-foreground">útil {bat.capacidadeUtil} kWh</div>
+                    )}
+                  </TableCell>
                   <TableCell>{bat.tensao} V</TableCell>
                   <TableCell>{bat.tecnologia}</TableCell>
+                  <TableCell>
+                    <div>DoD {bat.profundidadeDescarga ?? 80}%</div>
+                    <div className="text-xs text-muted-foreground">Ef. {bat.eficienciaRoundTrip ?? 90}%</div>
+                  </TableCell>
+                  <TableCell>
+                    <div>{bat.potenciaCarga || 0} / {bat.potenciaDescarga || 0} kW</div>
+                    {(bat.correnteCargaMax || bat.correnteDescargaMax) ? (
+                      <div className="text-xs text-muted-foreground">{bat.correnteCargaMax ?? 0} / {bat.correnteDescargaMax ?? 0} A</div>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Dialog open={editingBattery?.id === bat.id} onOpenChange={(open) => {
-                      if (!open) { setEditingBattery(null); form.reset(); }
+                      if (!open) { setEditingBattery(null); form.reset(DEFAULT_BATTERY_VALUES); }
                       else openEdit(bat);
                     }}>
                       <DialogTrigger asChild>
@@ -303,7 +446,7 @@ export default function Batteries() {
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="sm:max-w-[560px]">
+                      <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                           <DialogTitle>Editar Bateria</DialogTitle>
                         </DialogHeader>

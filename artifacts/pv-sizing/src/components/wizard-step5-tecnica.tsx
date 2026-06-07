@@ -26,6 +26,10 @@ function normalizarKW(val: number): number {
   return val > 500 ? val / 1000 : val;
 }
 
+function currentLimitWithTolerance(limit: number): number {
+  return limit + Math.max(0.5, limit * 0.02);
+}
+
 interface Props {
   panel: SolarPanel | null;
   inverter: Inverter | null;
@@ -153,6 +157,9 @@ function TechSummaryTable({ sizing, invElec, panelIsc, battery }: TechSummaryTab
   const activeMppts      = config.mpptConfig.filter(s => s.length > 0).length;
   const maxStringsInMppt = config.mpptConfig.reduce((mx, s) => Math.max(mx, s.length), 0);
   const maxIscPerMppt    = maxStringsInMppt * panelIsc;
+  const iscLimitTol      = currentLimitWithTolerance(invElec.corrMaxMppt);
+  const potenciaDCKwp    = config.potenciaDCTotal / 1000;
+  const dcExcedeMax      = invElec.potenciaDcMax > 0 && potenciaDCKwp > invElec.potenciaDcMax * 1.05;
   const allPanelCounts   = config.mpptConfig.flat().filter(v => v > 0);
   const maxPaineisPorStr = allPanelCounts.length > 0 ? Math.max(...allPanelCounts) : config.paineisPerString;
   const minPaineisPorStr = allPanelCounts.length > 0 ? Math.min(...allPanelCounts) : config.paineisPerString;
@@ -168,13 +175,13 @@ function TechSummaryTable({ sizing, invElec, panelIsc, battery }: TechSummaryTab
   const rows: Row[] = [
     {
       label: "Potência DC Total",
-      obtido: `${(config.potenciaDCTotal / 1000).toFixed(2)} kWp`,
+      obtido: `${potenciaDCKwp.toFixed(2)} kWp`,
       limite: `≤ ${invElec.potenciaDcMax} kW DC`,
-      status: config.potenciaDCTotal / 1000 > invElec.potenciaDcMax * 1.05 ? "aviso" : "ok",
+      status: dcExcedeMax ? "erro" : potenciaDCKwp > invElec.potenciaDcMax ? "aviso" : "ok",
     },
     {
       label: "Potência AC Inversor",
-      obtido: `${invElec.potenciaAc} kW AC`,
+      obtido: `${invElec.potenciaAc.toFixed(1)} kW AC`,
       limite: "referência dimensionamento",
       status: "info",
     },
@@ -182,7 +189,7 @@ function TechSummaryTable({ sizing, invElec, panelIsc, battery }: TechSummaryTab
       label: "DC/AC Ratio",
       obtido: `${(config.dcAcRatio * 100).toFixed(1)}%`,
       limite: "90–130% excelente · 80–140% aceitável",
-      status: (config.dcAcRatio < 0.6 || config.dcAcRatio > 1.7) ? "erro"
+      status: (config.dcAcRatio < 0.6 || (config.dcAcRatio > 1.7 && dcExcedeMax)) ? "erro"
             : (config.dcAcRatio < 0.8 || config.dcAcRatio > 1.4) ? "aviso"
             : (config.dcAcRatio < 0.9 || config.dcAcRatio > 1.3) ? "aviso"
             : "ok",
@@ -238,7 +245,7 @@ function TechSummaryTable({ sizing, invElec, panelIsc, battery }: TechSummaryTab
         : `${panelIsc.toFixed(2)} A por string`,
       obtido: `${maxIscPerMppt.toFixed(2)} A`,
       limite: `≤ ${invElec.corrMaxMppt} A`,
-      status: maxIscPerMppt > invElec.corrMaxMppt
+      status: maxIscPerMppt > iscLimitTol
         ? "erro"
         : maxIscPerMppt > invElec.corrMaxMppt * 0.9
           ? "aviso"
@@ -721,7 +728,7 @@ function SingleLineDiagram({ panel, inverter, battery, mpptConfig }: {
           <rect x={270} y={100} width={110} height={80} rx="8" fill="#f0fdf4" stroke="#22c55e" strokeWidth="2" />
           <text x={325} y={128} textAnchor="middle" fontSize="9" fontWeight="bold" fill="#15803d">Inversor</text>
           <text x={325} y={142} textAnchor="middle" fontSize="7.5" fill="#16a34a">{inverter.fabricante}</text>
-          <text x={325} y={155} textAnchor="middle" fontSize="7" fill="#16a34a">{inverter.potenciaAc} kW AC</text>
+          <text x={325} y={155} textAnchor="middle" fontSize="7" fill="#16a34a">{normalizarKW(Number(inverter.potenciaAc)).toFixed(1)} kW AC</text>
           <text x={325} y={166} textAnchor="middle" fontSize="7" fill="#16a34a">{numMppt} MPPT activos</text>
           <line x1={380} y1={140} x2={hasBat ? 440 : 560} y2={140} stroke="#22c55e" strokeWidth="2" />
 
@@ -945,7 +952,7 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
     if (!panel || !inverter || !panelElec || !invElec) return null;
     return checkPanelInverter(
       { potencia: panelElec.potencia, voc: panelElec.voc, vmp: panelElec.vmp, isc: panelElec.isc, imp: panelElec.imp },
-      { potenciaAc: Number(inverter.potenciaAc), potenciaDcMax: invElec.potenciaDcMax, mpptMin: invElec.mpptMin, mpptMax: invElec.mpptMax, corrMaxMppt: invElec.corrMaxMppt, numMppt: invElec.numMppt, stringsPorMppt: invElec.stringsPorMppt, vdcMax: invElec.vdcMax },
+      { potenciaAc: invElec.potenciaAc, potenciaDcMax: invElec.potenciaDcMax, mpptMin: invElec.mpptMin, mpptMax: invElec.mpptMax, corrMaxMppt: invElec.corrMaxMppt, numMppt: invElec.numMppt, stringsPorMppt: invElec.stringsPorMppt, vdcMax: invElec.vdcMax },
       numPaineis
     );
   }, [panel, inverter, panelElec, invElec, numPaineis]);
@@ -954,7 +961,7 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
     if (!battery || !inverter || !invElec) return null;
     return checkBatteryInverter(
       { capacidade: Number(battery.capacidade), tensao: Number(battery.tensao), tecnologia: battery.tecnologia ?? null },
-      { potenciaAc: Number(inverter.potenciaAc), potenciaDcMax: invElec.potenciaDcMax, mpptMin: invElec.mpptMin, mpptMax: invElec.mpptMax, corrMaxMppt: invElec.corrMaxMppt, numMppt: invElec.numMppt, stringsPorMppt: invElec.stringsPorMppt, vdcMax: invElec.vdcMax }
+      { potenciaAc: invElec.potenciaAc, potenciaDcMax: invElec.potenciaDcMax, mpptMin: invElec.mpptMin, mpptMax: invElec.mpptMax, corrMaxMppt: invElec.corrMaxMppt, numMppt: invElec.numMppt, stringsPorMppt: invElec.stringsPorMppt, vdcMax: invElec.vdcMax }
     );
   }, [battery, inverter, invElec]);
 
@@ -1084,7 +1091,7 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
             <TechSummaryTable
               sizing={activeSizing}
               invElec={{
-                potenciaAc:    Number(inverter.potenciaAc),
+                potenciaAc:    invElec.potenciaAc,
                 potenciaDcMax: invElec.potenciaDcMax,
                 mpptMin:       invElec.mpptMin,
                 mpptMax:       invElec.mpptMax,

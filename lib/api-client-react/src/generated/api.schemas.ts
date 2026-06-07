@@ -251,6 +251,22 @@ export interface Battery {
   potenciaDescarga: number;
   /** Depth of discharge percentage (e.g. 80 means 80% DoD) */
   profundidadeDescarga: number;
+  /** Round-trip efficiency percentage, when available */
+  eficienciaRoundTrip?: number | null;
+  /** Expected cycle life, when available */
+  ciclosVida?: number | null;
+  /** Maximum charge current in A, when available */
+  correnteCargaMax?: number | null;
+  /** Maximum discharge current in A, when available */
+  correnteDescargaMax?: number | null;
+  /** Usable capacity in kWh, normally capacidade x DoD */
+  capacidadeUtil?: number | null;
+  /** Product warranty in years, when available */
+  garantiaAnos?: number | null;
+  /** Compatibility notes, voltage range or inverter families */
+  compatibilidade?: string | null;
+  /** Technical notes extracted from the datasheet */
+  observacoesTecnicas?: string | null;
   createdAt: string;
 }
 
@@ -273,6 +289,14 @@ export interface CreateBatteryBody {
   potenciaCarga?: number;
   potenciaDescarga?: number;
   profundidadeDescarga?: number;
+  eficienciaRoundTrip?: number | null;
+  ciclosVida?: number | null;
+  correnteCargaMax?: number | null;
+  correnteDescargaMax?: number | null;
+  capacidadeUtil?: number | null;
+  garantiaAnos?: number | null;
+  compatibilidade?: string | null;
+  observacoesTecnicas?: string | null;
 }
 
 export type UpdateBatteryBodyTecnologia =
@@ -294,6 +318,14 @@ export interface UpdateBatteryBody {
   potenciaCarga?: number;
   potenciaDescarga?: number;
   profundidadeDescarga?: number;
+  eficienciaRoundTrip?: number | null;
+  ciclosVida?: number | null;
+  correnteCargaMax?: number | null;
+  correnteDescargaMax?: number | null;
+  capacidadeUtil?: number | null;
+  garantiaAnos?: number | null;
+  compatibilidade?: string | null;
+  observacoesTecnicas?: string | null;
 }
 
 export interface PvSystem {

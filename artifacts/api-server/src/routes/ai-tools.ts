@@ -933,7 +933,7 @@ router.post(
     const schemaByType: Record<string, string> = {
       painel: `{"nome":"string","fabricante":"string","potencia":number,"voc":number,"vmp":number,"isc":number,"imp":number,"coeficienteTemperatura":number,"coeficienteTemperaturaVoc":number,"noct":number,"alturaMm":number,"larguraMm":number}`,
       inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"vdcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":number,"stringsPorMppt":number}`,
-      bateria: `{"nome":"string","fabricante":"string","capacidade":number,"tensao":number,"tecnologia":"LiFePO4|Li-ion|AGM|Gel"}`,
+      bateria: `{"nome":"string","fabricante":"string","capacidade":number,"tensao":number,"tecnologia":"LiFePO4|Li-ion|AGM|Gel","profundidadeDescarga":number,"eficienciaRoundTrip":number,"ciclosVida":number,"potenciaCarga":number,"potenciaDescarga":number,"correnteCargaMax":number,"correnteDescargaMax":number,"capacidadeUtil":number,"garantiaAnos":number,"compatibilidade":"string","observacoesTecnicas":"string"}`,
     };
 
     try {
@@ -958,7 +958,12 @@ Devolve APENAS este JSON:
 Regras:
 - Usa unidades normalizadas: W, V, A, kWh e mm.
 - Para inversores, potenciaAc/potenciaDcMax em Watts.
+- Para inversores híbridos, potenciaDcMax deve ser a potência FV/DC máxima permitida/recomendada ("Max. PV input power", "Max DC input power", "PV array power"), não a potência AC nominal.
+- Para inversores, corrMaxMppt deve usar o limite de corrente por MPPT; se houver limite separado de curto-circuito FV/MPPT, usa esse limite mais adequado para validação de Isc.
+- Para baterias, potenciaCarga/potenciaDescarga em kW, correntes em A, DoD/eficiencia em %, ciclosVida em ciclos e garantiaAnos em anos.
+- Para baterias, se capacidadeUtil não estiver explicitamente indicada, calcula capacidade * profundidadeDescarga / 100 quando houver DoD.
 - Se um campo numérico não existir, usa 0.
+- Se um campo textual não existir, usa string vazia.
 - Não inventes dados técnicos ausentes; só estima fabricante/modelo quando for evidente pela referência.
 
 Dados:
@@ -1030,7 +1035,7 @@ router.post(
     const schemaByType: Record<string, string> = {
       painel: `{"nome":"string","fabricante":"string","potencia":number,"voc":number,"vmp":number,"isc":number,"imp":number,"coeficienteTemperatura":number}`,
       inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":number,"stringsPorMppt":number}`,
-      bateria: `{"nome":"string","fabricante":"string","capacidade":number,"tensao":number,"tecnologia":"LiFePO4|Li-ion|AGM|Gel"}`,
+      bateria: `{"nome":"string","fabricante":"string","capacidade":number,"tensao":number,"tecnologia":"LiFePO4|Li-ion|AGM|Gel","profundidadeDescarga":number,"eficienciaRoundTrip":number,"ciclosVida":number,"potenciaCarga":number,"potenciaDescarga":number,"correnteCargaMax":number,"correnteDescargaMax":number,"capacidadeUtil":number,"garantiaAnos":number,"compatibilidade":"string","observacoesTecnicas":"string"}`,
     };
 
     try {
@@ -1065,9 +1070,13 @@ Instruções importantes:
 - Se a tabela tiver colunas por modelo (ex: SUN-14K, SUN-15K, SUN-16K...), cria um registo separado para cada coluna.
 - Associa cada valor ao modelo correto — não mistures dados entre modelos.
 - Para inversores: potenciaAc e potenciaDcMax em Watts (W), mpptMin/mpptMax em Volts (V), corrMaxMppt em Amperes (A).
+- Para inversores híbridos, potenciaDcMax deve ser a potência FV/DC máxima permitida/recomendada ("Max. PV input power", "Max DC input power", "PV array power"), não a potência AC nominal.
+- Para inversores, corrMaxMppt deve usar o limite de corrente por MPPT; se houver limite separado de curto-circuito FV/MPPT, usa esse limite mais adequado para validação de Isc.
 - Para painéis: potencia em Watts pico (Wp), tensões em Volts, correntes em Amperes, coeficienteTemperatura em %/°C (valor negativo, ex: -0.35).
-- Para baterias: capacidade em kWh, tensao em Volts.
+- Para baterias: capacidade/capacidadeUtil em kWh, tensao em Volts, potenciaCarga/potenciaDescarga em kW, correntes em A, profundidadeDescarga/eficienciaRoundTrip em %, ciclosVida em ciclos e garantiaAnos em anos.
+- Para baterias, se capacidadeUtil não estiver explicitamente indicada, calcula capacidade * profundidadeDescarga / 100 quando houver DoD.
 - Se um valor não estiver disponível para um modelo, usa 0 (nunca null nos campos numéricos).
+- Se um texto não estiver disponível para um modelo, usa string vazia.
 - fabricante deve ser o mesmo para todos os modelos da mesma ficha.
 
 Responde APENAS com o JSON pedido, sem texto adicional, sem markdown.`,

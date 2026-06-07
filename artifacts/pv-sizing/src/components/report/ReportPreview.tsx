@@ -1065,6 +1065,14 @@ export default function ReportPreview({ sections, data }: { sections: SectionId[
                       ["Tecnologia", text(battery.tecnologia) ??"-"],
                       ["Tensão", fmt(battery.tensao, 0, "V")],
                       ["DoD", fmt(battery.profundidadeDescarga, 0, "%")],
+                      ["Capacidade útil", fmt(battery.capacidadeUtil, 2, "kWh")],
+                      ["Eficiência round-trip", fmt(battery.eficienciaRoundTrip, 0, "%")],
+                      ["Ciclos / vida útil", int(battery.ciclosVida)],
+                      ["Potência carga/descarga", `${fmt(battery.potenciaCarga, 1, "kW")} / ${fmt(battery.potenciaDescarga, 1, "kW")}`],
+                      ["Corrente carga/descarga", `${fmt(battery.correnteCargaMax, 1, "A")} / ${fmt(battery.correnteDescargaMax, 1, "A")}`],
+                      ["Garantia", fmt(battery.garantiaAnos, 0, "anos")],
+                      ["Compatibilidade", text(battery.compatibilidade) ??"-"],
+                      ["Observações", text(battery.observacoesTecnicas) ??"-"],
                     ]}
                   />
                 </div>

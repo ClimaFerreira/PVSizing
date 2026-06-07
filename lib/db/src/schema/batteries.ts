@@ -9,10 +9,18 @@ export const batteriesTable = pgTable("batteries", {
   fabricante: text("fabricante").notNull(),
   capacidade: numeric("capacidade", { precision: 10, scale: 2 }).notNull(),
   tensaoNominal: numeric("tensao_nominal", { precision: 10, scale: 2 }).notNull(),
+  tecnologia: text("tecnologia").notNull().default("LiFePO4"),
   potenciaCarga: numeric("potencia_carga", { precision: 10, scale: 2 }).notNull(),
   potenciaDescarga: numeric("potencia_descarga", { precision: 10, scale: 2 }).notNull(),
   profundidadeDescarga: numeric("profundidade_descarga", { precision: 5, scale: 2 }).notNull(),
+  eficienciaRoundTrip: numeric("eficiencia_round_trip", { precision: 5, scale: 2 }),
+  ciclosVida: integer("ciclos_vida"),
+  correnteCargaMax: numeric("corrente_carga_max", { precision: 10, scale: 2 }),
+  correnteDescargaMax: numeric("corrente_descarga_max", { precision: 10, scale: 2 }),
+  capacidadeUtil: numeric("capacidade_util", { precision: 10, scale: 2 }),
+  garantiaAnos: integer("garantia_anos"),
   compatibilidade: text("compatibilidade"),
+  observacoesTecnicas: text("observacoes_tecnicas"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

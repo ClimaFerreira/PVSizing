@@ -16,4 +16,12 @@ export interface UpdateBatteryBody {
   potenciaCarga?: number;
   potenciaDescarga?: number;
   profundidadeDescarga?: number;
+  eficienciaRoundTrip?: number | null;
+  ciclosVida?: number | null;
+  correnteCargaMax?: number | null;
+  correnteDescargaMax?: number | null;
+  capacidadeUtil?: number | null;
+  garantiaAnos?: number | null;
+  compatibilidade?: string | null;
+  observacoesTecnicas?: string | null;
 }

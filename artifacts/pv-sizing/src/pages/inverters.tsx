@@ -57,6 +57,8 @@ const inverterSchema = z.object({
 
 type InverterFormValues = z.infer<typeof inverterSchema>;
 
+const normalizarKW = (value: number) => value > 500 ? value / 1000 : value;
+
 export default function Inverters() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -222,10 +224,10 @@ export default function Inverters() {
                     <FormItem><FormLabel>Modelo</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="potenciaAc" render={({ field }) => (
-                    <FormItem><FormLabel>Potência AC (kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Potência AC (W ou kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="potenciaDcMax" render={({ field }) => (
-                    <FormItem><FormLabel>Potência DC Max (kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Potência DC Max (W ou kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="vdcMax" render={({ field }) => (
                     <FormItem><FormLabel>Tensão DC Max (V)</FormLabel><FormControl><Input type="number" step="1" placeholder="1000" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
@@ -304,7 +306,7 @@ export default function Inverters() {
                 <TableRow key={inv.id}>
                   <TableCell className="font-medium">{inv.fabricante}</TableCell>
                   <TableCell>{inv.nome}</TableCell>
-                  <TableCell>{inv.potenciaAc} W</TableCell>
+                  <TableCell>{normalizarKW(Number(inv.potenciaAc)).toFixed(1)} kW</TableCell>
                   <TableCell>{inv.numMppt} (x{inv.stringsPorMppt} strings)</TableCell>
                   <TableCell>{inv.mpptMin}V - {inv.mpptMax}V</TableCell>
                   <TableCell className="text-right">
@@ -331,10 +333,10 @@ export default function Inverters() {
                                 <FormItem><FormLabel>Modelo</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                               )} />
                               <FormField control={form.control} name="potenciaAc" render={({ field }) => (
-                                <FormItem><FormLabel>Potência AC (kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Potência AC (W ou kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                               )} />
                               <FormField control={form.control} name="potenciaDcMax" render={({ field }) => (
-                                <FormItem><FormLabel>Potência DC Max (kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Potência DC Max (W ou kW)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                               )} />
                               <FormField control={form.control} name="vdcMax" render={({ field }) => (
                                 <FormItem><FormLabel>Tensão DC Max (V)</FormLabel><FormControl><Input type="number" step="1" placeholder="1000" value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>

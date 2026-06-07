@@ -58,6 +58,9 @@ interface ParsedInvoice {
   showEdit?: boolean;
 }
 
+type InputMode = "faturas" | "manual";
+type ManualSubMode = "anual" | "mensal" | "avancado";
+
 export interface ConsumoData {
   consumoAnual: number;
   coberturaMeta: number;
@@ -74,6 +77,10 @@ export interface ConsumoData {
   historicoMensal?: (number | null)[];
   /** 12 origin tags aligned with `historicoMensal`: "fatura" | "estimado" | "manual" | null */
   mesesOrigem?: MesOrigem[];
+  inputMode?: InputMode;
+  manualSubMode?: ManualSubMode;
+  parsedInvoices?: ParsedInvoice[];
+  invoiceText?: string;
 }
 
 export const DEFAULT_CONSUMO_DATA: ConsumoData = {
@@ -284,15 +291,15 @@ function consolidateInvoices(invoices: ParsedInvoice[]): ConsolidatedData | null
 interface Props { data: ConsumoData; onChange: (d: ConsumoData) => void; }
 
 export default function WizardStep1({ data, onChange }: Props) {
-  const [inputMode, setInputMode] = useState<"faturas" | "manual">("faturas");
-  const [manualSubMode, setManualSubMode] = useState<"anual" | "mensal" | "avancado">("anual");
+  const [inputMode, setInputMode] = useState<InputMode>(data.inputMode ??"faturas");
+  const [manualSubMode, setManualSubMode] = useState<ManualSubMode>(data.manualSubMode ??"anual");
   const [monthlyInputs, setMonthlyInputs] = useState<string[]>(() =>
     data.historicoMensal?.map(v => (v != null ? String(v) : "")) ?? Array(12).fill("")
   );
   const [showMonthlyGrid, setShowMonthlyGrid] = useState(false);
-  const [invoices, setInvoices] = useState<ParsedInvoice[]>([]);
+  const [invoices, setInvoices] = useState<ParsedInvoice[]>(() => data.parsedInvoices ??[]);
   const [isDragging, setIsDragging] = useState(false);
-  const [invoiceText, setInvoiceText] = useState("");
+  const [invoiceText, setInvoiceText] = useState(data.invoiceText ??"");
   const [isParsingText, setIsParsingText] = useState(false);
   const [showAppliances, setShowAppliances] = useState(false);
   const [autoApplied, setAutoApplied] = useState(false);
@@ -305,7 +312,34 @@ export default function WizardStep1({ data, onChange }: Props) {
   const dataRef = useRef(data);
   dataRef.current = data;
 
-  const set = useCallback((patch: Partial<ConsumoData>) => onChange({ ...data, ...patch }), [data, onChange]);
+  const set = useCallback((patch: Partial<ConsumoData>) => {
+    const next = { ...dataRef.current, ...patch };
+    dataRef.current = next;
+    onChangeRef.current(next);
+  }, []);
+
+  const updateInvoices = useCallback((updater: ParsedInvoice[] | ((prev: ParsedInvoice[]) => ParsedInvoice[])) => {
+    setInvoices(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      set({ parsedInvoices: next });
+      return next;
+    });
+  }, [set]);
+
+  const updateInvoiceText = useCallback((value: string) => {
+    setInvoiceText(value);
+    set({ invoiceText: value });
+  }, [set]);
+
+  const updateInputMode = useCallback((value: InputMode) => {
+    setInputMode(value);
+    set({ inputMode: value });
+  }, [set]);
+
+  const updateManualSubMode = useCallback((value: ManualSubMode) => {
+    setManualSubMode(value);
+    set({ manualSubMode: value });
+  }, [set]);
 
   // Auto-apply consolidated invoice data to parent state whenever invoices change
   useEffect(() => {
@@ -324,10 +358,10 @@ export default function WizardStep1({ data, onChange }: Props) {
       patch.historicoMensal = c.monthlyKwh;
       patch.mesesOrigem = c.monthlyOrigins;
     }
-    onChangeRef.current({ ...dataRef.current, ...patch });
+    set(patch);
     setAutoApplied(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoices, inputMode]);
+  }, [invoices, inputMode, set]);
 
   // Derived: total appliance consumption
   const extraKwh = APPLIANCES
@@ -338,7 +372,7 @@ export default function WizardStep1({ data, onChange }: Props) {
   // ── Invoice parsing ─────────────────────────────────────────────────────────
   const parseFile = useCallback(async (file: File) => {
     const id = Math.random().toString(36).slice(2);
-    setInvoices(prev => [...prev, { id, fileName: file.name, status: "parsing" }]);
+    updateInvoices(prev => [...prev, { id, fileName: file.name, status: "parsing" }]);
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -351,13 +385,13 @@ export default function WizardStep1({ data, onChange }: Props) {
         throw new Error(message);
       }
       const invData: InvoiceData = await resp.json();
-      setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "done", data: invData } : i));
+      updateInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "done", data: invData } : i));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Não foi possível processar a fatura.";
-      setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "error" } : i));
+      updateInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "error" } : i));
       toast({ title: `Erro ao processar ${file.name}`, description: message, variant: "destructive" });
     }
-  }, [toast]);
+  }, [toast, updateInvoices]);
 
   const handleFiles = useCallback((files: FileList | null) => {
     if (!files) return;
@@ -375,7 +409,7 @@ export default function WizardStep1({ data, onChange }: Props) {
     }
     const id = Math.random().toString(36).slice(2);
     setIsParsingText(true);
-    setInvoices(prev => [...prev, { id, fileName: "Texto da fatura", status: "parsing" }]);
+    updateInvoices(prev => [...prev, { id, fileName: "Texto da fatura", status: "parsing" }]);
     try {
       const resp = await fetch(`${BASE}/api/tools/parse-invoice-text`, {
         method: "POST",
@@ -390,16 +424,16 @@ export default function WizardStep1({ data, onChange }: Props) {
         throw new Error(message);
       }
       const invData: InvoiceData = await resp.json();
-      setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "done", data: invData } : i));
+      updateInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "done", data: invData } : i));
       toast({ title: "Texto da fatura analisado com IA" });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Não foi possível analisar o texto da fatura.";
-      setInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "error" } : i));
+      updateInvoices(prev => prev.map(i => i.id === id ?{ ...i, status: "error" } : i));
       toast({ title: "Erro ao analisar texto da fatura", description: message, variant: "destructive" });
     } finally {
       setIsParsingText(false);
     }
-  }, [invoiceText, toast]);
+  }, [invoiceText, toast, updateInvoices]);
 
   const applyConsolidated = useCallback(() => {
     const c = consolidateInvoices(invoices);
@@ -407,14 +441,14 @@ export default function WizardStep1({ data, onChange }: Props) {
     const patch: Partial<ConsumoData> = { consumoAnual: c.consumoAnualEstimado };
     if (c.percVazio != null) { patch.percVazio = c.percVazio; patch.percCheio = c.percCheio!; patch.percPonta = c.percPonta!; }
     if (c.precoKwh) patch.precoKwh = c.precoKwh;
-    onChange({ ...data, ...patch });
+    set(patch);
     setAutoApplied(true);
     toast({ title: `Consumo atualizado: ${c.consumoAnualEstimado.toLocaleString("pt-PT")} kWh/ano` });
-  }, [invoices, data, onChange, toast]);
+  }, [invoices, set, toast]);
 
   const saveInvoiceEdit = useCallback((id: string, edits: Partial<InvoiceData>) => {
-    setInvoices(prev => prev.map(i => i.id === id ?{ ...i, edits, showEdit: false } : i));
-  }, []);
+    updateInvoices(prev => prev.map(i => i.id === id ?{ ...i, edits, showEdit: false } : i));
+  }, [updateInvoices]);
 
   // Tariff sliders — Vazio + Cheio; Ponta = 100 - V - C (min 0)
   const setTarifa = (field: "percVazio" | "percCheio", val: number) => {
@@ -460,7 +494,7 @@ export default function WizardStep1({ data, onChange }: Props) {
   return (
     <div className="space-y-5">
       {/* ── Input mode tabs ─────────────────────────────────────────────── */}
-      <Tabs value={inputMode} onValueChange={v => setInputMode(v as "faturas" | "manual")}>
+      <Tabs value={inputMode} onValueChange={v => updateInputMode(v as InputMode)}>
         <TabsList className="grid grid-cols-2 w-full">
           <TabsTrigger value="faturas" className="flex items-center gap-2">
             <FileText size={14} /> Faturas Elétricas
@@ -495,7 +529,7 @@ export default function WizardStep1({ data, onChange }: Props) {
           <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
             <Textarea
               value={invoiceText}
-              onChange={(event) => setInvoiceText(event.target.value)}
+              onChange={(event) => updateInvoiceText(event.target.value)}
               placeholder="Ou cole aqui texto da fatura: consumo, potência contratada, período, preço/kWh, leituras por período..."
               rows={3}
             />
@@ -520,8 +554,8 @@ export default function WizardStep1({ data, onChange }: Props) {
                 <InvoiceCard
                   key={inv.id}
                   inv={inv}
-                  onRemove={() => setInvoices(prev => prev.filter(i => i.id !== inv.id))}
-                  onToggleEdit={() => setInvoices(prev => prev.map(i => i.id === inv.id ?{ ...i, showEdit: !i.showEdit } : i))}
+                  onRemove={() => updateInvoices(prev => prev.filter(i => i.id !== inv.id))}
+                  onToggleEdit={() => updateInvoices(prev => prev.map(i => i.id === inv.id ?{ ...i, showEdit: !i.showEdit } : i))}
                   onSaveEdit={edits => saveInvoiceEdit(inv.id, edits)}
                 />
               ))}
@@ -662,7 +696,7 @@ export default function WizardStep1({ data, onChange }: Props) {
               { id: "mensal",   label: "Consumo Mensal" },
               { id: "avancado", label: "Avançado" },
             ] as const).map(m => (
-              <button key={m.id} onClick={() => setManualSubMode(m.id)}
+              <button key={m.id} onClick={() => updateManualSubMode(m.id)}
                 className={cn("px-4 py-1.5 rounded-full text-sm font-medium border transition-colors",
                   manualSubMode === m.id ?"bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50")}>
                 {m.label}

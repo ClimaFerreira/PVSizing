@@ -43,6 +43,10 @@ export interface BatteryCompat {
   tecnologia: string | null;
 }
 
+function currentLimitWithTolerance(limit: number): number {
+  return limit + Math.max(0.5, limit * 0.02);
+}
+
 /**
  * Sanity check on panel electrical data (physics constraints).
  * Voc must be > Vmp, Isc must be > Imp.
@@ -94,13 +98,15 @@ export function checkPanelInverter(
   const potenciaDC = numPaineis * panel.potencia;
   const dcAcRatio = potenciaDC / (inv.potenciaAc * 1000);
   const iscString = panel.isc;
+  const potenciaDCKwp = potenciaDC / 1000;
+  const dcExcedeMax = inv.potenciaDcMax > 0 && potenciaDCKwp > inv.potenciaDcMax * 1.05;
 
   itens.push({
     categoria: "Potência DC/AC",
     descricao: "Rácio de oversizing DC/AC (90–130% excelente · 80–140% aceitável)",
     valorObtido: `${(dcAcRatio * 100).toFixed(0)}%`,
     valorLimite: "90–130%",
-    status: (dcAcRatio < 0.6 || dcAcRatio > 1.7) ?"erro"
+    status: (dcAcRatio < 0.6 || (dcAcRatio > 1.7 && dcExcedeMax)) ?"erro"
           : (dcAcRatio < 0.8 || dcAcRatio > 1.4) ?"aviso"
           : "ok",
   });
@@ -108,9 +114,9 @@ export function checkPanelInverter(
   itens.push({
     categoria: "Potência DC",
     descricao: "Potência DC total vs. limite do inversor",
-    valorObtido: `${(potenciaDC / 1000).toFixed(2)} kWp`,
+    valorObtido: `${potenciaDCKwp.toFixed(2)} kWp`,
     valorLimite: `${inv.potenciaDcMax} kW`,
-    status: potenciaDC / 1000 > inv.potenciaDcMax * 1.1 ?"aviso" : "ok",
+    status: dcExcedeMax ?"erro" : potenciaDCKwp > inv.potenciaDcMax ?"aviso" : "ok",
   });
 
   itens.push({
@@ -134,7 +140,7 @@ export function checkPanelInverter(
     descricao: "Isc por string vs. corrente máxima MPPT",
     valorObtido: `${iscString.toFixed(1)} A`,
     valorLimite: `${inv.corrMaxMppt} A`,
-    status: iscString > inv.corrMaxMppt ?"erro" : iscString > inv.corrMaxMppt * 0.9 ?"aviso" : "ok",
+    status: iscString > currentLimitWithTolerance(inv.corrMaxMppt) ?"erro" : iscString > inv.corrMaxMppt * 0.9 ?"aviso" : "ok",
   });
 
   itens.push({

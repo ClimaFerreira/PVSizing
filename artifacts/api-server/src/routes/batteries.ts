@@ -15,6 +15,15 @@ import { getCompanyId } from "../lib/auth";
 
 const router: IRouter = Router();
 
+const nullableNumber = (value: number | null | undefined): string | null =>
+  value == null ? null : String(value);
+
+const nullableInt = (value: number | null | undefined): number | null =>
+  value == null ? null : Math.round(value);
+
+const calcCapacidadeUtil = (capacidade: number, dod: number): number =>
+  Math.round(capacidade * (dod / 100) * 100) / 100;
+
 router.get("/batteries", async (req, res): Promise<void> => {
   const cid = getCompanyId(req);
   const batteries = await db.select().from(batteriesTable).where(eq(batteriesTable.companyId, cid)).orderBy(batteriesTable.createdAt);
@@ -34,10 +43,20 @@ router.post("/batteries", async (req, res): Promise<void> => {
       fabricante: d.fabricante,
       capacidade: String(d.capacidade),
       tensaoNominal: String(d.tensao ?? 48),
+      tecnologia: d.tecnologia ?? "LiFePO4",
       potenciaCarga: String(d.potenciaCarga ?? 0),
       potenciaDescarga: String(d.potenciaDescarga ?? 0),
       profundidadeDescarga: String(d.profundidadeDescarga ?? 80),
-      compatibilidade: null,
+      eficienciaRoundTrip: nullableNumber(d.eficienciaRoundTrip),
+      ciclosVida: nullableInt(d.ciclosVida),
+      correnteCargaMax: nullableNumber(d.correnteCargaMax),
+      correnteDescargaMax: nullableNumber(d.correnteDescargaMax),
+      capacidadeUtil: nullableNumber(
+        d.capacidadeUtil ?? calcCapacidadeUtil(d.capacidade, d.profundidadeDescarga ?? 80),
+      ),
+      garantiaAnos: nullableInt(d.garantiaAnos),
+      compatibilidade: d.compatibilidade ?? null,
+      observacoesTecnicas: d.observacoesTecnicas ?? null,
     })
     .returning();
   res.status(201).json(GetBatteryResponse.parse(toBatteryResponse(battery)));
@@ -64,9 +83,18 @@ router.patch("/batteries/:id", async (req, res): Promise<void> => {
   if (d.fabricante !== undefined) updateValues.fabricante = d.fabricante;
   if (d.capacidade !== undefined) updateValues.capacidade = String(d.capacidade);
   if (d.tensao !== undefined) updateValues.tensaoNominal = String(d.tensao);
+  if (d.tecnologia !== undefined) updateValues.tecnologia = d.tecnologia;
   if (d.potenciaCarga !== undefined) updateValues.potenciaCarga = String(d.potenciaCarga);
   if (d.potenciaDescarga !== undefined) updateValues.potenciaDescarga = String(d.potenciaDescarga);
   if (d.profundidadeDescarga !== undefined) updateValues.profundidadeDescarga = String(d.profundidadeDescarga);
+  if (d.eficienciaRoundTrip !== undefined) updateValues.eficienciaRoundTrip = nullableNumber(d.eficienciaRoundTrip);
+  if (d.ciclosVida !== undefined) updateValues.ciclosVida = nullableInt(d.ciclosVida);
+  if (d.correnteCargaMax !== undefined) updateValues.correnteCargaMax = nullableNumber(d.correnteCargaMax);
+  if (d.correnteDescargaMax !== undefined) updateValues.correnteDescargaMax = nullableNumber(d.correnteDescargaMax);
+  if (d.capacidadeUtil !== undefined) updateValues.capacidadeUtil = nullableNumber(d.capacidadeUtil);
+  if (d.garantiaAnos !== undefined) updateValues.garantiaAnos = nullableInt(d.garantiaAnos);
+  if (d.compatibilidade !== undefined) updateValues.compatibilidade = d.compatibilidade;
+  if (d.observacoesTecnicas !== undefined) updateValues.observacoesTecnicas = d.observacoesTecnicas;
   const [battery] = await db
     .update(batteriesTable)
     .set(updateValues)
@@ -89,16 +117,30 @@ router.delete("/batteries/:id", async (req, res): Promise<void> => {
 });
 
 function toBatteryResponse(row: typeof batteriesTable.$inferSelect) {
+  const capacidade = Number(row.capacidade);
+  const profundidadeDescarga = Number(row.profundidadeDescarga);
+  const capacidadeUtil = row.capacidadeUtil != null
+    ? Number(row.capacidadeUtil)
+    : calcCapacidadeUtil(capacidade, profundidadeDescarga || 80);
+
   return {
     id: row.id,
     nome: row.nome,
     fabricante: row.fabricante,
-    capacidade: Number(row.capacidade),
+    capacidade,
     tensao: Number(row.tensaoNominal),
-    tecnologia: "LiFePO4" as const,
+    tecnologia: row.tecnologia as "LiFePO4" | "Li-ion" | "AGM" | "Gel",
     potenciaCarga: Number(row.potenciaCarga),
     potenciaDescarga: Number(row.potenciaDescarga),
-    profundidadeDescarga: Number(row.profundidadeDescarga),
+    profundidadeDescarga,
+    eficienciaRoundTrip: row.eficienciaRoundTrip != null ? Number(row.eficienciaRoundTrip) : null,
+    ciclosVida: row.ciclosVida,
+    correnteCargaMax: row.correnteCargaMax != null ? Number(row.correnteCargaMax) : null,
+    correnteDescargaMax: row.correnteDescargaMax != null ? Number(row.correnteDescargaMax) : null,
+    capacidadeUtil,
+    garantiaAnos: row.garantiaAnos,
+    compatibilidade: row.compatibilidade,
+    observacoesTecnicas: row.observacoesTecnicas,
     createdAt: row.createdAt,
   };
 }

@@ -386,6 +386,14 @@ export const ListBatteriesResponseItem = zod.object({
   profundidadeDescarga: zod
     .number()
     .describe("Depth of discharge percentage (e.g. 80 means 80% DoD)"),
+  eficienciaRoundTrip: zod.number().nullable().optional(),
+  ciclosVida: zod.number().int().nullable().optional(),
+  correnteCargaMax: zod.number().nullable().optional(),
+  correnteDescargaMax: zod.number().nullable().optional(),
+  capacidadeUtil: zod.number().nullable().optional(),
+  garantiaAnos: zod.number().int().nullable().optional(),
+  compatibilidade: zod.string().nullable().optional(),
+  observacoesTecnicas: zod.string().nullable().optional(),
   createdAt: zod.coerce.date(),
 });
 export const ListBatteriesResponse = zod.array(ListBatteriesResponseItem);
@@ -402,6 +410,14 @@ export const CreateBatteryBody = zod.object({
   potenciaCarga: zod.number().optional(),
   potenciaDescarga: zod.number().optional(),
   profundidadeDescarga: zod.number().optional(),
+  eficienciaRoundTrip: zod.number().nullable().optional(),
+  ciclosVida: zod.number().int().nullable().optional(),
+  correnteCargaMax: zod.number().nullable().optional(),
+  correnteDescargaMax: zod.number().nullable().optional(),
+  capacidadeUtil: zod.number().nullable().optional(),
+  garantiaAnos: zod.number().int().nullable().optional(),
+  compatibilidade: zod.string().nullable().optional(),
+  observacoesTecnicas: zod.string().nullable().optional(),
 });
 
 /**
@@ -427,6 +443,14 @@ export const GetBatteryResponse = zod.object({
   profundidadeDescarga: zod
     .number()
     .describe("Depth of discharge percentage (e.g. 80 means 80% DoD)"),
+  eficienciaRoundTrip: zod.number().nullable().optional(),
+  ciclosVida: zod.number().int().nullable().optional(),
+  correnteCargaMax: zod.number().nullable().optional(),
+  correnteDescargaMax: zod.number().nullable().optional(),
+  capacidadeUtil: zod.number().nullable().optional(),
+  garantiaAnos: zod.number().int().nullable().optional(),
+  compatibilidade: zod.string().nullable().optional(),
+  observacoesTecnicas: zod.string().nullable().optional(),
   createdAt: zod.coerce.date(),
 });
 
@@ -446,6 +470,14 @@ export const UpdateBatteryBody = zod.object({
   potenciaCarga: zod.number().optional(),
   potenciaDescarga: zod.number().optional(),
   profundidadeDescarga: zod.number().optional(),
+  eficienciaRoundTrip: zod.number().nullable().optional(),
+  ciclosVida: zod.number().int().nullable().optional(),
+  correnteCargaMax: zod.number().nullable().optional(),
+  correnteDescargaMax: zod.number().nullable().optional(),
+  capacidadeUtil: zod.number().nullable().optional(),
+  garantiaAnos: zod.number().int().nullable().optional(),
+  compatibilidade: zod.string().nullable().optional(),
+  observacoesTecnicas: zod.string().nullable().optional(),
 });
 
 export const UpdateBatteryResponse = zod.object({
@@ -464,6 +496,14 @@ export const UpdateBatteryResponse = zod.object({
   profundidadeDescarga: zod
     .number()
     .describe("Depth of discharge percentage (e.g. 80 means 80% DoD)"),
+  eficienciaRoundTrip: zod.number().nullable().optional(),
+  ciclosVida: zod.number().int().nullable().optional(),
+  correnteCargaMax: zod.number().nullable().optional(),
+  correnteDescargaMax: zod.number().nullable().optional(),
+  capacidadeUtil: zod.number().nullable().optional(),
+  garantiaAnos: zod.number().int().nullable().optional(),
+  compatibilidade: zod.string().nullable().optional(),
+  observacoesTecnicas: zod.string().nullable().optional(),
   createdAt: zod.coerce.date(),
 });
 

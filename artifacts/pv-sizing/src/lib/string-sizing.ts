@@ -90,6 +90,10 @@ function resolveVdcMax(inv: InverterElec): number {
   return inv.mpptMax * 1.2;
 }
 
+function currentLimitWithTolerance(limit: number): number {
+  return limit + Math.max(0.5, limit * 0.02);
+}
+
 export function calcStringTemps(panel: PanelElec): { tMinPt: number; tMaxCelula: number } {
   const noct = resolveNoct(panel);
   const tMaxCelula = T_AMB_MAX + (noct - 20) * (1000 / 800);
@@ -156,12 +160,31 @@ function buildAlerts(
   mpptConfig.forEach((strings, mi) => {
     if (strings.length === 0) return;
     const iscMppt = iscString * strings.length;
-    if (iscMppt > inv.corrMaxMppt) {
+    const iscLimitTol = currentLimitWithTolerance(inv.corrMaxMppt);
+    if (iscMppt > iscLimitTol) {
       alertas.push({ tipo: "erro", mensagem: `MPPT ${mi + 1}: Isc total (${iscMppt.toFixed(1)}A) excede corrente máxima do MPPT (${inv.corrMaxMppt}A)` });
+    } else if (iscMppt > inv.corrMaxMppt) {
+      alertas.push({ tipo: "aviso", mensagem: `MPPT ${mi + 1}: Isc total (${iscMppt.toFixed(1)}A) está ligeiramente acima do limite nominal (${inv.corrMaxMppt}A), dentro da tolerância de arredondamento. Confirme o limite Isc máximo no datasheet.` });
     } else {
       alertas.push({ tipo: "ok", mensagem: `MPPT ${mi + 1}: Isc total (${iscMppt.toFixed(1)}A) dentro do limite (${inv.corrMaxMppt}A)` });
     }
   });
+
+  const potenciaDCKwp = (totalPaineis * panel.potencia) / 1000;
+  const dcExcedeMax = inv.potenciaDcMax > 0 && potenciaDCKwp > inv.potenciaDcMax * 1.05;
+  const dcAcRatioAvisoAlto = dcAcRatio > 1.7 && !dcExcedeMax;
+
+  if (dcExcedeMax) {
+    alertas.push({ tipo: "erro", mensagem:
+      `Potência DC total (${potenciaDCKwp.toFixed(2)} kWp) excede o limite DC/PV do inversor (${inv.potenciaDcMax.toFixed(2)} kW). ` +
+      `Confirme no datasheet se existe potência FV máxima superior; caso contrário reduza painéis ou use inversor maior.` });
+  } else if (inv.potenciaDcMax > 0 && potenciaDCKwp > inv.potenciaDcMax) {
+    alertas.push({ tipo: "aviso", mensagem:
+      `Potência DC total (${potenciaDCKwp.toFixed(2)} kWp) está ligeiramente acima do limite DC/PV nominal (${inv.potenciaDcMax.toFixed(2)} kW). Confirme tolerâncias do fabricante.` });
+  } else if (inv.potenciaDcMax > 0) {
+    alertas.push({ tipo: "ok", mensagem:
+      `Potência DC total (${potenciaDCKwp.toFixed(2)} kWp) dentro do limite DC/PV do inversor (${inv.potenciaDcMax.toFixed(2)} kW).` });
+  }
 
   // DC/AC ratio — 4 tiers per PT-PT engineering practice
   const pct = (dcAcRatio * 100).toFixed(0);
@@ -171,9 +194,9 @@ function buildAlerts(
       `Impacto: eficiência muito reduzida em carga parcial; investimento no inversor desaproveitado. ` +
       `Sugestões: usar inversor de menor potência ou adicionar significativamente mais painéis.` });
   } else if (dcAcRatio > 1.7) {
-    alertas.push({ tipo: "erro", mensagem:
+    alertas.push({ tipo: dcAcRatioAvisoAlto ? "aviso" : "erro", mensagem:
       `DC/AC ratio muito elevado (${pct}%): risco de clipping severo e possíveis danos no inversor. ` +
-      `Impacto: perdas de produção acentuadas em horas de pico; degradação acelerada do inversor. ` +
+      `Impacto: perdas de produção acentuadas em horas de pico; valide sempre contra a potência DC/PV máxima do datasheet. ` +
       `Sugestões: usar inversor de maior potência ou reduzir o número de painéis.` });
   } else if (dcAcRatio < 0.8) {
     alertas.push({ tipo: "aviso", mensagem:
