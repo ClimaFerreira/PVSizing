@@ -105,14 +105,45 @@ const toTecnologia = (value: unknown, fallback: typeof TECNOLOGIAS[number] = "Li
 const calcCapacidadeUtil = (capacidade: number, profundidadeDescarga = 80) =>
   Math.round(capacidade * (profundidadeDescarga / 100) * 100) / 100;
 
+const errorMessage = (err: unknown) =>
+  err instanceof Error ? err.message : "Erro desconhecido";
+
+const addNumberIfPositive = (target: Record<string, unknown>, key: keyof BatteryFormValues | "capacidadeUtil", value: unknown) => {
+  const n = Number(value);
+  if (Number.isFinite(n) && n > 0) target[key] = n;
+};
+
+const addTextIfPresent = (target: Record<string, unknown>, key: keyof BatteryFormValues, value: unknown) => {
+  const text = String(value ?? "").trim();
+  if (text) target[key] = text;
+};
+
 const buildBatteryPayload = (data: BatteryFormValues) => {
   const profundidadeDescarga = data.profundidadeDescarga ?? 80;
-  return {
-    ...data,
-    capacidadeUtil: calcCapacidadeUtil(data.capacidade, profundidadeDescarga),
-    compatibilidade: data.compatibilidade?.trim() || null,
-    observacoesTecnicas: data.observacoesTecnicas?.trim() || null,
+  const payload: Record<string, unknown> = {
+    nome: data.nome.trim(),
+    fabricante: data.fabricante.trim(),
+    capacidade: Number(data.capacidade),
+    tensao: Number(data.tensao),
+    tecnologia: data.tecnologia,
   };
+
+  addNumberIfPositive(payload, "potenciaCarga", data.potenciaCarga);
+  addNumberIfPositive(payload, "potenciaDescarga", data.potenciaDescarga);
+  addNumberIfPositive(payload, "profundidadeDescarga", data.profundidadeDescarga);
+  addNumberIfPositive(payload, "eficienciaRoundTrip", data.eficienciaRoundTrip);
+  addNumberIfPositive(payload, "ciclosVida", data.ciclosVida);
+  addNumberIfPositive(payload, "correnteCargaMax", data.correnteCargaMax);
+  addNumberIfPositive(payload, "correnteDescargaMax", data.correnteDescargaMax);
+  addNumberIfPositive(payload, "garantiaAnos", data.garantiaAnos);
+  addTextIfPresent(payload, "compatibilidade", data.compatibilidade);
+  addTextIfPresent(payload, "observacoesTecnicas", data.observacoesTecnicas);
+
+  if (Number.isFinite(Number(data.capacidade)) && Number(data.capacidade) > 0) {
+    addNumberIfPositive(payload, "capacidadeUtil", calcCapacidadeUtil(Number(data.capacidade), profundidadeDescarga));
+  }
+
+  return payload as BatteryFormValues & { capacidadeUtil?: number };
 };
 
 export default function Batteries() {
@@ -144,6 +175,9 @@ export default function Batteries() {
             setEditingBattery(null);
             form.reset(DEFAULT_BATTERY_VALUES);
           },
+          onError: (err) => {
+            toast({ title: "Erro ao atualizar bateria", description: errorMessage(err), variant: "destructive" });
+          },
         }
       );
     } else {
@@ -155,6 +189,9 @@ export default function Batteries() {
             toast({ title: "Bateria criada com sucesso" });
             setIsCreateOpen(false);
             form.reset(DEFAULT_BATTERY_VALUES);
+          },
+          onError: (err) => {
+            toast({ title: "Erro ao criar bateria", description: errorMessage(err), variant: "destructive" });
           },
         }
       );
@@ -301,6 +338,8 @@ export default function Batteries() {
             }}
             onBatchCreate={async (modelos) => {
               let ok = 0;
+              let failed = 0;
+              let firstError = "";
               for (const d of modelos) {
                 try {
                   await createBattery.mutateAsync({ data: {
@@ -322,10 +361,17 @@ export default function Batteries() {
                     observacoesTecnicas: toText(d.observacoesTecnicas) || null,
                   }});
                   ok++;
-                } catch { /* skip failed */ }
+                } catch (err) {
+                  failed++;
+                  if (!firstError) firstError = errorMessage(err);
+                }
               }
               queryClient.invalidateQueries({ queryKey: getListBatteriesQueryKey() });
-              toast({ title: `${ok} bateria(s) criada(s) com sucesso` });
+              toast({
+                title: `${ok} bateria(s) criada(s) com sucesso`,
+                description: failed > 0 ? `${failed} falharam. ${firstError}` : undefined,
+                variant: failed > 0 ? "destructive" : undefined,
+              });
               if (ok > 0) { setIsCreateOpen(false); form.reset(DEFAULT_BATTERY_VALUES); }
             }}
           />

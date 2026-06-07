@@ -18,4 +18,28 @@ export interface CreateInverterBody {
   stringsPorMppt: number;
   /** @nullable */
   vdcMax?: number | null;
+  tipoRede?: "monofasico" | "trifasico" | "desconhecido";
+  tensaoAcNominal?: string;
+  ligacaoRede?: string;
+  faixaTensaoAc?: string;
+  frequenciaAc?: string;
+  potenciaAparenteAc?: number | null;
+  correnteNominalAc?: number | null;
+  correnteMaxAc?: number | null;
+  fatorPotencia?: string;
+  thdi?: string;
+  correnteInjecaoDc?: string;
+  potenciaPvMax?: number | null;
+  potenciaDcNominal?: number | null;
+  tensaoArranque?: number | null;
+  tensaoNominalDc?: string;
+  correnteCurtoCircuitoMppt?: number | null;
+  bateriaTensaoRange?: string;
+  bateriaCorrenteCargaMax?: number | null;
+  bateriaCorrenteDescargaMax?: number | null;
+  bateriaPotenciaCargaMax?: number | null;
+  bateriaPotenciaDescargaMax?: number | null;
+  grauProtecao?: string;
+  comunicacao?: string;
+  observacoesTecnicas?: string;
 }

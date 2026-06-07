@@ -32,6 +32,9 @@ type InverterItem = {
   nome: string;
   fabricante: string;
   potenciaAc: number | string;
+  tipoRede?: "monofasico" | "trifasico" | "desconhecido";
+  tensaoAcNominal?: string;
+  ligacaoRede?: string;
 };
 
 interface ComboViolacao {
@@ -50,7 +53,7 @@ interface Combo {
   potenciaAcUnit:  number;
   potenciaAcTotal: number;
   ratioDcAc:       number;
-  fase:            "mono" | "tri";
+  fase:            "mono" | "tri" | "desconhecido";
   isHybrid:        boolean;
   tag:             ComboTag;
   violacoes:       ComboViolacao[];
@@ -77,6 +80,24 @@ function normalizarKW(val: number): number {
 const HYBRID_RE = /HYB|HYBRID|GEN24|X-HYB|RHI|LP[12]|-EH|-ET|SH-\d|MULTI|STOREDGE|-H\d|\.HV\d/i;
 const isHybridInverter = (nome: string) => HYBRID_RE.test(nome);
 
+function normalizarTexto(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function inferirFaseInversor(inv: InverterItem, potAc: number): "mono" | "tri" | "desconhecido" {
+  const tecnico = normalizarTexto(`${inv.tipoRede ??""} ${inv.ligacaoRede ??""} ${inv.tensaoAcNominal ??""}`);
+  if (/\b(3l|3p|3f)\s*\+?\s*n?\s*\+?\s*pe\b|3l\+n\+pe|3p\+n\+pe|trifas|three phase|\b380\s*\/\s*400\b|\b400\s*v\b/.test(tecnico)) return "tri";
+  if (/\bl\s*\+\s*n\s*\+\s*pe\b|\b(1f|1p)\s*\+?\s*n?\s*\+?\s*pe\b|monofas|single phase|\b220\s*\/\s*230\b|\b230\s*v\b/.test(tecnico)) return "mono";
+
+  const modelo = normalizarTexto(`${inv.fabricante} ${inv.nome}`);
+  if (/\bsg05lp1\b|\blp1\b|\beu-am2\b/.test(modelo)) return "mono";
+  if (/\bsg04lp3\b|\blp3\b/.test(modelo)) return "tri";
+  return potAc <= 6 ? "mono" : "desconhecido";
+}
+
 // ── Tag classification ─────────────────────────────────────────────────────────
 function classifyTag(ratio: number, violacoes: ComboViolacao[]): ComboTag {
   if (violacoes.length > 0)              return "requer-validacao";
@@ -87,7 +108,7 @@ function classifyTag(ratio: number, violacoes: ComboViolacao[]): ComboTag {
 
 // ── Compute violations for one combo ─────────────────────────────────────────
 function computarViolacoes(
-  fase:        "mono" | "tri",
+  fase:        "mono" | "tri" | "desconhecido",
   isHybrid:    boolean,
   totalAc:     number,
   p:           InstalacaoParams,
@@ -95,9 +116,11 @@ function computarViolacoes(
   const v: ComboViolacao[] = [];
 
   // Phase
-  if (p.tipoLigacao === "monofasico" && fase !== "mono")
+  if (fase === "desconhecido" && p.tipoLigacao !== "indeferente")
+    v.push({ codigo: "fase", mensagem: "Tipo de rede AC por confirmar na ficha tecnica" });
+  if (p.tipoLigacao === "monofasico" && fase === "tri")
     v.push({ codigo: "fase", mensagem: "Inversor trifásico (ligação monofásica pretendida)" });
-  if (p.tipoLigacao === "trifasico" && fase !== "tri")
+  if (p.tipoLigacao === "trifasico" && fase === "mono")
     v.push({ codigo: "fase", mensagem: "Inversor monofásico (ligação trifásica pretendida)" });
 
   // AC limit
@@ -139,7 +162,7 @@ function gerarCombinacoes(
     const potAc = normalizarKW(Number(inv.potenciaAc));
     if (!potAc || potAc <= 0) continue;
 
-    const fase: "mono" | "tri" = potAc <= 6.0 ? "mono" : "tri";
+    const fase = inferirFaseInversor(inv, potAc);
     const isHybrid = isHybridInverter(inv.nome);
 
     for (const units of unitCounts) {
@@ -344,7 +367,7 @@ function ComboCard({
           highlight={ratioHighlight}
         />
         <DataRow label="Nº inversores" value={combo.unidades.toString()} />
-        <DataRow label="Tipo" value={combo.fase === "mono" ? "Monofásico" : "Trifásico"} />
+        <DataRow label="Tipo" value={combo.fase === "mono" ? "Monofásico" : combo.fase === "tri" ? "Trifásico" : "Por confirmar"} />
         <DataRow
           label="Compatível bateria"
           value={combo.isHybrid ? "Sim (integrada)" : "AC-coupled"}
