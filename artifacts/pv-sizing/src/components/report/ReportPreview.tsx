@@ -1089,14 +1089,18 @@ export default function ReportPreview({ sections, data }: { sections: SectionId[
               <div className="space-y-4">
                 {inverterUnits.map((unit, index) => {
                   const inverter = allInverters.find((item) => item.id === unit.inverterId);
+                  const quantidade = unit.quantidade ??1;
+                  const potenciaAc = inverter ? num(inverter.potenciaAc) ??0 : 0;
+                  const potenciaAcKw = potenciaAc > 500 ? potenciaAc / 1000 : potenciaAc;
                   return (
                     <div key={unit.key ??index} className="rounded-lg border p-4">
                       <h3 className="font-bold">Unidade {index + 1}: {inverter ?`${inverter.fabricante} ${inverter.nome}` : `Inversor ${unit.inverterId}`}</h3>
                       <DataTable
                         rows={[
-                          ["Quantidade", int(unit.quantidade ??1)],
+                          ["Quantidade", int(quantidade)],
+                          ["Potência AC", quantidade > 1 ? `${quantidade} x ${fmt(potenciaAcKw, 1, "kW")} = ${fmt(potenciaAcKw * quantidade, 1, "kW")}` : fmt(potenciaAcKw, 1, "kW")],
                           ["Painéis atribuídos", int(unit.numPaineisOverride)],
-                          ["MPPT configurados", int(unit.mpptConfig?.length)],
+                          ["MPPT totais", int((inverter?.numMppt ?? unit.mpptConfig?.length ??0) * quantidade)],
                         ]}
                       />
                       {unit.mpptConfig && (

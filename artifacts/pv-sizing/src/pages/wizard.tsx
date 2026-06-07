@@ -92,6 +92,8 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
+const normalizarKW = (value: number) => value > 500 ? value / 1000 : value;
+
 type CenarioTipo = "conservador" | "equilibrado" | "agressivo";
 
 const CENARIO_META: Record<CenarioTipo, { label: string; Icon: React.ElementType; accent: string; border: string; bg: string }> = {
@@ -571,7 +573,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     if (!inverterUnits.length || !inverters) return;
     const totalKw = inverterUnits.reduce((sum, unit) => {
       const inv = inverters.find(i => i.id === unit.inverterId);
-      return sum + (inv ?Number(inv.potenciaAc) * unit.quantidade : 0);
+      return sum + (inv ?normalizarKW(Number(inv.potenciaAc)) * unit.quantidade : 0);
     }, 0);
     if (totalKw > 0) {
       setSolarParams(prev => ({ ...prev, inverterPower: String(totalKw) }));
@@ -2206,11 +2208,11 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
                       {inverters && (() => {
                         const totalAC = inverterUnits.reduce((s, u) => {
                           const inv = inverters.find(i => i.id === u.inverterId);
-                          return s + (inv ?Number(inv.potenciaAc) * u.quantidade : 0);
+                          return s + (inv ?normalizarKW(Number(inv.potenciaAc)) * u.quantidade : 0);
                         }, 0);
                         const totalDC = inverterUnits.reduce((s, u) => {
                           const inv = inverters.find(i => i.id === u.inverterId);
-                          return s + (inv ?Number(inv.potenciaDcMax) * u.quantidade : 0);
+                          return s + (inv ?normalizarKW(Number(inv.potenciaDcMax)) * u.quantidade : 0);
                         }, 0);
                         if (totalAC === 0) return null;
                         return (
@@ -2273,7 +2275,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
         const battery = primaryBatIdStep6 ?batteries?.find(b => b.id === primaryBatIdStep6) ??null : null;
         const numPaineis = numPaineisStep5 ??0;
         const potenciaRealKwp = panel ?(numPaineis * Number(panel.potencia)) / 1000 : (eff?.potenciaInstalada ??0);
-        const isMultiInverter = inverterUnits.length > 1;
+        const isMultiInverter = inverterUnits.length > 1 || inverterUnits.some(u => (u.quantidade ??1) > 1);
 
         return (
           <div className="space-y-4">

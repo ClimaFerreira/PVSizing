@@ -486,11 +486,13 @@ interface InverterUnitCardProps {
   inverter: Inverter;
   panel: SolarPanel;
   numPaineis: number;
+  numPaineisTotal: number;
   onUnitChange: (key: string, changes: Partial<InverterUnit>) => void;
 }
 
-function InverterUnitCard({ unit, index, inverter, panel, numPaineis, onUnitChange }: InverterUnitCardProps) {
+function InverterUnitCard({ unit, index, inverter, panel, numPaineis, numPaineisTotal, onUnitChange }: InverterUnitCardProps) {
   const [expanded, setExpanded] = useState(index === 0);
+  const quantidade = Math.max(1, unit.quantidade || 1);
 
   const panelElec = useMemo(() => ({
     voc: Number(panel.voc),
@@ -518,20 +520,28 @@ function InverterUnitCard({ unit, index, inverter, panel, numPaineis, onUnitChan
     return calcStringSizing(panelElec, invElec, numPaineis);
   }, [panelElec, invElec, numPaineis]);
 
+  const effectiveMpptConfig = useMemo(() => {
+    if (!unit.mpptConfig) return null;
+    const total = unit.mpptConfig.flat().reduce((sum, value) => sum + value, 0);
+    return total === numPaineis ? unit.mpptConfig : null;
+  }, [unit.mpptConfig, numPaineis]);
+
   const activeSizing = useMemo<StringSizingResult | null>(() => {
     if (!autoSizing) return null;
-    if (!unit.mpptConfig) return autoSizing;
-    return calcStringSizingManual(panelElec, invElec, unit.mpptConfig, numPaineis);
-  }, [autoSizing, unit.mpptConfig, panelElec, invElec, numPaineis]);
+    if (!effectiveMpptConfig) return autoSizing;
+    return calcStringSizingManual(panelElec, invElec, effectiveMpptConfig, numPaineis);
+  }, [autoSizing, effectiveMpptConfig, panelElec, invElec, numPaineis]);
 
   const maxPaneis = useMemo(() => maxPaineisPerString(panelElec, invElec), [panelElec, invElec]);
 
   const hasErrors   = activeSizing?.alertas.some(a => a.tipo === "erro")  ?? false;
   const hasWarnings = activeSizing?.alertas.some(a => a.tipo === "aviso") ?? false;
 
-  const dcKwp = activeSizing ? (activeSizing.config.potenciaDCTotal / 1000) : (numPaineis * Number(panel.potencia) / 1000);
-  const acKw  = Number(inverter.potenciaAc) * unit.quantidade;
-  const ratio = acKw > 0 ? (dcKwp / acKw) * 100 : 0;
+  const dcKwpPorInversor = activeSizing ? (activeSizing.config.potenciaDCTotal / 1000) : (numPaineis * Number(panel.potencia) / 1000);
+  const dcKwpTotal = dcKwpPorInversor * quantidade;
+  const acKwPorInversor = invElec.potenciaAc;
+  const acKwTotal = acKwPorInversor * quantidade;
+  const ratio = acKwPorInversor > 0 ? (dcKwpPorInversor / acKwPorInversor) * 100 : 0;
 
   return (
     <Card className={cn(
@@ -553,10 +563,13 @@ function InverterUnitCard({ unit, index, inverter, panel, numPaineis, onUnitChan
               <div className="min-w-0">
                 <div className="font-medium text-sm truncate">
                   Inversor {index + 1} — {inverter.fabricante} {inverter.nome}
-                  {unit.quantidade > 1 && <span className="text-muted-foreground ml-1">(×{unit.quantidade})</span>}
+                  {quantidade > 1 && <span className="text-muted-foreground ml-1">(×{quantidade})</span>}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  {numPaineis} painéis · {dcKwp.toFixed(2)} kWp DC · {acKw.toFixed(1)} kW AC · DC/AC {ratio.toFixed(0)}%
+                  {quantidade > 1
+                    ? `${quantidade} × ${acKwPorInversor.toFixed(1)} kW = ${acKwTotal.toFixed(1)} kW AC · ${numPaineis} painéis/inversor · ${dcKwpPorInversor.toFixed(2)} kWp/inversor · total ${dcKwpTotal.toFixed(2)} kWp`
+                    : `${numPaineis} painéis · ${dcKwpPorInversor.toFixed(2)} kWp DC · ${acKwPorInversor.toFixed(1)} kW AC`
+                  } · DC/AC {ratio.toFixed(0)}%
                 </div>
               </div>
             </div>
@@ -594,9 +607,10 @@ function InverterUnitCard({ unit, index, inverter, panel, numPaineis, onUnitChan
                   invElec={invElec}
                   numPaineisAuto={numPaineis}
                   onConfigChange={(config, newTotal) => {
+                    const totalUnit = newTotal * quantidade;
                     onUnitChange(unit.key, {
                       mpptConfig: config,
-                      numPaineisOverride: newTotal !== numPaineis ? newTotal : null,
+                      numPaineisOverride: totalUnit !== numPaineisTotal ? totalUnit : null,
                     });
                   }}
                 />
@@ -626,13 +640,13 @@ function WizardStep6MultiTecnica({
 }: Props) {
   const dcMaxMap = useMemo(() => {
     const m = new Map<number, number>();
-    allInverters.forEach(i => m.set(i.id, Number(i.potenciaDcMax)));
+    allInverters.forEach(i => m.set(i.id, normalizarKW(Number(i.potenciaDcMax))));
     return m;
   }, [allInverters]);
 
   const acMap = useMemo(() => {
     const m = new Map<number, number>();
-    allInverters.forEach(i => m.set(i.id, Number(i.potenciaAc)));
+    allInverters.forEach(i => m.set(i.id, normalizarKW(Number(i.potenciaAc))));
     return m;
   }, [allInverters]);
 
@@ -646,6 +660,20 @@ function WizardStep6MultiTecnica({
     [inverterUnits, acMap, numPaineisMap, panel],
   );
 
+  const totalMppts = useMemo(() =>
+    inverterUnits.reduce((sum, unit) => {
+      const inv = allInverters.find(i => i.id === unit.inverterId);
+      return sum + (inv ? inv.numMppt * Math.max(1, unit.quantidade || 1) : 0);
+    }, 0),
+  [inverterUnits, allInverters]);
+
+  const totalDcMaxKw = useMemo(() =>
+    inverterUnits.reduce((sum, unit) => {
+      const inv = allInverters.find(i => i.id === unit.inverterId);
+      return sum + (inv ? normalizarKW(Number(inv.potenciaDcMax)) * Math.max(1, unit.quantidade || 1) : 0);
+    }, 0),
+  [inverterUnits, allInverters]);
+
   if (!panel) {
     return (
       <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
@@ -657,22 +685,26 @@ function WizardStep6MultiTecnica({
   const globalHasErrors   = inverterUnits.some(u => {
     const inv = allInverters.find(i => i.id === u.inverterId);
     if (!inv) return false;
-    const n = numPaineisMap.get(u.key) ?? 0;
+    const n = Math.ceil((numPaineisMap.get(u.key) ?? 0) / Math.max(1, u.quantidade || 1));
     if (n === 0) return false;
     const panelElec = { voc: Number(panel.voc), vmp: Number(panel.vmp), isc: Number(panel.isc), imp: Number(panel.imp), potencia: Number(panel.potencia), coeficienteTemperaturaVoc: panel.coeficienteTemperaturaVoc != null ? Number(panel.coeficienteTemperaturaVoc) : null, noct: panel.noct != null ? Number(panel.noct) : null };
     const invElec = { mpptMin: Number(inv.mpptMin), mpptMax: Number(inv.mpptMax), corrMaxMppt: Number(inv.corrMaxMppt), numMppt: inv.numMppt, stringsPorMppt: inv.stringsPorMppt, potenciaAc: normalizarKW(Number(inv.potenciaAc)), potenciaDcMax: normalizarKW(Number(inv.potenciaDcMax)), vdcMax: inv.vdcMax != null ? Number(inv.vdcMax) : null };
-    const sizing = u.mpptConfig ? calcStringSizingManual(panelElec, invElec, u.mpptConfig, n) : calcStringSizing(panelElec, invElec, n);
+    const configTotal = u.mpptConfig?.flat().reduce((sum, value) => sum + value, 0) ??0;
+    const mpptConfig = configTotal === n ? u.mpptConfig : null;
+    const sizing = mpptConfig ? calcStringSizingManual(panelElec, invElec, mpptConfig, n) : calcStringSizing(panelElec, invElec, n);
     return sizing.alertas.some(a => a.tipo === "erro");
   });
 
   const globalHasWarnings = !globalHasErrors && inverterUnits.some(u => {
     const inv = allInverters.find(i => i.id === u.inverterId);
     if (!inv) return false;
-    const n = numPaineisMap.get(u.key) ?? 0;
+    const n = Math.ceil((numPaineisMap.get(u.key) ?? 0) / Math.max(1, u.quantidade || 1));
     if (n === 0) return false;
     const panelElec = { voc: Number(panel.voc), vmp: Number(panel.vmp), isc: Number(panel.isc), imp: Number(panel.imp), potencia: Number(panel.potencia), coeficienteTemperaturaVoc: panel.coeficienteTemperaturaVoc != null ? Number(panel.coeficienteTemperaturaVoc) : null, noct: panel.noct != null ? Number(panel.noct) : null };
     const invElec = { mpptMin: Number(inv.mpptMin), mpptMax: Number(inv.mpptMax), corrMaxMppt: Number(inv.corrMaxMppt), numMppt: inv.numMppt, stringsPorMppt: inv.stringsPorMppt, potenciaAc: normalizarKW(Number(inv.potenciaAc)), potenciaDcMax: normalizarKW(Number(inv.potenciaDcMax)), vdcMax: inv.vdcMax != null ? Number(inv.vdcMax) : null };
-    const sizing = u.mpptConfig ? calcStringSizingManual(panelElec, invElec, u.mpptConfig, n) : calcStringSizing(panelElec, invElec, n);
+    const configTotal = u.mpptConfig?.flat().reduce((sum, value) => sum + value, 0) ??0;
+    const mpptConfig = configTotal === n ? u.mpptConfig : null;
+    const sizing = mpptConfig ? calcStringSizingManual(panelElec, invElec, mpptConfig, n) : calcStringSizing(panelElec, invElec, n);
     return sizing.alertas.some(a => a.tipo === "aviso");
   });
 
@@ -704,14 +736,16 @@ function WizardStep6MultiTecnica({
             Totais Globais do Sistema
           </CardTitle>
           <CardDescription className="text-xs">
-            {inverterUnits.length} modelo{inverterUnits.length !== 1 ? "s" : ""} · {totais.numUnidades} inversor{totais.numUnidades !== 1 ? "es" : ""}
+            {inverterUnits.length} modelo{inverterUnits.length !== 1 ? "s" : ""} · {totais.numUnidades} inversor{totais.numUnidades !== 1 ? "es" : ""} · {totalMppts} MPPT totais
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               { label: "Potência DC",    value: `${totais.potenciaDCkWp.toFixed(2)} kWp`,   sub: "instalada" },
               { label: "Potência AC",    value: `${totais.potenciaACkW.toFixed(1)} kW`,      sub: "total inversores" },
+              { label: "DC/PV máx.",     value: `${totalDcMaxKw.toFixed(1)} kW`,             sub: "limite total" },
+              { label: "MPPT totais",    value: `${totalMppts}`,                             sub: "entradas disponíveis" },
               { label: "Painéis",        value: `${totais.numPaineis}`,                      sub: "módulos FV" },
               { label: "DC/AC Global",   value: `${(totais.dcAcRatio * 100).toFixed(0)}%`,   sub: totais.dcAcRatio >= 0.95 && totais.dcAcRatio <= 1.5 ? "intervalo recomendado" : "fora do intervalo" },
             ].map(b => (
@@ -769,7 +803,8 @@ function WizardStep6MultiTecnica({
       {/* Per-unit cards */}
       {inverterUnits.map((unit, idx) => {
         const inv = allInverters.find(i => i.id === unit.inverterId);
-        const n = numPaineisMap.get(unit.key) ?? 0;
+        const nTotal = numPaineisMap.get(unit.key) ?? 0;
+        const n = Math.ceil(nTotal / Math.max(1, unit.quantidade || 1));
         if (!inv) return (
           <Card key={unit.key} className="border-dashed">
             <CardContent className="py-4 text-center text-sm text-muted-foreground">
@@ -785,6 +820,7 @@ function WizardStep6MultiTecnica({
             inverter={inv}
             panel={panel}
             numPaineis={n}
+            numPaineisTotal={nTotal}
             onUnitChange={onUnitChange}
           />
         );
