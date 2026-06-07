@@ -152,24 +152,58 @@ function consumoHourlyFracs(diurnoPct: number): readonly number[] {
   );
 }
 
-function calcAutoconsumoMensal(
+function calcEnergiaMensal(
   producaoMes: number,
   consumoMes: number,
   perfilDiurnoPct: number,
   m: number,
-): number {
+  bateriaKwh = 0,
+): { autoconsumoMes: number; excessoMes: number; importacaoMes: number } {
   const dias = DAYS_PER_MONTH[m];
   const producaoDia = producaoMes / dias;
   const consumoDia  = consumoMes  / dias;
   const cFracs = consumoHourlyFracs(perfilDiurnoPct);
+  const bateriaUtilKwh = Math.max(0, bateriaKwh) * 0.8;
+  const eficienciaBateria = 0.9;
 
   let autoconsumo = 0;
+  let excesso = 0;
+  let importacao = 0;
+  let cargaBateria = 0;
+
   for (let h = 0; h < 24; h++) {
     const solar   = SOLAR_FRACS_PT[h] * producaoDia;
     const consumo = cFracs[h] * consumoDia;
-    autoconsumo  += Math.min(solar, consumo);
+    const direto = Math.min(solar, consumo);
+    let sobraSolar = Math.max(0, solar - consumo);
+    let faltaConsumo = Math.max(0, consumo - solar);
+
+    autoconsumo += direto;
+
+    if (bateriaUtilKwh > 0 && sobraSolar > 0) {
+      const cargaPossivel = Math.min(bateriaUtilKwh - cargaBateria, sobraSolar * eficienciaBateria);
+      if (cargaPossivel > 0) {
+        cargaBateria += cargaPossivel;
+        sobraSolar -= cargaPossivel / eficienciaBateria;
+      }
+    }
+
+    if (bateriaUtilKwh > 0 && faltaConsumo > 0) {
+      const descarga = Math.min(cargaBateria, faltaConsumo);
+      cargaBateria -= descarga;
+      faltaConsumo -= descarga;
+      autoconsumo += descarga;
+    }
+
+    excesso += Math.max(0, sobraSolar);
+    importacao += Math.max(0, faltaConsumo);
   }
-  return Math.round(autoconsumo * dias);
+
+  return {
+    autoconsumoMes: Math.round(autoconsumo * dias),
+    excessoMes: Math.round(excesso * dias),
+    importacaoMes: Math.round(importacao * dias),
+  };
 }
 
 // ── PVGIS fetch helper for auto-size ──────────────────────────────────────────
@@ -311,11 +345,12 @@ interface CenarioParams {
 
 function buildCenario(p: CenarioParams) {
   const consumoDiario = p.consumoAnualAjustado / 365;
+  const hasPvgis = Boolean(p.pvgisMonthlyKwhPerKwp);
 
-  // Panel sizing (always uses HSP for conservative sizing)
+  // PVGIS HSP already includes configured losses; fallback HSP still needs yield losses.
   const energiaAlvoDiaria = consumoDiario * (p.coberturaMeta / 100);
   const potenciaBruta = energiaAlvoDiaria / p.hsp;
-  const potenciaMinima = potenciaBruta / p.fatorRendimento;
+  const potenciaMinima = hasPvgis ? potenciaBruta : potenciaBruta / p.fatorRendimento;
   const numPaineis = Math.ceil((potenciaMinima * 1000) / 400);
   const potenciaInstalada = Math.round(numPaineis * 400) / 1000;
 
@@ -333,13 +368,12 @@ function buildCenario(p: CenarioParams) {
       ? p.consumoMensalInput.map(v => Math.round(v))
       : DAYS_PER_MONTH.map(days => Math.round(consumoDiario * days));
 
-  // Autoconsumo: hourly temporal simulation (replaces simple min(prod, consumo))
-  const autoconsumoMensal = producaoMensal.map((prod, m) =>
-    calcAutoconsumoMensal(prod, consumoMensal[m], p.perfilDiurnoPct, m),
+  const bateriaKwh = p.incluirBateria ? p.capacidadeBateriaBase ?? 0 : 0;
+  const energiaMensal = producaoMensal.map((prod, m) =>
+    calcEnergiaMensal(prod, consumoMensal[m], p.perfilDiurnoPct, m, bateriaKwh),
   );
-  const excessoMensal = producaoMensal.map((prod, m) =>
-    Math.max(0, prod - autoconsumoMensal[m]),
-  );
+  const autoconsumoMensal = energiaMensal.map((r) => r.autoconsumoMes);
+  const excessoMensal = energiaMensal.map((r) => r.excessoMes);
 
   const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
   const consumoAnualReal = consumoMensal.reduce((a, b) => a + b, 0);
@@ -667,7 +701,7 @@ router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => 
   }
 
   const custoKwp = 1050;
-  const custoBateria = 0; // battery cost not auto-estimated — must be defined by user
+  const custoBateria = 650; // EUR/kWh, aligned with frontend default battery estimate
 
   // ── PVGIS real data (async, with 8 s timeout + fallback) ──────────────────
   const pvgisMonthlyKwhPerKwp = await fetchPvgisMonthlyKwhPerKwp(
@@ -754,7 +788,7 @@ router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => 
     Math.round(
       (((consumoAnualAjustado / 365) * (coberturaMeta / 100)) /
         hsp /
-        fatorRendimento) *
+        (pvgisMonthlyKwhPerKwp ? 1 : fatorRendimento)) *
         100,
     ) / 100;
   const energiaAnualEstimada = cenEquilibrado.energiaAnualEstimada;
@@ -766,7 +800,9 @@ router.post("/tools/auto-size", calcLimiter, async (req, res): Promise<void> => 
   const cenariosPaineis = WATTAGES.map((wp) => {
     const quantidade = Math.ceil((potenciaMinima * 1000) / wp);
     const potInst = Math.round(quantidade * wp) / 1000;
-    const energiaAnual = Math.round(potInst * hsp * 365 * fatorRendimento);
+    const energiaAnual = pvgisMonthlyKwhPerKwp
+      ? Math.round(pvgisMonthlyKwhPerKwp.reduce((a, b) => a + b, 0) * potInst)
+      : Math.round(potInst * hsp * 365 * fatorRendimento);
     const coberturaScenario = Math.min(
       100,
       Math.round((energiaAnual / consumoAnualAjustado) * 1000) / 10,

@@ -242,6 +242,7 @@ export default function Wizard() {
 function WizardInner({ projectId }: { projectId: number }) {
   const [step, setStep]           = useState(1);
   const [consumoData, setConsumoData] = useState<ConsumoData>(DEFAULT_CONSUMO_DATA);
+  const consumoDataRef = useRef<ConsumoData>(DEFAULT_CONSUMO_DATA);
   const [locData, setLocData]     = useState<LocalizacaoForm | null>(null);
   const [sizing, setSizing]       = useState<AutoSizeResult | null>(null);
   const [isSizing, setIsSizing]   = useState(false);
@@ -275,6 +276,16 @@ function WizardInner({ projectId }: { projectId: number }) {
   const skipNextManualReset    = useRef(false);
   const { toast } = useToast();
   const [, navigate] = useLocation();
+
+  const updateConsumoData = useCallback((next: ConsumoData | ((prev: ConsumoData) => ConsumoData)) => {
+    setConsumoData(prev => {
+      const value = typeof next === "function"
+        ? (next as (prev: ConsumoData) => ConsumoData)(prev)
+        : next;
+      consumoDataRef.current = value;
+      return value;
+    });
+  }, []);
 
   const { data: panels }    = useListPanels();
   const { data: inverters } = useListInverters();
@@ -376,9 +387,94 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
   // —— Auto-enable battery when project type is "adicionarBateria" ——————————
   useEffect(() => {
     if (tipoProjeto === "bateria") {
-      setConsumoData(prev => prev.incluirBateria ?prev : { ...prev, incluirBateria: true });
+      updateConsumoData(prev => prev.incluirBateria ?prev : { ...prev, incluirBateria: true });
     }
-  }, [tipoProjeto]);
+  }, [tipoProjeto, updateConsumoData]);
+
+  const buildDraftSnapshot = useCallback((overrides: {
+    step?: number;
+    consumoData?: ConsumoData;
+    locData?: LocalizacaoForm | null;
+    sizing?: AutoSizeResult | null;
+    numPaineisStep5?: number | null;
+  } = {}): Omit<WizardDraftData, "version" | "savedAt"> => ({
+    step: overrides.step ?? step,
+    clienteData: clienteForm.getValues() as unknown as Record<string, unknown>,
+    consumoData: (overrides.consumoData ?? consumoDataRef.current) as unknown as Record<string, unknown>,
+    locData: (overrides.locData ??locData ??locForm.getValues()) as unknown as Record<string, unknown>,
+    sizing: (overrides.sizing ??sizing) as unknown as Record<string, unknown> | null,
+    selectedCenarioTipo,
+    manual: manual as unknown as Record<string, unknown> | null,
+    showManualAdjust,
+    equipFormValues: equipForm.getValues(),
+    numPaineisStep5: overrides.numPaineisStep5 ?? numPaineisStep5,
+    inverterUnits: inverterUnits as unknown as Record<string, unknown>[],
+    batteryUnits: batteryUnits as unknown as Record<string, unknown>[],
+    tipoProjeto,
+    investimentoManual,
+    panelRefId,
+    mapData: mapaCtxData as unknown as Record<string, unknown> | null,
+    reportMapData: reportMapData as unknown as Record<string, unknown> | null,
+    orcamentoState: orcamentoState as unknown as Record<string, unknown> | null,
+  }), [
+    step, consumoData, clienteForm, locData, locForm, sizing, selectedCenarioTipo, manual,
+    showManualAdjust, equipForm, numPaineisStep5, inverterUnits, batteryUnits,
+    tipoProjeto, investimentoManual, panelRefId, mapaCtxData, reportMapData, orcamentoState,
+  ]);
+
+  const saveSnapshot = useCallback((
+    overrides: Parameters<typeof buildDraftSnapshot>[0] = {},
+    options: { remote?: boolean; keepalive?: boolean } = {},
+  ) => {
+    const snapshot = buildDraftSnapshot(overrides);
+    saveDraftForProject(companyId, projectId, snapshot);
+
+    if (options.remote === false) {
+      setLastSaved(new Date());
+      setSaveStatus("saved");
+      return Promise.resolve();
+    }
+
+    const stepToSave = snapshot.step;
+    const derivedStatus: "rascunho" | "em_analise" | "pronto_proposta" =
+      stepToSave >= 10 ?"pronto_proposta" : stepToSave >= 4 ?"em_analise" : "rascunho";
+    const draftPayload: WizardDraftData = {
+      ...snapshot,
+      version: 1,
+      savedAt: new Date().toISOString(),
+    };
+
+    if (!options.keepalive) setSaveStatus("saving");
+
+    return fetch(`${BASE}/api/projects/${projectId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        draftData: draftPayload as unknown as Record<string, unknown>,
+        currentStep: stepToSave,
+        status: derivedStatus,
+      }),
+      keepalive: options.keepalive,
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        if (!options.keepalive) {
+          setLastSaved(new Date());
+          setSaveStatus("saved");
+          qc.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+        }
+      })
+      .catch(() => {
+        if (!options.keepalive) setSaveStatus("error");
+      });
+  }, [buildDraftSnapshot, companyId, projectId, qc]);
+
+  const flushSnapshot = useCallback((overrides: Parameters<typeof buildDraftSnapshot>[0] = {}) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
+    void saveSnapshot(overrides);
+  }, [buildDraftSnapshot, saveSnapshot]);
 
   // —— Auto-save: localStorage cache (800ms) + project PATCH (3s) ———————————
   // The Project row is the source of truth; localStorage is a fast offline cache.
@@ -386,72 +482,39 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     // Don't auto-save before initial hydration completes — otherwise we'd
     // overwrite the just-loaded project with empty defaults.
     if (!hydratedRef.current) return;
-    if (saveTimerRef.current)   clearTimeout(saveTimerRef.current);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
 
-    const snapshot: Omit<WizardDraftData, "version" | "savedAt"> = {
-      step,
-      clienteData: clienteForm.getValues() as unknown as Record<string, unknown>,
-      consumoData: consumoData as unknown as Record<string, unknown>,
-      locData: (locData ??locForm.getValues()) as unknown as Record<string, unknown>,
-      sizing: sizing as unknown as Record<string, unknown> | null,
-      selectedCenarioTipo,
-      manual: manual as unknown as Record<string, unknown> | null,
-      showManualAdjust,
-      equipFormValues: equipForm.getValues(),
-      numPaineisStep5,
-      inverterUnits: inverterUnits as unknown as Record<string, unknown>[],
-      batteryUnits: batteryUnits as unknown as Record<string, unknown>[],
-      tipoProjeto,
-      investimentoManual,
-      panelRefId,
-      mapData: mapaCtxData as unknown as Record<string, unknown> | null,
-      reportMapData: reportMapData as unknown as Record<string, unknown> | null,
-      orcamentoState: orcamentoState as unknown as Record<string, unknown> | null,
-    };
+    const snapshot = buildDraftSnapshot();
 
-    // localStorage — fast offline cache (800ms), keyed per-project
     saveTimerRef.current = setTimeout(() => {
       saveDraftForProject(companyId, projectId, snapshot);
     }, 800);
 
-    // Project PATCH — debounced 3s
     dbSyncTimerRef.current = setTimeout(() => {
-      setSaveStatus("saving");
-      // Derive a status from progress: step 1-3 = rascunho, 4-7 = em_analise, 8 = pronto_proposta
-      const derivedStatus: "rascunho" | "em_analise" | "pronto_proposta" =
-        step >= 10 ?"pronto_proposta" : step >= 4 ?"em_analise" : "rascunho";
-      const draftPayload: WizardDraftData = {
-        ...snapshot,
-        version: 1,
-        savedAt: new Date().toISOString(),
-      };
-      fetch(`${BASE}/api/projects/${projectId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          draftData: draftPayload as unknown as Record<string, unknown>,
-          currentStep: step,
-          status: derivedStatus,
-        }),
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error(String(r.status));
-          setLastSaved(new Date());
-          setSaveStatus("saved");
-          qc.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-          qc.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
-        })
-        .catch(() => setSaveStatus("error"));
+      void saveSnapshot();
     }, 3_000);
 
     return () => {
-      if (saveTimerRef.current)   clearTimeout(saveTimerRef.current);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       if (dbSyncTimerRef.current) clearTimeout(dbSyncTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, consumoData, locData, sizing, selectedCenarioTipo, manual, showManualAdjust, numPaineisStep5, inverterUnits, batteryUnits, tipoProjeto, investimentoManual, panelRefId, mapaCtxData, reportMapData, orcamentoState, projectId, clienteForm, locForm]);
+  }, [buildDraftSnapshot, saveSnapshot, companyId, projectId]);
 
+  useEffect(() => {
+    const saveBeforeUnload = () => {
+      if (!hydratedRef.current) return;
+      void saveSnapshot({}, { keepalive: true });
+    };
+
+    window.addEventListener("pagehide", saveBeforeUnload);
+    window.addEventListener("beforeunload", saveBeforeUnload);
+    return () => {
+      window.removeEventListener("pagehide", saveBeforeUnload);
+      window.removeEventListener("beforeunload", saveBeforeUnload);
+    };
+  }, [saveSnapshot]);
   // —— Reference panel for step-4 scenarios —————————————————————————————————
   // Prefer explicitly chosen panelRefId, then step-5 form selection, then first in catalogue.
   const panelRef = useMemo(() => {
@@ -542,14 +605,15 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
 
     const precoKwh = consumoData.precoKwh ??0.18;
     const custoKwp = 1050;
-    const custoBateria = 0; // battery cost not auto-estimated — must be defined by user
+    const custoBateria = 650;
 
     return sizing.cenariosDimensionamento.map(c => {
       const mult = CENARIO_COB_MULT[c.tipo] ??1.0;
       // Recompute minimum power for this scenario using the same formula as the server
+      const rendimentoSizing = sizing.confianca?.pvgis ? 1 : sizing.fatorRendimento;
       const potenciaMinima =
         (sizing.consumoAnualAjustado / 365 * (consumoData.coberturaMeta * mult / 100))
-        / (sizing.hsp * sizing.fatorRendimento);
+        / (sizing.hsp * rendimentoSizing);
 
       const numPaineis = Math.ceil(potenciaMinima * 1000 / wpRef);
       const potenciaInstalada = Math.round(numPaineis * wpRef) / 1000;
@@ -560,7 +624,12 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       const consumoMensal  = c.consumoMensal;
 
       // Hourly simulation for accurate autoconsumo (replaces simple min(prod, consumo))
-      const simResult = simulateAnual(producaoMensal, consumoMensal, perfilDiurnoPct);
+      const simResult = simulateAnual(
+        producaoMensal,
+        consumoMensal,
+        perfilDiurnoPct,
+        c.capacidadeBateriaRecomendada ?? 0,
+      );
       const { autoconsumoMensal, excessoMensal, autoconsumoAnual, excessoAnual, autoconsumoPerc } = simResult;
 
       const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
@@ -633,7 +702,8 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
         if (!wp || wp <= 0) return null;
         const quantidade = Math.ceil((sizing.potenciaMinima * 1000) / wp);
         const potInst = Math.round(quantidade * wp) / 1000;
-        const energiaAnual = Math.round(potInst * sizing.hsp * 365 * sizing.fatorRendimento);
+        const rendimentoProducao = sizing.confianca?.pvgis ? 1 : sizing.fatorRendimento;
+        const energiaAnual = Math.round(potInst * sizing.hsp * 365 * rendimentoProducao);
         const coberturaReal =
           sizing.consumoAnualAjustado > 0
             ?Math.min(100, Math.round((energiaAnual / sizing.consumoAnualAjustado) * 100))
@@ -736,7 +806,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     const scale      = activeCenario.potenciaInstalada > 0 ?potenciaInstalada / activeCenario.potenciaInstalada : 1;
     const producaoMensal = activeCenario.producaoMensal.map(v => Math.round(v * scale * hspScale * rendScale));
     const consumoMensal  = activeCenario.consumoMensal;
-    const simResult      = simulateAnual(producaoMensal, consumoMensal, perfilDiurnoPct);
+    const simResult      = simulateAnual(producaoMensal, consumoMensal, perfilDiurnoPct, manual.capacidadeBateria);
     const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
     const consumoAnualReal     = consumoMensal.reduce((a, b) => a + b, 0);
     const coberturaReal = consumoAnualReal > 0 ?Math.round(energiaAnualEstimada / consumoAnualReal * 100) : 0;
@@ -772,7 +842,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     if (draft.clienteData) {
       clienteForm.reset(draft.clienteData as unknown as ClienteForm);
     }
-    setConsumoData(draft.consumoData as unknown as ConsumoData);
+    updateConsumoData(draft.consumoData as unknown as ConsumoData);
     if (draft.locData) {
       setLocData(draft.locData as unknown as LocalizacaoForm);
       locForm.reset(draft.locData as unknown as LocalizacaoForm);
@@ -812,7 +882,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
   }, []);
 
   const resetWizard = useCallback(() => {
-    setConsumoData(DEFAULT_CONSUMO_DATA);
+    updateConsumoData(DEFAULT_CONSUMO_DATA);
     setLocData(null);
     setSizing(null);
     setStep(1);
@@ -831,7 +901,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
   }, [clienteForm, locForm, equipForm]);
 
   // —— Auto-size —————————————————————————————————————————————————————————————
-  const runAutoSize = async (consumo: ConsumoData, loc: LocalizacaoForm) => {
+  const runAutoSize = async (consumo: ConsumoData, loc: LocalizacaoForm): Promise<AutoSizeResult | null> => {
     setIsSizing(true);
     try {
       // Build optional monthly consumption from invoice history (12 non-null values)
@@ -863,14 +933,16 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
         }),
       });
       if (!resp.ok) throw new Error();
-      setSizing(await resp.json());
+      const result = await resp.json() as AutoSizeResult;
+      setSizing(result);
+      return result;
     } catch {
       toast({ title: "Erro no dimensionamento automático", variant: "destructive" });
+      return null;
     } finally {
       setIsSizing(false);
     }
   };
-
   // —— Save proposal —————————————————————————————————————————————————————————
   const handleSaveProposal = useCallback(() => {
     const eff = effectiveSizing ??sizing;
@@ -896,27 +968,34 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     );
   }, [effectiveSizing, sizing, panels, consumoData.consumoAnual, equipForm, createProposal, clearDraft, toast, navigate]);
 
-  // —— Navigation ————————————————————————————————————————————————————————————
+  // —— Navigation ——————————————————————————————————————————————————————————
   const goNext = async () => {
     if (step === 1) {
       // Validate both client data and location
       const clienteOk = await clienteForm.trigger();
       const locOk     = await locForm.trigger();
       if (!clienteOk || !locOk) return;
-      setLocData(locForm.getValues());
+      const loc = locForm.getValues();
+      setLocData(loc);
+      flushSnapshot({ step: 2, locData: loc });
       setStep(2);
     } else if (step === 2) {
-      if (consumoData.consumoAnual < 100) {
+      const consumo = consumoDataRef.current;
+      if (consumo.consumoAnual < 100) {
         toast({ title: "Consumo deve ser ≥ 100 kWh", variant: "destructive" });
         return;
       }
+      flushSnapshot({ step: 3, consumoData: consumo });
       setStep(3);
     } else if (step === 3) {
       // Run auto-size with consumption + location data before showing study
       const loc = locData ??locForm.getValues();
-      await runAutoSize(consumoData, loc);
+      const result = await runAutoSize(consumoDataRef.current, loc);
+      if (!result) return;
+      flushSnapshot({ step: 4, consumoData: consumoDataRef.current, locData: loc, sizing: result });
       setStep(4);
     } else if (step === 4) {
+      flushSnapshot({ step: 5 });
       setStep(5);
     } else if (step === 5) {
       const vals = equipForm.getValues();
@@ -936,20 +1015,31 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
         ?Math.ceil((eff.potenciaInstalada * 1000) / (selectedPanel?.potencia ??400))
         : (manual?.numPaineis ??0);
       setNumPaineisStep5(computed);
+      flushSnapshot({ step: 6, numPaineisStep5: computed });
       setStep(6);
     } else if (step === 6) {
+      flushSnapshot({ step: 7 });
       setStep(7);
     } else if (step === 7) {
-  setStep(8);
-} else if (step === 8) {
-  setStep(9);
-} else if (step === 9) {
-  setStep(10);
-} else if (step === 10) {
-  setStep(11);
-}
+      flushSnapshot({ step: 8 });
+      setStep(8);
+    } else if (step === 8) {
+      flushSnapshot({ step: 9 });
+      setStep(9);
+    } else if (step === 9) {
+      flushSnapshot({ step: 10 });
+      setStep(10);
+    } else if (step === 10) {
+      flushSnapshot({ step: 11 });
+      setStep(11);
+    }
   };
 
+  const goPrevious = () => {
+    const previousStep = Math.max(1, step - 1);
+    flushSnapshot({ step: previousStep, consumoData: consumoDataRef.current });
+    setStep(previousStep);
+  };
   const progress = ((step - 1) / (STEPS.length - 1)) * 100;
 
   const addInverterUnit = useCallback(() => {
@@ -1157,7 +1247,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <WizardStep1 data={consumoData} onChange={setConsumoData} />
+            <WizardStep1 data={consumoData} onChange={updateConsumoData} />
           </CardContent>
         </Card>
       )}
@@ -1166,7 +1256,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       {step === 3 && (
         <WizardStep3Perfil
           consumoData={consumoData}
-          onConsumoChange={setConsumoData}
+          onConsumoChange={updateConsumoData}
           consumoDiurnoPct={perfilDiurnoPct}
           onDiurnoChange={setPerfilDiurnoPct}
         />
@@ -1204,7 +1294,8 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
                           if (sizing && !showManualAdjust) {
                             const tipo = selectedCenarioTipo;
                             const mult = CENARIO_COB_MULT[tipo] ??1.0;
-                            const pm = (sizing.consumoAnualAjustado / 365 * (consumoData.coberturaMeta * mult / 100)) / (sizing.hsp * sizing.fatorRendimento);
+                            const rendimentoSizing = sizing.confianca?.pvgis ? 1 : sizing.fatorRendimento;
+                            const pm = (sizing.consumoAnualAjustado / 365 * (consumoData.coberturaMeta * mult / 100)) / (sizing.hsp * rendimentoSizing);
                             const panel = panels.find(p => p.id === id);
                             const wp = panel ?Number(panel.potencia) : 400;
                             const np = Math.ceil(pm * 1000 / wp);
@@ -2840,7 +2931,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       <div className="flex items-center justify-between pt-4 border-t border-border/50 gap-4">
         <Button
           variant="outline"
-          onClick={() => setStep(s => Math.max(1, s - 1))}
+          onClick={goPrevious}
           disabled={step === 1}
           className="gap-1.5"
         >

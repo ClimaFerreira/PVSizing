@@ -94,12 +94,15 @@ export function simulateMes(
   producaoMes:     number,
   consumoMes:      number,
   perfilDiurnoPct: number,
-  m:               number, // month index 0–11
+  m:               number, // month index 0-11
+  bateriaKwh = 0,
 ): MesSimResult {
   const dias       = DIAS_MES[m];
   const producaoDia = producaoMes / dias;
   const consumoDia  = consumoMes  / dias;
   const cFracs      = consumoFracs(perfilDiurnoPct);
+  const bateriaUtilKwh = Math.max(0, bateriaKwh) * 0.8;
+  const eficienciaBateria = 0.9;
 
   const solar   = SOLAR_FRACS.map(f => f * producaoDia);
   const consumo = cFracs.map(f => f * consumoDia);
@@ -107,11 +110,32 @@ export function simulateMes(
   let autoconsumo = 0;
   let excedente   = 0;
   let importacao  = 0;
+  let cargaBateria = 0;
 
   for (let h = 0; h < 24; h++) {
-    autoconsumo += Math.min(solar[h], consumo[h]);
-    excedente   += Math.max(0, solar[h] - consumo[h]);
-    importacao  += Math.max(0, consumo[h] - solar[h]);
+    const direto = Math.min(solar[h], consumo[h]);
+    let sobraSolar = Math.max(0, solar[h] - consumo[h]);
+    let faltaConsumo = Math.max(0, consumo[h] - solar[h]);
+
+    autoconsumo += direto;
+
+    if (bateriaUtilKwh > 0 && sobraSolar > 0) {
+      const cargaPossivel = Math.min(bateriaUtilKwh - cargaBateria, sobraSolar * eficienciaBateria);
+      if (cargaPossivel > 0) {
+        cargaBateria += cargaPossivel;
+        sobraSolar -= cargaPossivel / eficienciaBateria;
+      }
+    }
+
+    if (bateriaUtilKwh > 0 && faltaConsumo > 0) {
+      const descarga = Math.min(cargaBateria, faltaConsumo);
+      cargaBateria -= descarga;
+      faltaConsumo -= descarga;
+      autoconsumo += descarga;
+    }
+
+    excedente += Math.max(0, sobraSolar);
+    importacao += Math.max(0, faltaConsumo);
   }
 
   return {
@@ -142,6 +166,7 @@ export function simulateAnual(
   producaoMensal:  number[],
   consumoMensal:   number[],
   perfilDiurnoPct: number,
+  bateriaKwh = 0,
 ): AnualSimResult {
   const autoconsumoMensal: number[] = [];
   const excessoMensal:     number[] = [];
@@ -152,6 +177,7 @@ export function simulateAnual(
       consumoMensal[m]  ?? 0,
       perfilDiurnoPct,
       m,
+      bateriaKwh,
     );
     autoconsumoMensal.push(r.autoconsumoMes);
     excessoMensal.push(r.excessoMes);
@@ -166,7 +192,6 @@ export function simulateAnual(
 
   return { autoconsumoMensal, excessoMensal, autoconsumoAnual, excessoAnual, autoconsumoPerc };
 }
-
 // ── Confidence score ──────────────────────────────────────────────────────────
 
 export interface ConfidenceScore {
