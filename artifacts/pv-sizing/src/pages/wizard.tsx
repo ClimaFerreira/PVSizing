@@ -258,6 +258,7 @@ function WizardInner({ projectId }: { projectId: number }) {
   const [numPaineisStep5, setNumPaineisStep5] = useState<number | null>(null);
   const [manualMpptConfig, setManualMpptConfig] = useState<import("@/lib/string-sizing").MpptConfig | null>(null);
   const [inverterUnits, setInverterUnits] = useState<InverterUnit[]>([]);
+  const inverterUnitsRef = useRef<InverterUnit[]>([]);
   const [batteryUnits, setBatteryUnits] = useState<BatteryUnit[]>([]);
   const [tipoProjeto, setTipoProjeto] = useState<TipoProjeto>("nova");
   const [instalacaoExistente, setInstalacaoExistente] = useState<InstalacaoExistente>(defaultInstalacaoExistente);
@@ -399,6 +400,8 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     locData?: LocalizacaoForm | null;
     sizing?: AutoSizeResult | null;
     numPaineisStep5?: number | null;
+    inverterUnits?: InverterUnit[];
+    equipFormValues?: EquipamentosForm;
   } = {}): Omit<WizardDraftData, "version" | "savedAt"> => ({
     step: overrides.step ?? step,
     clienteData: clienteForm.getValues() as unknown as Record<string, unknown>,
@@ -408,9 +411,9 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     selectedCenarioTipo,
     manual: manual as unknown as Record<string, unknown> | null,
     showManualAdjust,
-    equipFormValues: equipForm.getValues(),
+    equipFormValues: overrides.equipFormValues ??equipForm.getValues(),
     numPaineisStep5: overrides.numPaineisStep5 ?? numPaineisStep5,
-    inverterUnits: inverterUnits as unknown as Record<string, unknown>[],
+    inverterUnits: (overrides.inverterUnits ??inverterUnitsRef.current) as unknown as Record<string, unknown>[],
     batteryUnits: batteryUnits as unknown as Record<string, unknown>[],
     tipoProjeto,
     investimentoManual,
@@ -862,7 +865,9 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     }
     if (draft.numPaineisStep5 != null) setNumPaineisStep5(draft.numPaineisStep5);
     if (draft.inverterUnits && draft.inverterUnits.length > 0) {
-      setInverterUnits(draft.inverterUnits as unknown as InverterUnit[]);
+      const restoredUnits = draft.inverterUnits as unknown as InverterUnit[];
+      inverterUnitsRef.current = restoredUnits;
+      setInverterUnits(restoredUnits);
     }
     if (draft.batteryUnits && draft.batteryUnits.length > 0) {
       setBatteryUnits(draft.batteryUnits as unknown as BatteryUnit[]);
@@ -894,6 +899,8 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     setLastSaved(null);
     setPerfilDiurnoPct(60);
     setManualMpptConfig(null);
+    inverterUnitsRef.current = [];
+    setInverterUnits([]);
     setInvestimentoManual(null);
     setOrcamentoState(null);
     clienteForm.reset({ tipoCliente: "particular", morada: "", tipoTarifa: "simples", potenciaContratada: 3.45 });
@@ -1001,15 +1008,18 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       setStep(5);
     } else if (step === 5) {
       const vals = equipForm.getValues();
-      const hasInverter = inverterUnits.length > 0
-        ?inverterUnits.some(u => u.inverterId > 0)
+      const unitsNow = inverterUnitsRef.current;
+      const hasInverter = unitsNow.length > 0
+        ?unitsNow.some(u => u.inverterId > 0)
         : Boolean(vals.inverterId);
       if (!vals.panelId || !hasInverter) {
         toast({ title: "Selecione pelo menos um painel e um inversor", variant: "destructive" });
         return;
       }
-      if (inverterUnits.length > 0 && inverterUnits[0].inverterId) {
-        equipForm.setValue("inverterId", inverterUnits[0].inverterId);
+      const nextEquipValues = { ...vals };
+      if (unitsNow.length > 0 && unitsNow[0].inverterId) {
+        equipForm.setValue("inverterId", unitsNow[0].inverterId);
+        nextEquipValues.inverterId = unitsNow[0].inverterId;
       }
       const eff = effectiveSizing ??sizing;
       const selectedPanel = panels?.find(p => p.id === vals.panelId);
@@ -1017,7 +1027,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
         ?Math.ceil((eff.potenciaInstalada * 1000) / (selectedPanel?.potencia ??400))
         : (manual?.numPaineis ??0);
       setNumPaineisStep5(computed);
-      flushSnapshot({ step: 6, numPaineisStep5: computed });
+      flushSnapshot({ step: 6, numPaineisStep5: computed, inverterUnits: unitsNow, equipFormValues: nextEquipValues });
       setStep(6);
     } else if (step === 6) {
       flushSnapshot({ step: 7 });
@@ -1048,14 +1058,22 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     setInverterUnits(prev => {
       if (prev.length === 0) {
         const currentId = equipForm.getValues("inverterId");
-        return [criarUnidade(currentId || 0), criarUnidade(0)];
+        const next = [criarUnidade(currentId || 0), criarUnidade(0)];
+        inverterUnitsRef.current = next;
+        return next;
       }
-      return [...prev, criarUnidade(0)];
+      const next = [...prev, criarUnidade(0)];
+      inverterUnitsRef.current = next;
+      return next;
     });
   }, [equipForm]);
 
   const removeInverterUnit = useCallback((key: string) => {
-    setInverterUnits(prev => prev.filter(u => u.key !== key));
+    setInverterUnits(prev => {
+      const next = prev.filter(u => u.key !== key);
+      inverterUnitsRef.current = next;
+      return next;
+    });
   }, []);
 
   const updateInverterUnit = useCallback((key: string, changes: Partial<InverterUnit>) => {
@@ -1064,6 +1082,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       if (next[0]?.key === key && changes.inverterId != null) {
         equipForm.setValue("inverterId", changes.inverterId);
       }
+      inverterUnitsRef.current = next;
       return next;
     });
   }, [equipForm]);
@@ -2070,11 +2089,25 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
                 inverterUnits={inverterUnits}
                 onSelectInverter={id => {
                   equipForm.setValue("inverterId", id);
+                  inverterUnitsRef.current = [];
                   setInverterUnits([]);
+                  flushSnapshot({
+                    step: 5,
+                    inverterUnits: [],
+                    equipFormValues: { ...equipForm.getValues(), inverterId: id },
+                  });
                 }}
                 onSelectMultiInverter={units => {
+                  inverterUnitsRef.current = units;
                   setInverterUnits(units);
-                  if (units.length > 0) equipForm.setValue("inverterId", units[0].inverterId);
+                  if (units.length > 0) {
+                    equipForm.setValue("inverterId", units[0].inverterId);
+                    flushSnapshot({
+                      step: 5,
+                      inverterUnits: units,
+                      equipFormValues: { ...equipForm.getValues(), inverterId: units[0].inverterId },
+                    });
+                  }
                 }}
               />
             </Suspense>
