@@ -932,7 +932,7 @@ router.post(
 
     const schemaByType: Record<string, string> = {
       painel: `{"nome":"string","fabricante":"string","potencia":number,"voc":number,"vmp":number,"isc":number,"imp":number,"coeficienteTemperatura":number,"coeficienteTemperaturaVoc":number,"noct":number,"alturaMm":number,"larguraMm":number}`,
-      inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"vdcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":number,"stringsPorMppt":number}`,
+      inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"vdcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":number,"stringsPorMppt":number,"tipoRede":"monofasico|trifasico|desconhecido","tensaoAcNominal":"string","faixaTensaoAc":"string","ligacaoRede":"string","frequenciaAc":"string","potenciaAparenteAc":number,"correnteNominalAc":number,"correnteMaxAc":number,"fatorPotencia":"string","thdi":"string","correnteInjecaoDc":"string","potenciaPvMax":number,"potenciaDcNominal":number,"tensaoArranque":number,"tensaoNominalDc":"string","correnteCurtoCircuitoMppt":number,"bateriaTensaoRange":"string","bateriaCorrenteCargaMax":number,"bateriaCorrenteDescargaMax":number,"bateriaPotenciaCargaMax":number,"bateriaPotenciaDescargaMax":number,"grauProtecao":"string","comunicacao":"string","observacoesTecnicas":"string"}`,
       bateria: `{"nome":"string","fabricante":"string","capacidade":number,"tensao":number,"tecnologia":"LiFePO4|Li-ion|AGM|Gel","profundidadeDescarga":number,"eficienciaRoundTrip":number,"ciclosVida":number,"potenciaCarga":number,"potenciaDescarga":number,"correnteCargaMax":number,"correnteDescargaMax":number,"capacidadeUtil":number,"garantiaAnos":number,"compatibilidade":"string","observacoesTecnicas":"string"}`,
     };
 
@@ -956,6 +956,8 @@ Devolve APENAS este JSON:
 }
 
 Regras:
+- Para inversores, classifica tipoRede pela ficha: L+N+PE, 1F+N+PE, single phase, monofasico, 220/230 V => monofasico; 3L+N+PE, 3P+N+PE, three phase, trifasico, 380/400 V ou 400 V => trifasico. Nunca assumas trifasico apenas pela potencia.
+- Para inversores, extrai tambem tensao AC nominal/range, ligacao a rede, frequencia, correntes AC, fator de potencia, THDi, tensoes/correntes DC/FV, compatibilidade de bateria, protecao, comunicacao e observacoes quando existirem.
 - Usa unidades normalizadas: W, V, A, kWh e mm.
 - Para inversores, potenciaAc/potenciaDcMax em Watts.
 - Para inversores híbridos, potenciaDcMax deve ser a potência FV/DC máxima permitida/recomendada ("Max. PV input power", "Max DC input power", "PV array power"), não a potência AC nominal.
@@ -1034,7 +1036,7 @@ router.post(
 
     const schemaByType: Record<string, string> = {
       painel: `{"nome":"string","fabricante":"string","potencia":number,"voc":number,"vmp":number,"isc":number,"imp":number,"coeficienteTemperatura":number}`,
-      inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":number,"stringsPorMppt":number}`,
+      inversor: `{"nome":"string","fabricante":"string","potenciaAc":number,"potenciaDcMax":number,"vdcMax":number,"mpptMin":number,"mpptMax":number,"corrMaxMppt":number,"numMppt":number,"stringsPorMppt":number,"tipoRede":"monofasico|trifasico|desconhecido","tensaoAcNominal":"string","faixaTensaoAc":"string","ligacaoRede":"string","frequenciaAc":"string","potenciaAparenteAc":number,"correnteNominalAc":number,"correnteMaxAc":number,"fatorPotencia":"string","thdi":"string","correnteInjecaoDc":"string","potenciaPvMax":number,"potenciaDcNominal":number,"tensaoArranque":number,"tensaoNominalDc":"string","correnteCurtoCircuitoMppt":number,"bateriaTensaoRange":"string","bateriaCorrenteCargaMax":number,"bateriaCorrenteDescargaMax":number,"bateriaPotenciaCargaMax":number,"bateriaPotenciaDescargaMax":number,"grauProtecao":"string","comunicacao":"string","observacoesTecnicas":"string"}`,
       bateria: `{"nome":"string","fabricante":"string","capacidade":number,"tensao":number,"tecnologia":"LiFePO4|Li-ion|AGM|Gel","profundidadeDescarga":number,"eficienciaRoundTrip":number,"ciclosVida":number,"potenciaCarga":number,"potenciaDescarga":number,"correnteCargaMax":number,"correnteDescargaMax":number,"capacidadeUtil":number,"garantiaAnos":number,"compatibilidade":"string","observacoesTecnicas":"string"}`,
     };
 
@@ -1067,6 +1069,8 @@ Devolve um objeto JSON com EXATAMENTE esta estrutura:
 }
 
 Instruções importantes:
+- Para inversores, classifica tipoRede pela ficha: L+N+PE, 1F+N+PE, single phase, monofasico, 220/230 V => monofasico; 3L+N+PE, 3P+N+PE, three phase, trifasico, 380/400 V ou 400 V => trifasico. Nunca assumas trifasico apenas pela potencia.
+- Para inversores, extrai tambem tensao AC nominal/range, ligacao a rede, frequencia, correntes AC, fator de potencia, THDi, tensoes/correntes DC/FV, compatibilidade de bateria, protecao, comunicacao e observacoes quando existirem.
 - Se a tabela tiver colunas por modelo (ex: SUN-14K, SUN-15K, SUN-16K...), cria um registo separado para cada coluna.
 - Associa cada valor ao modelo correto — não mistures dados entre modelos.
 - Para inversores: potenciaAc e potenciaDcMax em Watts (W), mpptMin/mpptMax em Volts (V), corrMaxMppt em Amperes (A).

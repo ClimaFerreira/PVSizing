@@ -80,6 +80,10 @@ const inverterSchema = z.object({
 });
 
 type InverterFormValues = z.infer<typeof inverterSchema>;
+type InverterPayload = Pick<
+  InverterFormValues,
+  "nome" | "fabricante" | "potenciaAc" | "potenciaDcMax" | "mpptMin" | "mpptMax" | "corrMaxMppt" | "numMppt" | "stringsPorMppt" | "vdcMax"
+>;
 
 const normalizarKW = (value: number) => value > 500 ? value / 1000 : value;
 type TipoRedeInverter = "monofasico" | "trifasico" | "desconhecido";
@@ -109,7 +113,7 @@ function tipoRedeLabel(tipo: TipoRedeInverter | undefined): string {
 }
 
 function numeroOpcional(value: unknown, fallback: number | null | undefined = null): number | null {
-  const n = Number(value);
+  const n = parseNumber(value, fallback ?? 0);
   return Number.isFinite(n) && n > 0 ? n : fallback ?? null;
 }
 
@@ -145,6 +149,78 @@ function camposAvancadosFromDados(dados: Record<string, unknown>, cur: Partial<I
     comunicacao: textoOpcional(dados.comunicacao, cur.comunicacao),
     observacoesTecnicas: textoOpcional(dados.observacoesTecnicas, cur.observacoesTecnicas),
   };
+}
+
+function firstValue(dados: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    const value = dados[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return undefined;
+}
+
+function parseNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const raw = String(value ?? "").trim();
+  if (!raw) return fallback;
+  const match = raw.replace(",", ".").match(/-?\d+(?:\.\d+)?/);
+  const parsed = match ? Number(match[0]) : NaN;
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parsePowerWatts(value: unknown, fallback = 0): number {
+  const text = normalizarTexto(value);
+  const number = parseNumber(value, fallback);
+  if (!Number.isFinite(number) || number <= 0) return fallback;
+  if (text.includes("kw") || number < 100) return Math.round(number * 1000);
+  return Math.round(number);
+}
+
+function parsePositiveInteger(value: unknown, fallback = 1): number {
+  const number = parseNumber(value, fallback);
+  return Math.max(1, Math.round(number));
+}
+
+function missingBasicPayloadError(payload: InverterPayload): string | null {
+  const missing: string[] = [];
+  if (!payload.fabricante) missing.push("fabricante");
+  if (!payload.nome) missing.push("modelo");
+  if (payload.potenciaAc <= 0) missing.push("potencia AC");
+  if (payload.potenciaDcMax <= 0) missing.push("potencia DC/PV maxima");
+  if (payload.mpptMin <= 0) missing.push("MPPT minimo");
+  if (payload.mpptMax <= 0) missing.push("MPPT maximo");
+  if (payload.corrMaxMppt <= 0) missing.push("corrente MPPT");
+  if (payload.numMppt <= 0) missing.push("numero de MPPTs");
+  if (payload.stringsPorMppt <= 0) missing.push("strings por MPPT");
+  return missing.length > 0 ? missing.join(", ") : null;
+}
+
+function buildInverterPayload(dados: Record<string, unknown>, cur: Partial<InverterFormValues> = {}): InverterPayload {
+  const fabricante = textoOpcional(firstValue(dados, ["fabricante", "marca"]), cur.fabricante);
+  const nome = textoOpcional(firstValue(dados, ["nome", "modelo", "referencia"]), cur.nome);
+  const payload = {
+    fabricante,
+    nome,
+    potenciaAc: parsePowerWatts(firstValue(dados, ["potenciaAc", "potenciaAcNominal", "potenciaNominalAc"]), cur.potenciaAc ?? 0),
+    potenciaDcMax: parsePowerWatts(firstValue(dados, ["potenciaDcMax", "potenciaPvMax", "potenciaDc", "potenciaDcEntrada", "maxPvPower"]), cur.potenciaDcMax ?? 0),
+    mpptMin: parseNumber(firstValue(dados, ["mpptMin", "tensaoMpptMin", "tensaoMinMppt"]), cur.mpptMin ?? 0),
+    mpptMax: parseNumber(firstValue(dados, ["mpptMax", "tensaoMpptMax", "tensaoMaxMppt"]), cur.mpptMax ?? 0),
+    corrMaxMppt: parseNumber(firstValue(dados, ["corrMaxMppt", "correnteMaxMppt", "correnteMaxEntradaMppt", "correnteCurtoCircuitoMppt"]), cur.corrMaxMppt ?? 0),
+    numMppt: parsePositiveInteger(firstValue(dados, ["numMppt", "numeroMppt", "mppts"]), cur.numMppt ?? 1),
+    stringsPorMppt: parsePositiveInteger(firstValue(dados, ["stringsPorMppt", "stringsMppt", "cadeiasPorMppt", "strings"]), cur.stringsPorMppt ?? 1),
+    vdcMax: numeroOpcional(firstValue(dados, ["vdcMax", "tensaoDcMax", "tensaoMaximaDc", "tensaoMaximaFv"]), cur.vdcMax),
+  };
+  const missing = missingBasicPayloadError(payload);
+  if (missing) {
+    throw new Error(`${fabricante || "Inversor"} ${nome || ""}: falta ${missing}`);
+  }
+  return payload;
+}
+
+function getMutationErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === "object" && err && "message" in err) return String((err as { message?: unknown }).message);
+  return "Erro desconhecido ao gravar inversor";
 }
 
 export default function Inverters() {
@@ -200,9 +276,21 @@ export default function Inverters() {
   });
 
   const onSubmit = (data: InverterFormValues) => {
+    let payload: ReturnType<typeof buildInverterPayload>;
+    try {
+      payload = buildInverterPayload(data as unknown as Record<string, unknown>);
+    } catch (err) {
+      toast({
+        title: "Dados do inversor incompletos",
+        description: getMutationErrorMessage(err),
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (editingInverter) {
       updateInverter.mutate(
-        { id: editingInverter.id, data },
+        { id: editingInverter.id, data: payload },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListInvertersQueryKey() });
@@ -210,17 +298,31 @@ export default function Inverters() {
             setEditingInverter(null);
             form.reset();
           },
+          onError: (err) => {
+            toast({
+              title: "Erro ao atualizar inversor",
+              description: getMutationErrorMessage(err),
+              variant: "destructive",
+            });
+          },
         }
       );
     } else {
       createInverter.mutate(
-        { data },
+        { data: payload },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListInvertersQueryKey() });
             toast({ title: "Inversor criado com sucesso" });
             setIsCreateOpen(false);
             form.reset();
+          },
+          onError: (err) => {
+            toast({
+              title: "Erro ao criar inversor",
+              description: getMutationErrorMessage(err),
+              variant: "destructive",
+            });
           },
         }
       );
@@ -291,49 +393,48 @@ export default function Inverters() {
             <DatasheetImport
               tipoEquipamento="inversor"
               onExtracted={(dados) => {
-                const d = dados as Record<string, number | string>;
-                const cur = form.getValues();
-                const tipoRede = inferirTipoRede(dados);
-                form.reset({
-                  fabricante:    d.fabricante               ? String(d.fabricante)       : cur.fabricante,
-                  nome:          d.nome                     ? String(d.nome)             : cur.nome,
-                  potenciaAc:    Number(d.potenciaAc)    > 0 ? Number(d.potenciaAc)     : cur.potenciaAc,
-                  potenciaDcMax: Number(d.potenciaDcMax) > 0 ? Number(d.potenciaDcMax)  : cur.potenciaDcMax,
-                  mpptMin:       Number(d.mpptMin)       > 0 ? Number(d.mpptMin)        : cur.mpptMin,
-                  mpptMax:       Number(d.mpptMax)       > 0 ? Number(d.mpptMax)        : cur.mpptMax,
-                  corrMaxMppt:   Number(d.corrMaxMppt)   > 0 ? Number(d.corrMaxMppt)    : cur.corrMaxMppt,
-                  numMppt:       Number(d.numMppt)       > 0 ? Number(d.numMppt)        : cur.numMppt,
-                  stringsPorMppt: Number(d.stringsPorMppt) > 0 ? Number(d.stringsPorMppt) : cur.stringsPorMppt,
-                  vdcMax: Number(d.vdcMax) > 0 ? Number(d.vdcMax) : cur.vdcMax,
-                  tipoRede,
-                  tensaoAcNominal: String(d.tensaoAcNominal ?? d.tensaoAcSaida ?? cur.tensaoAcNominal ?? ""),
-                  ligacaoRede: String(d.ligacaoRede ?? d.formaLigacaoRede ?? cur.ligacaoRede ?? ""),
-                });
+                try {
+                  const d = dados as Record<string, unknown>;
+                  const cur = form.getValues();
+                  const payload = buildInverterPayload(d, cur);
+                  const avancados = camposAvancadosFromDados(d, cur);
+                  form.reset({
+                    ...cur,
+                    ...payload,
+                    ...avancados,
+                  });
+                } catch (err) {
+                  toast({
+                    title: "Dados extraidos incompletos",
+                    description: getMutationErrorMessage(err),
+                    variant: "destructive",
+                  });
+                }
               }}
               onBatchCreate={async (modelos) => {
                 let ok = 0;
+                let firstError = "";
                 for (const d of modelos) {
                   try {
-                    await createInverter.mutateAsync({ data: {
-                      nome: String(d.nome ?? ""),
-                      fabricante: String(d.fabricante ?? ""),
-                      potenciaAc: Number(d.potenciaAc ?? 0),
-                      potenciaDcMax: Number(d.potenciaDcMax ?? 0),
-                      mpptMin: Number(d.mpptMin ?? 0),
-                      mpptMax: Number(d.mpptMax ?? 0),
-                      corrMaxMppt: Number(d.corrMaxMppt ?? 0),
-                      numMppt: Number(d.numMppt ?? 1),
-                      stringsPorMppt: Number(d.stringsPorMppt ?? 1),
-                      vdcMax: d.vdcMax ? Number(d.vdcMax) : null,
-                      tipoRede: inferirTipoRede(d),
-                      tensaoAcNominal: String(d.tensaoAcNominal ?? d.tensaoAcSaida ?? ""),
-                      ligacaoRede: String(d.ligacaoRede ?? d.formaLigacaoRede ?? ""),
-                    }});
+                    await createInverter.mutateAsync({ data: buildInverterPayload(d) });
                     ok++;
-                  } catch { /* skip failed */ }
+                  } catch (err) {
+                    if (!firstError) firstError = getMutationErrorMessage(err);
+                  }
                 }
                 queryClient.invalidateQueries({ queryKey: getListInvertersQueryKey() });
-                toast({ title: `${ok} inversor(es) criado(s) com sucesso` });
+                if (ok === 0) {
+                  toast({
+                    title: "Nenhum inversor foi criado",
+                    description: firstError || "Os dados extraidos nao foram aceites pela API.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                toast({
+                  title: `${ok} inversor(es) criado(s) com sucesso`,
+                  description: firstError ? `Alguns modelos falharam. Primeiro erro: ${firstError}` : undefined,
+                });
                 if (ok > 0) { setIsCreateOpen(false); form.reset(); }
               }}
             />
