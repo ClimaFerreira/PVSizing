@@ -57,7 +57,9 @@ import { useMapa } from "@/contexts/MapaContext";
 import type { MapData } from "@/contexts/MapaContext";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
-import { simulateAnual } from "@/lib/energy-simulation";
+import { simulateAnual, type BatterySimulationConfig } from "@/lib/energy-simulation";
+import { calculateFinancialStudy } from "@/lib/financial-calculation";
+import { resolvePanelConfiguration } from "@/lib/wizard-system";
 
 import WizardStep1, { ConsumoData, DEFAULT_CONSUMO_DATA } from "@/components/wizard-step1";
 import WizardStep1Cliente, {
@@ -606,9 +608,9 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
   // Monthly production scales proportionally to potenciaInstalada (linear).
   const cenariosDimensionamentoAdj = useMemo<AutoSizeCenario[]>(() => {
     if (!sizing?.cenariosDimensionamento) return [];
-    if (wpRef === 400) return sizing.cenariosDimensionamento;
 
     const precoKwh = consumoData.precoKwh ??0.18;
+    const precoInjecao = 0.06;
     const custoKwp = 1050;
     const custoBateria = 650;
 
@@ -633,16 +635,18 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
         producaoMensal,
         consumoMensal,
         perfilDiurnoPct,
-        c.capacidadeBateriaRecomendada ?? 0,
+        consumoData.incluirBateria ? (c.capacidadeBateriaRecomendada ?? 0) : 0,
       );
       const { autoconsumoMensal, excessoMensal, autoconsumoAnual, excessoAnual, autoconsumoPerc } = simResult;
 
       const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
       const consumoAnualReal     = consumoMensal.reduce((a, b) => a + b, 0);
       const coberturaReal = Math.round(energiaAnualEstimada / consumoAnualReal * 100);
-      const investBat = c.capacidadeBateriaRecomendada ?Math.round(c.capacidadeBateriaRecomendada * custoBateria) : 0;
+      const investBat = consumoData.incluirBateria && c.capacidadeBateriaRecomendada
+        ? Math.round(c.capacidadeBateriaRecomendada * custoBateria)
+        : 0;
       const investimentoEstimado = Math.round(potenciaInstalada * custoKwp) + investBat;
-      const poupancaAnual = Math.round(autoconsumoAnual * precoKwh * 100) / 100;
+      const poupancaAnual = Math.round((autoconsumoAnual * precoKwh + excessoAnual * precoInjecao) * 100) / 100;
       const paybackAnos   = poupancaAnual > 0 ?Math.round(investimentoEstimado / poupancaAnual * 10) / 10 : 99;
 
       return {
@@ -663,7 +667,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sizing, wpRef, consumoData.coberturaMeta, consumoData.precoKwh, perfilDiurnoPct]);
+  }, [sizing, wpRef, consumoData.coberturaMeta, consumoData.precoKwh, consumoData.incluirBateria, perfilDiurnoPct]);
 
   // Currently selected sizing scenario (uses adjusted values)
   const activeCenario: AutoSizeCenario | null = useMemo(() => {
@@ -684,6 +688,8 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
         capacidadeBateria: c?.capacidadeBateriaRecomendada ?? sizing.capacidadeBateriaRecomendada ?? 0,
         coberturaMeta: consumoData.coberturaMeta,
       });
+      setNumPaineisStep5(c?.numPaineis ?? sizing.numPaineis);
+      setManualMpptConfig(null);
       setShowManualAdjust(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -729,8 +735,14 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
   // Effective sizing: active scenario base + manual overrides
   const effectiveSizing = useMemo(() => {
     if (!sizing || !manual) return sizing;
-    const potenciaInstalada = +(manual.numPaineis * manual.potenciaWp / 1000).toFixed(2);
-    const energiaAnualEstimada = Math.round(potenciaInstalada * manual.hsp * 365 * manual.rendimento);
+    const panelConfig = resolvePanelConfiguration({
+      targetPowerKwp: sizing.potenciaRecomendada,
+      panelPowerWp: manual.potenciaWp,
+      explicitPanelCount: numPaineisStep5 ?? manual.numPaineis,
+    });
+    const potenciaInstalada = panelConfig.installedPowerKwp;
+    const productionFactor = sizing.confianca?.pvgis ? 1 : manual.rendimento;
+    const energiaAnualEstimada = Math.round(potenciaInstalada * manual.hsp * 365 * productionFactor);
     const coberturaReal = sizing.consumoAnualAjustado > 0
       ?Math.round((energiaAnualEstimada / sizing.consumoAnualAjustado) * 100)
       : 0;
@@ -738,7 +750,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       ...sizing,
       potenciaInstalada,
       potenciaRecomendada: potenciaInstalada,
-      numPaineis: manual.numPaineis,
+      numPaineis: panelConfig.panelCount,
       energiaAnualEstimada,
       coberturaReal,
       coberturaAlvo: manual.coberturaMeta,
@@ -746,7 +758,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       hsp: manual.hsp,
       fatorRendimento: manual.rendimento,
     };
-  }, [sizing, manual]);
+  }, [sizing, manual, numPaineisStep5]);
 
   // —— Financial projections for orçamento estudo —————————————————————————————
   const PRECO_INJECAO_ORC = 0.06;
@@ -807,11 +819,18 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
     if (!isManualModified || !manual || !sizing) return activeCenario;
     const potenciaInstalada = +(manual.numPaineis * manual.potenciaWp / 1000).toFixed(2);
     const hspScale   = sizing.hsp > 0 ?manual.hsp / sizing.hsp : 1;
-    const rendScale  = sizing.fatorRendimento > 0 ?manual.rendimento / sizing.fatorRendimento : 1;
+    const rendScale  = sizing.confianca?.pvgis
+      ? 1
+      : (sizing.fatorRendimento > 0 ? manual.rendimento / sizing.fatorRendimento : 1);
     const scale      = activeCenario.potenciaInstalada > 0 ?potenciaInstalada / activeCenario.potenciaInstalada : 1;
     const producaoMensal = activeCenario.producaoMensal.map(v => Math.round(v * scale * hspScale * rendScale));
     const consumoMensal  = activeCenario.consumoMensal;
-    const simResult      = simulateAnual(producaoMensal, consumoMensal, perfilDiurnoPct, manual.capacidadeBateria);
+    const simResult = simulateAnual(
+      producaoMensal,
+      consumoMensal,
+      perfilDiurnoPct,
+      consumoData.incluirBateria ? manual.capacidadeBateria : 0,
+    );
     const energiaAnualEstimada = producaoMensal.reduce((a, b) => a + b, 0);
     const consumoAnualReal     = consumoMensal.reduce((a, b) => a + b, 0);
     const coberturaReal = consumoAnualReal > 0 ?Math.round(energiaAnualEstimada / consumoAnualReal * 100) : 0;
@@ -830,7 +849,80 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       coberturaReal,
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCenario, isManualModified, manual, sizing, perfilDiurnoPct]);
+  }, [activeCenario, isManualModified, manual, sizing, perfilDiurnoPct, consumoData.incluirBateria]);
+
+  const selectedBatteryConfig = useMemo<BatterySimulationConfig | number>(() => {
+    if (!consumoData.incluirBateria) return 0;
+    const lines = batteryUnits
+      .map(unit => ({ unit, battery: batteries?.find(item => item.id === unit.batteryId) }))
+      .filter(line => Boolean(line.battery))
+      .map(line => ({ unit: line.unit, battery: line.battery! }));
+    if (!lines.length) {
+      return manual?.capacidadeBateria ?? activeCenario?.capacidadeBateriaRecomendada ?? 0;
+    }
+    const capacidadeKwh = lines.reduce((sum, line) => sum + Number(line.battery.capacidade) * line.unit.qty, 0);
+    const first = lines[0].battery;
+    return {
+      capacidadeKwh,
+      dodPct: Number(first.profundidadeDescarga || 80),
+      eficienciaRoundTripPct: Number(first.eficienciaRoundTrip || 90),
+      potenciaCargaMaxKw: lines.reduce((sum, line) => sum + Number(line.battery.potenciaCarga || 0) * line.unit.qty, 0) || null,
+      potenciaDescargaMaxKw: lines.reduce((sum, line) => sum + Number(line.battery.potenciaDescarga || 0) * line.unit.qty, 0) || null,
+    };
+  }, [consumoData.incluirBateria, batteryUnits, batteries, manual?.capacidadeBateria, activeCenario?.capacidadeBateriaRecomendada]);
+
+  const finalCenario = useMemo<AutoSizeCenario | null>(() => {
+    if (!chartCenario) return null;
+    const sim = simulateAnual(
+      chartCenario.producaoMensal,
+      chartCenario.consumoMensal,
+      perfilDiurnoPct,
+      selectedBatteryConfig,
+    );
+    const capacidadeBateria = typeof selectedBatteryConfig === "number"
+      ? selectedBatteryConfig
+      : selectedBatteryConfig.capacidadeKwh;
+    const investimentoEstimado = Math.round(
+      chartCenario.potenciaInstalada * 1050 + capacidadeBateria * 650,
+    );
+    const financial = calculateFinancialStudy({
+      investimento: investimentoEstimado,
+      autoconsumoAnualKwh: sim.autoconsumoAnual,
+      excedenteAnualKwh: sim.excessoAnual,
+      precoKwh: consumoData.precoKwh ?? 0.18,
+      precoInjecao: 0.06,
+    });
+    return {
+      ...chartCenario,
+      autoconsumoMensal: sim.autoconsumoMensal,
+      excessoMensal: sim.excessoMensal,
+      autoconsumoAnual: sim.autoconsumoAnual,
+      excessoAnual: sim.excessoAnual,
+      autoconsumoPerc: sim.autoconsumoPerc,
+      capacidadeBateriaRecomendada: capacidadeBateria > 0 ? capacidadeBateria : null,
+      investimentoEstimado,
+      poupancaAnual: Math.round(financial.poupancaTotalAno1),
+      paybackAnos: financial.paybackSimplesAnos ?? 99,
+    };
+  }, [chartCenario, perfilDiurnoPct, selectedBatteryConfig, consumoData.precoKwh]);
+
+  const batteryStudyBaseCenario = useMemo<AutoSizeCenario | null>(() => {
+    if (!chartCenario) return null;
+    const sim = simulateAnual(
+      chartCenario.producaoMensal,
+      chartCenario.consumoMensal,
+      perfilDiurnoPct,
+      0,
+    );
+    return {
+      ...chartCenario,
+      autoconsumoMensal: sim.autoconsumoMensal,
+      excessoMensal: sim.excessoMensal,
+      autoconsumoAnual: sim.autoconsumoAnual,
+      excessoAnual: sim.excessoAnual,
+      autoconsumoPerc: sim.autoconsumoPerc,
+    };
+  }, [chartCenario, perfilDiurnoPct]);
 
   // —— Potência DC efectiva para sugestões (usa painel seleccionado no passo 5) ——
   const panelIdStep5 = equipForm.watch("panelId");
@@ -1023,9 +1115,11 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       }
       const eff = effectiveSizing ??sizing;
       const selectedPanel = panels?.find(p => p.id === vals.panelId);
-      const computed = eff
-        ?Math.ceil((eff.potenciaInstalada * 1000) / (selectedPanel?.potencia ??400))
-        : (manual?.numPaineis ??0);
+      const computed = resolvePanelConfiguration({
+        targetPowerKwp: eff?.potenciaInstalada ?? 0,
+        panelPowerWp: Number(selectedPanel?.potencia ?? 400),
+        explicitPanelCount: numPaineisStep5 ?? manual?.numPaineis,
+      }).panelCount;
       setNumPaineisStep5(computed);
       flushSnapshot({ step: 6, numPaineisStep5: computed, inverterUnits: unitsNow, equipFormValues: nextEquipValues });
       setStep(6);
@@ -1312,7 +1406,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
                           // Pre-fill step 5 equipment form
                           equipForm.setValue("panelId", id, { shouldValidate: false });
                           // Re-sync manual Wp to new panel when manual hasn't been touched
-                          if (sizing && !showManualAdjust) {
+                          if (sizing) {
                             const tipo = selectedCenarioTipo;
                             const mult = CENARIO_COB_MULT[tipo] ??1.0;
                             const rendimentoSizing = sizing.confianca?.pvgis ? 1 : sizing.fatorRendimento;
@@ -1321,6 +1415,8 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
                             const wp = panel ?Number(panel.potencia) : 400;
                             const np = Math.ceil(pm * 1000 / wp);
                             setManual(m => m ?{ ...m, numPaineis: np, potenciaWp: wp } : m);
+                            setNumPaineisStep5(np);
+                            setManualMpptConfig(null);
                           }
                         }}
                       >
@@ -2087,6 +2183,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
                 inverters={inverters}
                 selectedInverterId={inverterUnits.length === 0 ?equipForm.watch("inverterId") : undefined}
                 inverterUnits={inverterUnits}
+                incluirBateria={consumoData.incluirBateria}
                 onSelectInverter={id => {
                   equipForm.setValue("inverterId", id);
                   inverterUnitsRef.current = [];
@@ -2124,7 +2221,29 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
                   <FormField control={equipForm.control} name="panelId" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Painel Solar *</FormLabel>
-                      <Select onValueChange={v => field.onChange(Number(v))} value={field.value?.toString()}>
+                      <Select
+                        onValueChange={v => {
+                          const panelId = Number(v);
+                          field.onChange(panelId);
+                          setPanelRefId(panelId);
+                          const selected = panels?.find(item => item.id === panelId);
+                          if (selected) {
+                            const count = resolvePanelConfiguration({
+                              targetPowerKwp: (effectiveSizing ?? sizing)?.potenciaInstalada ?? 0,
+                              panelPowerWp: Number(selected.potencia),
+                              explicitPanelCount: numPaineisStep5 ?? manual?.numPaineis,
+                            }).panelCount;
+                            setNumPaineisStep5(count);
+                            setManual(current => current ? {
+                              ...current,
+                              numPaineis: count,
+                              potenciaWp: Number(selected.potencia),
+                            } : current);
+                            setManualMpptConfig(null);
+                          }
+                        }}
+                        value={field.value?.toString()}
+                      >
                         <FormControl><SelectTrigger><SelectValue placeholder="Selecionar painel solar..." /></SelectTrigger></FormControl>
                         <SelectContent>
                           {panels?.map(p => (
@@ -2138,7 +2257,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
                         const eff = (effectiveSizing ??sizing)!;
                         const panel = panels?.find(p => p.id === equipForm.watch("panelId"));
                         if (!panel) return null;
-                        const n   = Math.ceil((eff.potenciaInstalada * 1000) / panel.potencia);
+                        const n   = numPaineisStep5 ?? eff.numPaineis;
                         const kWp = (n * panel.potencia / 1000).toFixed(2);
                         return (
                           <p className="text-xs text-primary mt-1">
@@ -2270,8 +2389,14 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
                         <WizardBatteryStudy
                           batteries={batteries}
                           batteryUnits={batteryUnits}
-                          onUnitsChange={setBatteryUnits}
-                          activeCenario={activeCenario ??null}
+                          onUnitsChange={units => {
+                            setBatteryUnits(units);
+                            flushSnapshot({
+                              step: 5,
+                              batteryUnits: units as unknown as Record<string, unknown>[],
+                            });
+                          }}
+                          activeCenario={batteryStudyBaseCenario}
                           precoKwh={consumoData.precoKwh ??0.18}
                           perfilDiurnoPct={perfilDiurnoPct}
                           percVazio={consumoData.percVazio}
@@ -2328,17 +2453,34 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
                   value={numPaineis}
                   onChange={e => {
                     const v = parseInt(e.target.value, 10);
-                    if (!isNaN(v) && v > 0) setNumPaineisStep5(v);
+                    if (!isNaN(v) && v > 0) {
+                      setNumPaineisStep5(v);
+                      setManual(current => current ? {
+                        ...current,
+                        numPaineis: v,
+                        potenciaWp: Number(panel?.potencia ?? current.potenciaWp),
+                      } : current);
+                      setManualMpptConfig(null);
+                    }
                   }}
                   className="w-20 h-7 text-sm text-center px-1"
                 />
               </div>
-              {eff && panel && numPaineis !== Math.ceil((eff.potenciaInstalada * 1000) / Number(panel.potencia)) && (
+              {eff && panel && activeCenario && numPaineis !== Math.ceil((activeCenario.potenciaInstalada * 1000) / Number(panel.potencia)) && (
                 <button
                   className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
-                  onClick={() => setNumPaineisStep5(Math.ceil((eff.potenciaInstalada * 1000) / Number(panel.potencia)))}
+                  onClick={() => {
+                    const suggested = Math.ceil((activeCenario.potenciaInstalada * 1000) / Number(panel.potencia));
+                    setNumPaineisStep5(suggested);
+                    setManual(current => current ? {
+                      ...current,
+                      numPaineis: suggested,
+                      potenciaWp: Number(panel.potencia),
+                    } : current);
+                    setManualMpptConfig(null);
+                  }}
                 >
-                  Repor sugestão ({Math.ceil((eff.potenciaInstalada * 1000) / Number(panel.potencia))} painéis)
+                  Repor sugestão ({Math.ceil((activeCenario.potenciaInstalada * 1000) / Number(panel.potencia))} painéis)
                 </button>
               )}
             </div>
@@ -2392,14 +2534,14 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
       })()}
 
       {/* —— STEP 7: Estudo de Poupança e Retorno ——————————————————————————————— */}
-      {step === 7 && activeCenario && (
+      {step === 7 && finalCenario && (
         <div className="space-y-4">
           {/* Upgrade savings comparison card */}
           {tipoProjeto !== "nova" && instalacaoExistente.producaoAnualkWh > 0 && (() => {
-            const producaoAdd = activeCenario.energiaAnualEstimada ??0;
+            const producaoAdd = finalCenario.energiaAnualEstimada ??0;
             const precoKwhUpg = consumoData.precoKwh ??0.18;
             const poupancaAdd = producaoAdd * precoKwhUpg;
-            const invest = investimentoManual ??activeCenario.investimentoEstimado;
+            const invest = investimentoManual ??finalCenario.investimentoEstimado;
             const payback = poupancaAdd > 0 && invest > 0 ?invest / poupancaAdd : null;
             return (
               <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/10">
@@ -2445,7 +2587,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
             );
           })()}
           <WizardStep7Financeiro
-            cenario={activeCenario}
+            cenario={finalCenario}
             precoKwh={consumoData.precoKwh ??0.18}
             consumoAnual={consumoData.consumoAnual}
             consumoDiurnoPct={perfilDiurnoPct}
@@ -2454,7 +2596,7 @@ const [spacingOrientation, setSpacingOrientation] = useState<"horizontal" | "ver
           />
         </div>
       )}
-      {step === 7 && !activeCenario && (
+      {step === 7 && !finalCenario && (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
             <p>Sem estudo de dimensionamento. Regresse ao passo 4 para calcular.</p>

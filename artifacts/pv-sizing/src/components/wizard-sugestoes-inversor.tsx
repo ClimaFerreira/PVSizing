@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
@@ -67,6 +67,7 @@ interface Props {
   inverters:            InverterItem[] | undefined;
   selectedInverterId:   number | undefined;
   inverterUnits:        InverterUnit[];
+  incluirBateria:       boolean;
   onSelectInverter:     (inverterId: number) => void;
   onSelectMultiInverter:(units: InverterUnit[]) => void;
 }
@@ -445,6 +446,7 @@ export default function WizardSugestoesInversor({
   inverters,
   selectedInverterId,
   inverterUnits,
+  incluirBateria,
   onSelectInverter,
   onSelectMultiInverter,
 }: Props) {
@@ -457,6 +459,16 @@ export default function WizardSugestoesInversor({
   });
 
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+
+  useEffect(() => {
+    setParams(prev => ({
+      ...prev,
+      bateria: incluirBateria ? "sim" : "nao",
+      tipoInversor: incluirBateria
+        ? (prev.tipoInversor === "sem-preferencia" ? "hibrido" : prev.tipoInversor)
+        : (prev.tipoInversor === "hibrido" ? "sem-preferencia" : prev.tipoInversor),
+    }));
+  }, [incluirBateria]);
 
   function setParam<K extends keyof InstalacaoParams>(k: K, v: InstalacaoParams[K]) {
     setParams(prev => ({ ...prev, [k]: v }));

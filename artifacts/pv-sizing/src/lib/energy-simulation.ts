@@ -1,213 +1,246 @@
-// ── energy-simulation.ts ─────────────────────────────────────────────────────
-// Central energy simulation module for SolarDim.
-// All hourly-profile calculations live here; imported by wizard and battery study.
+// Central hourly-profile energy simulation for SolarDim.
 
-// ── Solar production profile ──────────────────────────────────────────────────
-// Normalized bell-curve, 6h–20h, peak at 13h, σ = 3h (Portugal continental)
 export const SOLAR_FRACS: readonly number[] = (() => {
-  const raw = Array.from({ length: 24 }, (_, h) => {
-    if (h < 6 || h >= 20) return 0;
-    return Math.exp(-((h - 13) ** 2) / (2 * 3 * 3));
+  const raw = Array.from({ length: 24 }, (_, hour) => {
+    if (hour < 6 || hour >= 20) return 0;
+    return Math.exp(-((hour - 13) ** 2) / (2 * 3 * 3));
   });
-  const s = raw.reduce((a, b) => a + b, 0);
-  return raw.map(v => v / s);
+  const total = raw.reduce((sum, value) => sum + value, 0);
+  return raw.map(value => value / total);
 })();
 
-// ── Hourly consumption fractions ──────────────────────────────────────────────
-// Daytime: 7h–22h (15 h), night: 22h–7h (9 h)
 export function consumoFracs(perfilDiurnoPct: number): readonly number[] {
-  const d = Math.max(0, Math.min(100, perfilDiurnoPct)) / 100;
-  const n = 1 - d;
-  return Array.from({ length: 24 }, (_, h) =>
-    h >= 7 && h < 22 ? d / 15 : n / 9,
+  const daytime = Math.max(0, Math.min(100, perfilDiurnoPct)) / 100;
+  const night = 1 - daytime;
+  return Array.from({ length: 24 }, (_, hour) =>
+    hour >= 7 && hour < 22 ? daytime / 15 : night / 9,
   );
 }
 
-// ── Tariff period hour map (Portugal bi/tri-horário, integer hour buckets) ────
-// Vazio: 22–7 (10h, mostly night)
-// Ponta: 10–11 + 19–21 (5h, peak morning + evening)
-// Cheio: 8–9 + 12–18 (9h, intermediate)
 export type Periodo = "vazio" | "cheio" | "ponta";
+
 export const TARIFF_HOURS: readonly Periodo[] = (() => {
-  const arr: Periodo[] = Array(24).fill("cheio");
-  for (const h of [22, 23, 0, 1, 2, 3, 4, 5, 6, 7]) arr[h] = "vazio";
-  for (const h of [10, 11, 19, 20, 21]) arr[h] = "ponta";
-  return arr;
+  const periods: Periodo[] = Array(24).fill("cheio");
+  for (const hour of [22, 23, 0, 1, 2, 3, 4, 5, 6, 7]) periods[hour] = "vazio";
+  for (const hour of [10, 11, 19, 20, 21]) periods[hour] = "ponta";
+  return periods;
 })();
 
-/** Build 24-h consumption fraction distribution from tariff period %s. */
 export function tariffHourlyProfile(
   percVazio: number,
   percCheio: number,
   percPonta: number,
 ): readonly number[] {
   const total = Math.max(1, percVazio + percCheio + percPonta);
-  const hoursByPer: Record<Periodo, number[]> = { vazio: [], cheio: [], ponta: [] };
-  TARIFF_HOURS.forEach((p, h) => hoursByPer[p].push(h));
-  const pcts: Record<Periodo, number> = {
+  const hoursByPeriod: Record<Periodo, number[]> = { vazio: [], cheio: [], ponta: [] };
+  TARIFF_HOURS.forEach((period, hour) => hoursByPeriod[period].push(hour));
+  const percentages: Record<Periodo, number> = {
     vazio: percVazio / total,
     cheio: percCheio / total,
     ponta: percPonta / total,
   };
-  const fracs = new Array<number>(24).fill(0);
-  (["vazio", "cheio", "ponta"] as Periodo[]).forEach(p => {
-    const hrs = hoursByPer[p];
-    if (!hrs.length) return;
-    const per = pcts[p] / hrs.length;
-    for (const h of hrs) fracs[h] = per;
+  const fractions = new Array<number>(24).fill(0);
+  (["vazio", "cheio", "ponta"] as Periodo[]).forEach(period => {
+    const hours = hoursByPeriod[period];
+    const value = percentages[period] / hours.length;
+    for (const hour of hours) fractions[hour] = value;
   });
-  return fracs;
+  return fractions;
 }
 
-/** Derive day (7–22) vs night (22–7) split from tariff distribution. */
 export function dayNightFromTariff(
   percVazio: number,
   percCheio: number,
   percPonta: number,
 ): { diurnoPct: number; noturnoPct: number } {
-  const fr = tariffHourlyProfile(percVazio, percCheio, percPonta);
-  let day = 0;
-  for (let h = 0; h < 24; h++) if (h >= 7 && h < 22) day += fr[h];
-  const diurnoPct = Math.round(day * 100);
+  const fractions = tariffHourlyProfile(percVazio, percCheio, percPonta);
+  let daytime = 0;
+  for (let hour = 7; hour < 22; hour++) daytime += fractions[hour];
+  const diurnoPct = Math.round(daytime * 100);
   return { diurnoPct, noturnoPct: 100 - diurnoPct };
-}
-
-// ── Monthly simulation ────────────────────────────────────────────────────────
-
-export interface MesSimResult {
-  producaoDia:    number;
-  consumoDia:     number;
-  autoconsumo:    number;   // kWh/dia directly consumed from solar
-  excedente:      number;   // kWh/dia solar surplus (exported without battery)
-  importacao:     number;   // kWh/dia imported from grid
-  autoconsumoMes: number;   // autoconsumo × dias (rounded)
-  excessoMes:     number;   // excedente × dias (rounded)
 }
 
 export const DIAS_MES = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
 
-/**
- * Simulate one month using hourly profiles.
- * Returns daily and monthly autoconsumo / excedente.
- */
+export interface BatterySimulationConfig {
+  capacidadeKwh: number;
+  dodPct?: number;
+  eficienciaRoundTripPct?: number;
+  potenciaCargaMaxKw?: number | null;
+  potenciaDescargaMaxKw?: number | null;
+}
+
+export interface MesSimResult {
+  producaoDia: number;
+  consumoDia: number;
+  autoconsumo: number;
+  excedente: number;
+  importacao: number;
+  autoconsumoMes: number;
+  excessoMes: number;
+  importacaoMes: number;
+  bateriaEntregueMes: number;
+}
+
+function normalizeBatteryConfig(battery: number | BatterySimulationConfig) {
+  const config = typeof battery === "number"
+    ? { capacidadeKwh: battery }
+    : battery;
+  return {
+    capacidadeKwh: Math.max(0, config.capacidadeKwh),
+    dodPct: Math.max(0, Math.min(100, config.dodPct ?? 80)),
+    eficienciaRoundTripPct: Math.max(1, Math.min(100, config.eficienciaRoundTripPct ?? 90)),
+    potenciaCargaMaxKw: Math.max(0, config.potenciaCargaMaxKw ?? Number.POSITIVE_INFINITY),
+    potenciaDescargaMaxKw: Math.max(0, config.potenciaDescargaMaxKw ?? Number.POSITIVE_INFINITY),
+  };
+}
+
 export function simulateMes(
-  producaoMes:     number,
-  consumoMes:      number,
+  producaoMes: number,
+  consumoMes: number,
   perfilDiurnoPct: number,
-  m:               number, // month index 0-11
-  bateriaKwh = 0,
+  monthIndex: number,
+  battery: number | BatterySimulationConfig = 0,
 ): MesSimResult {
-  const dias       = DIAS_MES[m];
-  const producaoDia = producaoMes / dias;
-  const consumoDia  = consumoMes  / dias;
-  const cFracs      = consumoFracs(perfilDiurnoPct);
-  const bateriaUtilKwh = Math.max(0, bateriaKwh) * 0.8;
-  const eficienciaBateria = 0.9;
+  const days = DIAS_MES[monthIndex];
+  const producaoDia = producaoMes / days;
+  const consumoDia = consumoMes / days;
+  const consumptionFractions = consumoFracs(perfilDiurnoPct);
+  const batteryConfig = normalizeBatteryConfig(battery);
+  const usableCapacity = batteryConfig.capacidadeKwh * (batteryConfig.dodPct / 100);
+  const roundTripEfficiency = batteryConfig.eficienciaRoundTripPct / 100;
+  const chargeEfficiency = Math.sqrt(roundTripEfficiency);
+  const dischargeEfficiency = Math.sqrt(roundTripEfficiency);
 
-  const solar   = SOLAR_FRACS.map(f => f * producaoDia);
-  const consumo = cFracs.map(f => f * consumoDia);
+  const solar = SOLAR_FRACS.map(fraction => fraction * producaoDia);
+  const consumption = consumptionFractions.map(fraction => fraction * consumoDia);
 
-  let autoconsumo = 0;
-  let excedente   = 0;
-  let importacao  = 0;
-  let cargaBateria = 0;
+  let selfConsumed = 0;
+  let exported = 0;
+  let imported = 0;
+  let storedEnergy = 0;
+  let batteryDelivered = 0;
 
-  for (let h = 0; h < 24; h++) {
-    const direto = Math.min(solar[h], consumo[h]);
-    let sobraSolar = Math.max(0, solar[h] - consumo[h]);
-    let faltaConsumo = Math.max(0, consumo[h] - solar[h]);
+  for (let hour = 0; hour < 24; hour++) {
+    const direct = Math.min(solar[hour], consumption[hour]);
+    let surplus = Math.max(0, solar[hour] - consumption[hour]);
+    let deficit = Math.max(0, consumption[hour] - solar[hour]);
+    selfConsumed += direct;
 
-    autoconsumo += direto;
-
-    if (bateriaUtilKwh > 0 && sobraSolar > 0) {
-      const cargaPossivel = Math.min(bateriaUtilKwh - cargaBateria, sobraSolar * eficienciaBateria);
-      if (cargaPossivel > 0) {
-        cargaBateria += cargaPossivel;
-        sobraSolar -= cargaPossivel / eficienciaBateria;
+    if (usableCapacity > 0 && surplus > 0) {
+      const energyInput = Math.min(
+        surplus,
+        batteryConfig.potenciaCargaMaxKw,
+        (usableCapacity - storedEnergy) / chargeEfficiency,
+      );
+      if (energyInput > 0) {
+        storedEnergy += energyInput * chargeEfficiency;
+        surplus -= energyInput;
       }
     }
 
-    if (bateriaUtilKwh > 0 && faltaConsumo > 0) {
-      const descarga = Math.min(cargaBateria, faltaConsumo);
-      cargaBateria -= descarga;
-      faltaConsumo -= descarga;
-      autoconsumo += descarga;
+    if (usableCapacity > 0 && deficit > 0) {
+      const delivered = Math.min(
+        deficit,
+        batteryConfig.potenciaDescargaMaxKw,
+        storedEnergy * dischargeEfficiency,
+      );
+      storedEnergy -= delivered / dischargeEfficiency;
+      deficit -= delivered;
+      selfConsumed += delivered;
+      batteryDelivered += delivered;
     }
 
-    excedente += Math.max(0, sobraSolar);
-    importacao += Math.max(0, faltaConsumo);
+    exported += surplus;
+    imported += deficit;
   }
 
   return {
     producaoDia,
     consumoDia,
-    autoconsumo,
-    excedente,
-    importacao,
-    autoconsumoMes: Math.round(autoconsumo * dias),
-    excessoMes:     Math.round(excedente   * dias),
+    autoconsumo: selfConsumed,
+    excedente: exported,
+    importacao: imported,
+    autoconsumoMes: Math.round(selfConsumed * days),
+    excessoMes: Math.round(exported * days),
+    importacaoMes: Math.round(imported * days),
+    bateriaEntregueMes: Math.round(batteryDelivered * days),
   };
 }
 
-// ── Annual simulation ─────────────────────────────────────────────────────────
-
 export interface AnualSimResult {
   autoconsumoMensal: number[];
-  excessoMensal:     number[];
-  autoconsumoAnual:  number;
-  excessoAnual:      number;
-  autoconsumoPerc:   number; // % of annual production that is self-consumed
+  excessoMensal: number[];
+  importacaoMensal: number[];
+  bateriaEntregueMensal: number[];
+  autoconsumoAnual: number;
+  excessoAnual: number;
+  importacaoAnual: number;
+  bateriaEntregueAnual: number;
+  autoconsumoPerc: number;
 }
 
-/**
- * Simulate a full year (12 months) using hourly profiles.
- */
 export function simulateAnual(
-  producaoMensal:  number[],
-  consumoMensal:   number[],
+  producaoMensal: number[],
+  consumoMensal: number[],
   perfilDiurnoPct: number,
-  bateriaKwh = 0,
+  battery: number | BatterySimulationConfig = 0,
 ): AnualSimResult {
   const autoconsumoMensal: number[] = [];
-  const excessoMensal:     number[] = [];
+  const excessoMensal: number[] = [];
+  const importacaoMensal: number[] = [];
+  const bateriaEntregueMensal: number[] = [];
 
-  for (let m = 0; m < 12; m++) {
-    const r = simulateMes(
-      producaoMensal[m] ?? 0,
-      consumoMensal[m]  ?? 0,
+  for (let month = 0; month < 12; month++) {
+    const result = simulateMes(
+      producaoMensal[month] ?? 0,
+      consumoMensal[month] ?? 0,
       perfilDiurnoPct,
-      m,
-      bateriaKwh,
+      month,
+      battery,
     );
-    autoconsumoMensal.push(r.autoconsumoMes);
-    excessoMensal.push(r.excessoMes);
+    autoconsumoMensal.push(result.autoconsumoMes);
+    excessoMensal.push(result.excessoMes);
+    importacaoMensal.push(result.importacaoMes);
+    bateriaEntregueMensal.push(result.bateriaEntregueMes);
   }
 
-  const autoconsumoAnual = autoconsumoMensal.reduce((a, b) => a + b, 0);
-  const excessoAnual     = excessoMensal.reduce((a, b) => a + b, 0);
-  const producaoAnual    = producaoMensal.reduce((a, b) => a + b, 0);
-  const autoconsumoPerc  = producaoAnual > 0
+  const autoconsumoAnual = autoconsumoMensal.reduce((sum, value) => sum + value, 0);
+  const excessoAnual = excessoMensal.reduce((sum, value) => sum + value, 0);
+  const importacaoAnual = importacaoMensal.reduce((sum, value) => sum + value, 0);
+  const bateriaEntregueAnual = bateriaEntregueMensal.reduce((sum, value) => sum + value, 0);
+  const producaoAnual = producaoMensal.reduce((sum, value) => sum + value, 0);
+  const autoconsumoPerc = producaoAnual > 0
     ? Math.round((autoconsumoAnual / producaoAnual) * 100)
     : 0;
 
-  return { autoconsumoMensal, excessoMensal, autoconsumoAnual, excessoAnual, autoconsumoPerc };
+  return {
+    autoconsumoMensal,
+    excessoMensal,
+    importacaoMensal,
+    bateriaEntregueMensal,
+    autoconsumoAnual,
+    excessoAnual,
+    importacaoAnual,
+    bateriaEntregueAnual,
+    autoconsumoPerc,
+  };
 }
-// ── Confidence score ──────────────────────────────────────────────────────────
 
 export interface ConfidenceScore {
   pontuacao: number;
   nivel: "alto" | "medio" | "baixo";
   fontes: {
-    pvgis:            boolean;
-    consumoMensal:    boolean;
+    pvgis: boolean;
+    consumoMensal: boolean;
     mesesDisponiveis: number;
   };
   avisos: string[];
 }
 
 export function calcConfidenceScore(opts: {
-  pvgis:              boolean;
-  mesesConsumoDados:  number; // how many months of real invoice data
+  pvgis: boolean;
+  mesesConsumoDados: number;
 }): ConfidenceScore {
   const { pvgis, mesesConsumoDados } = opts;
   const avisos: string[] = [];
@@ -216,21 +249,21 @@ export function calcConfidenceScore(opts: {
   if (pvgis) {
     pontuacao += 40;
   } else {
-    avisos.push("Produção estimada por HSP médio local (PVGIS indisponível).");
+    avisos.push("Producao estimada por HSP medio local (PVGIS indisponivel).");
   }
 
   if (mesesConsumoDados >= 12) {
     pontuacao += 40;
   } else if (mesesConsumoDados >= 3) {
     pontuacao += 20;
-    avisos.push(`Perfil baseado em ${mesesConsumoDados} meses de fatura — sazonalidade parcial.`);
+    avisos.push(`Perfil baseado em ${mesesConsumoDados} meses de fatura - sazonalidade parcial.`);
   } else {
     pontuacao += 5;
-    avisos.push("Consumo mensal uniforme assumido. Carregue faturas para maior precisão.");
+    avisos.push("Consumo mensal uniforme assumido. Carregue faturas para maior precisao.");
   }
 
   if (!pvgis && mesesConsumoDados < 3) {
-    avisos.push("Estimativa baseada em dados incompletos — resultados indicativos.");
+    avisos.push("Estimativa baseada em dados incompletos - resultados indicativos.");
   }
 
   const nivel: ConfidenceScore["nivel"] =
@@ -243,7 +276,7 @@ export function calcConfidenceScore(opts: {
     nivel,
     fontes: {
       pvgis,
-      consumoMensal:    mesesConsumoDados >= 3,
+      consumoMensal: mesesConsumoDados >= 3,
       mesesDisponiveis: mesesConsumoDados,
     },
     avisos,

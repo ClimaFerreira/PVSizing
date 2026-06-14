@@ -144,6 +144,7 @@ interface TechSummaryTableProps {
     mpptMin: number;
     mpptMax: number;
     corrMaxMppt: number;
+    correnteCurtoCircuitoMppt?: number | null;
     numMppt: number;
     stringsPorMppt: number;
   };
@@ -157,7 +158,8 @@ function TechSummaryTable({ sizing, invElec, panelIsc, battery }: TechSummaryTab
   const activeMppts      = config.mpptConfig.filter(s => s.length > 0).length;
   const maxStringsInMppt = config.mpptConfig.reduce((mx, s) => Math.max(mx, s.length), 0);
   const maxIscPerMppt    = maxStringsInMppt * panelIsc;
-  const iscLimitTol      = currentLimitWithTolerance(invElec.corrMaxMppt);
+  const iscLimit         = invElec.correnteCurtoCircuitoMppt || invElec.corrMaxMppt;
+  const iscLimitTol      = currentLimitWithTolerance(iscLimit);
   const potenciaDCKwp    = config.potenciaDCTotal / 1000;
   const dcExcedeMax      = invElec.potenciaDcMax > 0 && potenciaDCKwp > invElec.potenciaDcMax * 1.05;
   const allPanelCounts   = config.mpptConfig.flat().filter(v => v > 0);
@@ -244,10 +246,10 @@ function TechSummaryTable({ sizing, invElec, panelIsc, battery }: TechSummaryTab
         ? `${maxStringsInMppt} strings em paralelo × ${panelIsc.toFixed(2)} A`
         : `${panelIsc.toFixed(2)} A por string`,
       obtido: `${maxIscPerMppt.toFixed(2)} A`,
-      limite: `≤ ${invElec.corrMaxMppt} A`,
+      limite: `≤ ${iscLimit} A (Isc máx.)`,
       status: maxIscPerMppt > iscLimitTol
         ? "erro"
-        : maxIscPerMppt > invElec.corrMaxMppt * 0.9
+        : maxIscPerMppt > iscLimit * 0.9
           ? "aviso"
           : "ok",
     },
@@ -329,26 +331,33 @@ interface StringSizingCardProps {
   maxStringsPorMppt: number;
   maxPaineisPorString: number;
   panelElec: { voc: number; vmp: number; isc: number; imp: number; potencia: number; coeficienteTemperaturaVoc: number | null; noct: number | null };
-  invElec: { mpptMin: number; mpptMax: number; corrMaxMppt: number; numMppt: number; stringsPorMppt: number; potenciaAc: number; potenciaDcMax: number; vdcMax: number | null };
+  invElec: { mpptMin: number; mpptMax: number; corrMaxMppt: number; correnteCurtoCircuitoMppt?: number | null; numMppt: number; stringsPorMppt: number; potenciaAc: number; potenciaDcMax: number; vdcMax: number | null };
   numPaineisAuto: number;
+  savedConfig?: MpptConfig | null;
   onConfigChange?: (mpptConfig: MpptConfig) => void;
 }
 
 function StringSizingCard({
   autoResult, numMppt, maxStringsPorMppt, maxPaineisPorString,
-  panelElec, invElec, numPaineisAuto, onConfigChange,
+  panelElec, invElec, numPaineisAuto, savedConfig, onConfigChange,
 }: StringSizingCardProps) {
   const [editMode, setEditMode] = useState(false);
-  const [mpptConfigEdit, setMpptConfigEdit] = useState<MpptConfig>(() => autoResult.config.mpptConfig);
+  const [hasManualEdit, setHasManualEdit] = useState(Boolean(savedConfig));
+  const [mpptConfigEdit, setMpptConfigEdit] = useState<MpptConfig>(() => savedConfig ?? autoResult.config.mpptConfig);
 
   useEffect(() => {
-    if (!editMode) setMpptConfigEdit(autoResult.config.mpptConfig);
-  }, [autoResult, editMode]);
+    if (savedConfig) {
+      setMpptConfigEdit(savedConfig);
+      setHasManualEdit(true);
+    } else if (!hasManualEdit) {
+      setMpptConfigEdit(autoResult.config.mpptConfig);
+    }
+  }, [autoResult, hasManualEdit, savedConfig]);
 
   const result = useMemo<StringSizingResult>(() => {
-    if (!editMode) return autoResult;
+    if (!hasManualEdit) return autoResult;
     return calcStringSizingManual(panelElec, invElec, mpptConfigEdit, numPaineisAuto);
-  }, [editMode, autoResult, panelElec, invElec, mpptConfigEdit, numPaineisAuto]);
+  }, [hasManualEdit, autoResult, panelElec, invElec, mpptConfigEdit, numPaineisAuto]);
 
   const { config, alertas, tMinPortugal, tMaxCelula, vdcMaxUsado } = result;
   const erros = alertas.filter(a => a.tipo === "erro");
@@ -356,11 +365,13 @@ function StringSizingCard({
   const ok = alertas.filter(a => a.tipo === "ok");
 
   const updateConfig = useCallback((next: MpptConfig) => {
+    setHasManualEdit(true);
     setMpptConfigEdit(next);
     onConfigChange?.(next);
   }, [onConfigChange]);
 
   function handleResetAuto() {
+    setHasManualEdit(false);
     setMpptConfigEdit(autoResult.config.mpptConfig);
     setEditMode(false);
     onConfigChange?.(autoResult.config.mpptConfig);
@@ -433,7 +444,7 @@ function StringSizingCard({
               variant={editMode ? "default" : "outline"}
               size="sm"
               className="text-xs gap-1"
-              onClick={() => { if (editMode) { handleResetAuto(); } else { setEditMode(true); } }}
+              onClick={() => setEditMode(value => !value)}
             >
               <Pencil size={12} />
               {editMode ? "Fechar edição" : "Editar config."}
@@ -906,6 +917,7 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
     mpptMin: Number(inverter.mpptMin),
     mpptMax: Number(inverter.mpptMax),
     corrMaxMppt: Number(inverter.corrMaxMppt),
+    correnteCurtoCircuitoMppt: inverter.correnteCurtoCircuitoMppt != null ? Number(inverter.correnteCurtoCircuitoMppt) : null,
     numMppt: inverter.numMppt,
     stringsPorMppt: inverter.stringsPorMppt,
     potenciaAc:    normalizarKW(Number(inverter.potenciaAc)),
@@ -952,7 +964,7 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
     if (!panel || !inverter || !panelElec || !invElec) return null;
     return checkPanelInverter(
       { potencia: panelElec.potencia, voc: panelElec.voc, vmp: panelElec.vmp, isc: panelElec.isc, imp: panelElec.imp },
-      { potenciaAc: invElec.potenciaAc, potenciaDcMax: invElec.potenciaDcMax, mpptMin: invElec.mpptMin, mpptMax: invElec.mpptMax, corrMaxMppt: invElec.corrMaxMppt, numMppt: invElec.numMppt, stringsPorMppt: invElec.stringsPorMppt, vdcMax: invElec.vdcMax },
+      { potenciaAc: invElec.potenciaAc, potenciaDcMax: invElec.potenciaDcMax, mpptMin: invElec.mpptMin, mpptMax: invElec.mpptMax, corrMaxMppt: invElec.corrMaxMppt, correnteCurtoCircuitoMppt: invElec.correnteCurtoCircuitoMppt, numMppt: invElec.numMppt, stringsPorMppt: invElec.stringsPorMppt, vdcMax: invElec.vdcMax },
       numPaineis
     );
   }, [panel, inverter, panelElec, invElec, numPaineis]);
@@ -961,7 +973,7 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
     if (!battery || !inverter || !invElec) return null;
     return checkBatteryInverter(
       { capacidade: Number(battery.capacidade), tensao: Number(battery.tensao), tecnologia: battery.tecnologia ?? null },
-      { potenciaAc: invElec.potenciaAc, potenciaDcMax: invElec.potenciaDcMax, mpptMin: invElec.mpptMin, mpptMax: invElec.mpptMax, corrMaxMppt: invElec.corrMaxMppt, numMppt: invElec.numMppt, stringsPorMppt: invElec.stringsPorMppt, vdcMax: invElec.vdcMax }
+      { potenciaAc: invElec.potenciaAc, potenciaDcMax: invElec.potenciaDcMax, mpptMin: invElec.mpptMin, mpptMax: invElec.mpptMax, corrMaxMppt: invElec.corrMaxMppt, correnteCurtoCircuitoMppt: invElec.correnteCurtoCircuitoMppt, numMppt: invElec.numMppt, stringsPorMppt: invElec.stringsPorMppt, vdcMax: invElec.vdcMax }
     );
   }, [battery, inverter, invElec]);
 
@@ -1096,6 +1108,7 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
                 mpptMin:       invElec.mpptMin,
                 mpptMax:       invElec.mpptMax,
                 corrMaxMppt:   invElec.corrMaxMppt,
+                correnteCurtoCircuitoMppt: invElec.correnteCurtoCircuitoMppt,
                 numMppt:       invElec.numMppt,
                 stringsPorMppt: invElec.stringsPorMppt,
               }}
@@ -1116,6 +1129,7 @@ function WizardStep5Tecnica({ panel, inverter, battery, numPaineis, potenciaInst
               panelElec={panelElec}
               invElec={invElec}
               numPaineisAuto={numPaineis}
+              savedConfig={localEditedConfig ?? manualMpptConfig}
               onConfigChange={(mpptConfig) => {
                 // Update local state immediately → diagram reacts in same render
                 setLocalEditedConfig(mpptConfig);

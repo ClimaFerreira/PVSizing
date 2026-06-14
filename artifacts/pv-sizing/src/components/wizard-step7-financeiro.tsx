@@ -11,6 +11,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { calculateFinancialStudy } from "@/lib/financial-calculation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AutoSizeCenario {
@@ -108,7 +109,7 @@ function WizardStep7Financeiro({
   investimento, onInvestimentoChange,
 }: Props) {
   const {
-    investimentoEstimado, poupancaAnual, autoconsumoAnual,
+    investimentoEstimado, autoconsumoAnual,
     excessoAnual, autoconsumoPerc, energiaAnualEstimada, potenciaInstalada,
   } = cenario;
 
@@ -137,39 +138,38 @@ function WizardStep7Financeiro({
 
   // ── Derived year-0 values ──────────────────────────────────────────────────
   // Recalculate poupança using current precoKwh (may differ from what auto-size used)
-  const poupancaAnualBase  = autoconsumoAnual * precoKwh;
-  const receitaExcedente   = excessoAnual * precoInjecao;
-  const poupancaTotal      = poupancaAnualBase + receitaExcedente;
+  const financial = useMemo(() => calculateFinancialStudy({
+    investimento: investimentoEdit,
+    autoconsumoAnualKwh: autoconsumoAnual,
+    excedenteAnualKwh: excessoAnual,
+    precoKwh,
+    precoInjecao,
+    taxaEscaladaPct: taxaEscalada,
+    taxaDegradacaoPct: taxaDegradacao,
+    taxaDescontoPct: TAXA_DESCONTO * 100,
+    anos: ANOS_VIDA,
+  }), [
+    investimentoEdit, autoconsumoAnual, excessoAnual, precoKwh,
+    precoInjecao, taxaEscalada, taxaDegradacao,
+  ]);
+  const poupancaAnualBase  = financial.poupancaEnergiaAno1;
+  const receitaExcedente   = financial.receitaExcedenteAno1;
+  const poupancaTotal      = financial.poupancaTotalAno1;
   const custoAtual         = consumoAnual * precoKwh;
   const custoApos          = Math.max(0, custoAtual - poupancaAnualBase);
   const reducaoFatura      = consumoAnual > 0 ? Math.round((poupancaAnualBase / custoAtual) * 100) : 0;
   const co2Anual           = Math.round(autoconsumoAnual * 0.253 / 100) / 10; // tonnes
 
   // ── 25-year projection ─────────────────────────────────────────────────────
-  const projecao = useMemo(() => {
-    const rows: { ano: number; poupanca: number; poupancaAcum: number; npvAcum: number }[] = [];
-    let poupancaAcum = -investimentoEdit;
-    let npvAcum      = -investimentoEdit;
-    const d = taxaDegradacao / 100;
-    const e = taxaEscalada  / 100;
-    for (let ano = 1; ano <= ANOS_VIDA; ano++) {
-      const degradFactor = Math.pow(1 - d, ano - 1);
-      const escalFactor  = Math.pow(1 + e, ano - 1);
-      const poupAno      = poupancaAnualBase * degradFactor * escalFactor;
-      const recAno       = receitaExcedente  * degradFactor * escalFactor;
-      const fluxo        = poupAno + recAno;
-      poupancaAcum      += fluxo;
-      npvAcum           += fluxo / Math.pow(1 + TAXA_DESCONTO, ano);
-      rows.push({ ano, poupanca: Math.round(fluxo), poupancaAcum: Math.round(poupancaAcum), npvAcum: Math.round(npvAcum) });
-    }
-    return rows;
-  }, [investimentoEdit, poupancaAnualBase, receitaExcedente, taxaDegradacao, taxaEscalada]);
+  const projecao = financial.projecao;
 
   const p10       = projecao.find(r => r.ano === 10)?.poupancaAcum ?? 0;
   const p15       = projecao.find(r => r.ano === 15)?.poupancaAcum ?? 0;
   const p25       = projecao[ANOS_VIDA - 1]?.poupancaAcum ?? 0;
-  const npv25     = projecao[ANOS_VIDA - 1]?.npvAcum ?? 0;
-  const paybackReal = (projecao.findIndex(r => r.poupancaAcum >= 0) + 1) || 0;
+  const npv25     = financial.npvFinal;
+  const paybackSimples = financial.paybackSimplesAnos ?? 0;
+  const paybackDinamico = financial.paybackDinamicoAnos ?? 0;
+  const paybackDescontado = financial.paybackDescontadoAnos ?? 0;
   const irr       = p25 > 0 && investimentoEdit > 0
     ? Math.pow((investimentoEdit + p25) / investimentoEdit, 1 / ANOS_VIDA) - 1
     : 0;
@@ -258,7 +258,7 @@ function WizardStep7Financeiro({
           </div>
         </div>
         <KPI icon={TrendingUp} label="Poupança anual (ano 1)"  value={fmtEur(poupancaTotal)}              sub="energia + injeção"            highlight />
-        <KPI icon={Clock}      label="Payback simples"          value={paybackReal > 0 ? `${paybackReal} anos` : `> ${ANOS_VIDA} anos`} sub="com inflação energética" highlight />
+        <KPI icon={Clock} label="Payback simples" value={paybackSimples > 0 ? `${paybackSimples} anos` : `> ${ANOS_VIDA} anos`} sub="investimento / poupança do ano 1" highlight />
         <KPI icon={BarChart3}  label="Poupança a 25 anos"       value={fmtEur(p25)}                        sub="valor nominal acumulado" />
       </div>
 
@@ -378,9 +378,9 @@ function WizardStep7Financeiro({
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 bg-muted/30 rounded-lg text-center">
-              <p className="text-xs text-muted-foreground">Payback simples</p>
+              <p className="text-xs text-muted-foreground">Payback dinâmico</p>
               <p className="text-lg font-bold">
-                {paybackReal > 0 ? `${paybackReal} anos` : `> ${ANOS_VIDA} anos`}
+                {paybackDinamico > 0 ? `${paybackDinamico} anos` : `> ${ANOS_VIDA} anos`}
               </p>
             </div>
             <div className="p-3 bg-muted/30 rounded-lg text-center">
@@ -394,8 +394,10 @@ function WizardStep7Financeiro({
               <p className="text-lg font-bold">{(irr * 100).toFixed(1)}%</p>
             </div>
             <div className="p-3 bg-muted/30 rounded-lg text-center">
-              <p className="text-xs text-muted-foreground">Redução da fatura</p>
-              <p className="text-lg font-bold text-primary">−{reducaoFatura}%</p>
+              <p className="text-xs text-muted-foreground">Payback descontado</p>
+              <p className="text-lg font-bold text-primary">
+                {paybackDescontado > 0 ? `${paybackDescontado} anos` : `> ${ANOS_VIDA} anos`}
+              </p>
             </div>
           </div>
 

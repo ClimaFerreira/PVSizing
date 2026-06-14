@@ -391,7 +391,10 @@ function buildCenario(p: CenarioParams) {
       ? Math.round(p.capacidadeBateriaBase * p.custoBateria)
       : 0;
   const investimentoEstimado = investPV + investBat;
-  const poupancaAnual = Math.round(autoconsumoAnual * p.precoKwh * 100) / 100;
+  const precoInjecao = 0.06;
+  const poupancaEnergiaAnual = autoconsumoAnual * p.precoKwh;
+  const receitaExcedenteAnual = excessoAnual * precoInjecao;
+  const poupancaAnual = Math.round((poupancaEnergiaAnual + receitaExcedenteAnual) * 100) / 100;
   const paybackAnos =
     poupancaAnual > 0
       ? Math.round((investimentoEstimado / poupancaAnual) * 10) / 10
@@ -429,6 +432,8 @@ function buildCenario(p: CenarioParams) {
     autoconsumoPerc,
     investimentoEstimado,
     poupancaAnual,
+    poupancaEnergiaAnual: Math.round(poupancaEnergiaAnual * 100) / 100,
+    receitaExcedenteAnual: Math.round(receitaExcedenteAnual * 100) / 100,
     paybackAnos,
     capacidadeBateriaRecomendada: p.incluirBateria ? p.capacidadeBateriaBase : null,
     fonteProducao,

@@ -32,6 +32,7 @@ export interface InverterCompat {
   mpptMin: number;
   mpptMax: number;
   corrMaxMppt: number;
+  correnteCurtoCircuitoMppt?: number | null;
   numMppt: number;
   stringsPorMppt: number;
   vdcMax: number | null;
@@ -98,6 +99,7 @@ export function checkPanelInverter(
   const potenciaDC = numPaineis * panel.potencia;
   const dcAcRatio = potenciaDC / (inv.potenciaAc * 1000);
   const iscString = panel.isc;
+  const iscLimit = inv.correnteCurtoCircuitoMppt || inv.corrMaxMppt;
   const potenciaDCKwp = potenciaDC / 1000;
   const dcExcedeMax = inv.potenciaDcMax > 0 && potenciaDCKwp > inv.potenciaDcMax * 1.05;
 
@@ -136,11 +138,19 @@ export function checkPanelInverter(
   });
 
   itens.push({
-    categoria: "Corrente MPPT",
-    descricao: "Isc por string vs. corrente máxima MPPT",
-    valorObtido: `${iscString.toFixed(1)} A`,
+    categoria: "Corrente operacional MPPT",
+    descricao: "Imp por string vs. corrente máxima de entrada",
+    valorObtido: `${panel.imp.toFixed(1)} A`,
     valorLimite: `${inv.corrMaxMppt} A`,
-    status: iscString > currentLimitWithTolerance(inv.corrMaxMppt) ?"erro" : iscString > inv.corrMaxMppt * 0.9 ?"aviso" : "ok",
+    status: panel.imp > currentLimitWithTolerance(inv.corrMaxMppt) ?"erro" : panel.imp > inv.corrMaxMppt * 0.9 ?"aviso" : "ok",
+  });
+
+  itens.push({
+    categoria: "Corrente Isc MPPT",
+    descricao: "Isc por string vs. limite de curto-circuito",
+    valorObtido: `${iscString.toFixed(1)} A`,
+    valorLimite: `${iscLimit} A`,
+    status: iscString > currentLimitWithTolerance(iscLimit) ?"erro" : iscString > iscLimit * 0.9 ?"aviso" : "ok",
   });
 
   itens.push({

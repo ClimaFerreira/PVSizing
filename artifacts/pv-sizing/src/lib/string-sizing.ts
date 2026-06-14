@@ -1,12 +1,8 @@
 /**
  * String sizing and electrical validation for PV systems.
- * Temperatures in °C, voltages in V, currents in A.
+ * Temperatures are in C, voltages in V, currents in A.
  *
- * MpptConfig: per-MPPT, per-string panel counts.
- *   mpptConfig[mpptIdx][stringIdx] = numPaineis
- *
- * KEY INVARIANT: calcStringSizing NEVER changes numPaineis.
- * It finds the best electrical configuration for EXACTLY the given panel count.
+ * KEY INVARIANT: automatic sizing never changes the requested panel count.
  */
 
 export type MpptConfig = number[][];
@@ -27,23 +23,25 @@ export interface InverterElec {
   corrMaxMppt: number;
   numMppt: number;
   stringsPorMppt: number;
-  potenciaAc: number;    // rated AC output power in kW
-  potenciaDcMax: number; // max DC input power in kW
+  potenciaAc: number;
+  potenciaDcMax: number;
   vdcMax: number | null;
+  correnteCurtoCircuitoMppt?: number | null;
 }
 
 export interface StringConfig {
   mpptConfig: MpptConfig;
-  paineisPerString: number;    // dominant value (uniform) or max if mixed
+  paineisPerString: number;
   numStrings: number;
   stringsPorMppt: number[];
   totalPaineis: number;
-  isMixed: boolean;            // any MPPT has strings with different panel counts
-  vocFrio: number;             // worst-case (max panels any string) Voc at T_MIN_PT
-  vmpQuente: number;           // worst-case (min panels any active string) Vmpp at T_MAX
-  vocSTC: number;              // max string Voc at STC
-  vmpSTC: number;              // max string Vmp at STC
-  iscString: number;           // Isc per string (same panel model for all)
+  isMixed: boolean;
+  vocFrio: number;
+  vmpQuente: number;
+  vocSTC: number;
+  vmpSTC: number;
+  iscString: number;
+  impString: number;
   dcAcRatio: number;
   potenciaDCTotal: number;
 }
@@ -54,10 +52,10 @@ export interface StringAlert {
 }
 
 export interface SemSolucaoInfo {
-  abaixo:    number;  // closest panel count below target that works (0 = none found)
-  acima:     number;  // closest panel count above target that works (0 = none found)
-  minPerStr: number;  // electrical min panels per string
-  maxPerStr: number;  // electrical max panels per string
+  abaixo: number;
+  acima: number;
+  minPerStr: number;
+  maxPerStr: number;
 }
 
 export interface StringSizingResult {
@@ -66,483 +64,317 @@ export interface StringSizingResult {
   tMinPortugal: number;
   tMaxCelula: number;
   vdcMaxUsado: number;
-  semSolucao: boolean;         // true when no valid config found for the given numPaineis
-  sugestoes?: SemSolucaoInfo;  // only present when semSolucao=true
+  semSolucao: boolean;
+  sugestoes?: SemSolucaoInfo;
 }
 
 const T_MIN_PT = -10;
 const T_STC = 25;
 const T_AMB_MAX = 40;
+const DEFAULT_COEF_VOC = -0.0028;
+const DEFAULT_COEF_VMP = -0.0035;
 
 function resolveCoefVoc(panel: PanelElec): number {
-  if (panel.coeficienteTemperaturaVoc !== null && panel.coeficienteTemperaturaVoc !== 0) {
+  if (panel.coeficienteTemperaturaVoc != null && panel.coeficienteTemperaturaVoc !== 0) {
     return panel.coeficienteTemperaturaVoc / 100;
   }
-  return -0.0028;
-}
-
-function resolveNoct(panel: PanelElec): number {
-  return panel.noct ?? 45;
+  return DEFAULT_COEF_VOC;
 }
 
 function resolveVdcMax(inv: InverterElec): number {
-  if (inv.vdcMax && inv.vdcMax > 0) return inv.vdcMax;
-  return inv.mpptMax * 1.2;
+  return inv.vdcMax && inv.vdcMax > 0 ? inv.vdcMax : inv.mpptMax * 1.2;
 }
 
 function currentLimitWithTolerance(limit: number): number {
-  return limit + Math.max(0.5, limit * 0.02);
+  return Math.max(limit * 1.02, limit + 0.5);
 }
 
 export function calcStringTemps(panel: PanelElec): { tMinPt: number; tMaxCelula: number } {
-  const noct = resolveNoct(panel);
-  const tMaxCelula = T_AMB_MAX + (noct - 20) * (1000 / 800);
-  return { tMinPt: T_MIN_PT, tMaxCelula };
+  const noct = panel.noct ?? 45;
+  return { tMinPt: T_MIN_PT, tMaxCelula: T_AMB_MAX + ((noct - 20) / 800) * 1000 };
 }
 
 export function calcVocAtTemp(voc: number, coefVoc: number, tCell: number): number {
   return voc * (1 + coefVoc * (tCell - T_STC));
 }
 
-export function calcVmpAtTemp(vmp: number, coefVoc: number, tCell: number): number {
-  return vmp * (1 + coefVoc * (tCell - T_STC));
+export function calcVmpAtTemp(vmp: number, coefVmp: number, tCell: number): number {
+  return vmp * (1 + coefVmp * (tCell - T_STC));
 }
 
-/** Maximum panels per string based on Vdc max constraint */
-export function maxPaineisPerString(panel: PanelElec, inv: InverterElec): number {
-  const coefVoc = resolveCoefVoc(panel);
+function electricalLimits(panel: PanelElec, inv: InverterElec) {
+  const { tMaxCelula } = calcStringTemps(panel);
   const vdcMax = resolveVdcMax(inv);
-  const vocFrio1 = calcVocAtTemp(panel.voc, coefVoc, T_MIN_PT);
-  return Math.max(1, Math.floor(vdcMax / vocFrio1));
+  const vocFrio1 = calcVocAtTemp(panel.voc, resolveCoefVoc(panel), T_MIN_PT);
+  const vmpFrio1 = calcVmpAtTemp(panel.vmp, DEFAULT_COEF_VMP, T_MIN_PT);
+  const vmpQuente1 = calcVmpAtTemp(panel.vmp, DEFAULT_COEF_VMP, tMaxCelula);
+  const minPerStr = Math.max(1, Math.ceil(inv.mpptMin / vmpQuente1));
+  const maxPerStr = Math.max(1, Math.min(
+    Math.floor(vdcMax / vocFrio1),
+    Math.floor(inv.mpptMax / vmpFrio1),
+  ));
+  const iscLimit = inv.correnteCurtoCircuitoMppt && inv.correnteCurtoCircuitoMppt > 0
+    ? inv.correnteCurtoCircuitoMppt
+    : inv.corrMaxMppt;
+  const byImp = panel.imp > 0
+    ? Math.floor(currentLimitWithTolerance(inv.corrMaxMppt) / panel.imp)
+    : inv.stringsPorMppt;
+  const byIsc = panel.isc > 0
+    ? Math.floor(currentLimitWithTolerance(iscLimit) / panel.isc)
+    : inv.stringsPorMppt;
+  const stringsPerMppt = Math.max(0, Math.min(inv.stringsPorMppt, byImp, byIsc));
+
+  return {
+    tMaxCelula,
+    vdcMax,
+    vocFrio1,
+    vmpFrio1,
+    vmpQuente1,
+    minPerStr,
+    maxPerStr,
+    iscLimit,
+    stringsPerMppt,
+    maxStringsTotal: inv.numMppt * stringsPerMppt,
+  };
 }
 
-function buildAlerts(
-  panel: PanelElec,
-  inv: InverterElec,
-  mpptConfig: MpptConfig,
-  vocFrioMax: number,
-  vmpQuenteMin: number,
-  vocSTCMax: number,
-  vmpSTCMax: number,
-  iscString: number,
-  dcAcRatio: number,
-  numStrings: number,
-  vdcMax: number,
-  tMinPt: number,
-  isMixed: boolean,
-  numPaineisAuto: number | null,
-  totalPaineis: number,
-): StringAlert[] {
-  const alertas: StringAlert[] = [];
-
-  // Voc frio check (worst-case = max panels per string)
-  if (vocFrioMax > vdcMax) {
-    alertas.push({ tipo: "erro", mensagem: `Voc a ${tMinPt}°C (${vocFrioMax.toFixed(0)}V) excede tensão máxima DC do inversor (${vdcMax.toFixed(0)}V)` });
-  } else if (vocFrioMax > vdcMax * 0.95) {
-    alertas.push({ tipo: "aviso", mensagem: `Voc a ${tMinPt}°C (${vocFrioMax.toFixed(0)}V) está próximo do limite máximo DC (${vdcMax.toFixed(0)}V)` });
-  } else {
-    alertas.push({ tipo: "ok", mensagem: `Voc em frio (${vocFrioMax.toFixed(0)}V) dentro do limite máximo DC (${vdcMax.toFixed(0)}V)` });
-  }
-
-  // Vmpp em calor check (worst-case = min panels per string)
-  if (vmpQuenteMin < inv.mpptMin) {
-    alertas.push({ tipo: "erro", mensagem: `Vmpp em calor (${vmpQuenteMin.toFixed(0)}V) abaixo da janela MPPT mínima (${inv.mpptMin}V)` });
-  } else {
-    alertas.push({ tipo: "ok", mensagem: `Vmpp em calor (${vmpQuenteMin.toFixed(0)}V) dentro da janela MPPT (${inv.mpptMin}–${inv.mpptMax}V)` });
-  }
-
-  // Vmpp @ STC above MPPT max
-  if (vmpSTCMax > inv.mpptMax) {
-    alertas.push({ tipo: "aviso", mensagem: `Vmpp a STC (${vmpSTCMax.toFixed(0)}V) excede topo da janela MPPT (${inv.mpptMax}V) — considere reduzir painéis por string` });
-  }
-
-  // Isc per MPPT check — each MPPT individually
-  mpptConfig.forEach((strings, mi) => {
-    if (strings.length === 0) return;
-    const iscMppt = iscString * strings.length;
-    const iscLimitTol = currentLimitWithTolerance(inv.corrMaxMppt);
-    if (iscMppt > iscLimitTol) {
-      alertas.push({ tipo: "erro", mensagem: `MPPT ${mi + 1}: Isc total (${iscMppt.toFixed(1)}A) excede corrente máxima do MPPT (${inv.corrMaxMppt}A)` });
-    } else if (iscMppt > inv.corrMaxMppt) {
-      alertas.push({ tipo: "aviso", mensagem: `MPPT ${mi + 1}: Isc total (${iscMppt.toFixed(1)}A) está ligeiramente acima do limite nominal (${inv.corrMaxMppt}A), dentro da tolerância de arredondamento. Confirme o limite Isc máximo no datasheet.` });
-    } else {
-      alertas.push({ tipo: "ok", mensagem: `MPPT ${mi + 1}: Isc total (${iscMppt.toFixed(1)}A) dentro do limite (${inv.corrMaxMppt}A)` });
-    }
-  });
-
-  const potenciaDCKwp = (totalPaineis * panel.potencia) / 1000;
-  const dcExcedeMax = inv.potenciaDcMax > 0 && potenciaDCKwp > inv.potenciaDcMax * 1.05;
-  const dcAcRatioAvisoAlto = dcAcRatio > 1.7 && !dcExcedeMax;
-
-  if (dcExcedeMax) {
-    alertas.push({ tipo: "erro", mensagem:
-      `Potência DC total (${potenciaDCKwp.toFixed(2)} kWp) excede o limite DC/PV do inversor (${inv.potenciaDcMax.toFixed(2)} kW). ` +
-      `Confirme no datasheet se existe potência FV máxima superior; caso contrário reduza painéis ou use inversor maior.` });
-  } else if (inv.potenciaDcMax > 0 && potenciaDCKwp > inv.potenciaDcMax) {
-    alertas.push({ tipo: "aviso", mensagem:
-      `Potência DC total (${potenciaDCKwp.toFixed(2)} kWp) está ligeiramente acima do limite DC/PV nominal (${inv.potenciaDcMax.toFixed(2)} kW). Confirme tolerâncias do fabricante.` });
-  } else if (inv.potenciaDcMax > 0) {
-    alertas.push({ tipo: "ok", mensagem:
-      `Potência DC total (${potenciaDCKwp.toFixed(2)} kWp) dentro do limite DC/PV do inversor (${inv.potenciaDcMax.toFixed(2)} kW).` });
-  }
-
-  // DC/AC ratio — 4 tiers per PT-PT engineering practice
-  const pct = (dcAcRatio * 100).toFixed(0);
-  if (dcAcRatio < 0.6) {
-    alertas.push({ tipo: "erro", mensagem:
-      `DC/AC ratio muito baixo (${pct}%): inversor fortemente sobredimensionado face aos painéis. ` +
-      `Impacto: eficiência muito reduzida em carga parcial; investimento no inversor desaproveitado. ` +
-      `Sugestões: usar inversor de menor potência ou adicionar significativamente mais painéis.` });
-  } else if (dcAcRatio > 1.7) {
-    alertas.push({ tipo: dcAcRatioAvisoAlto ? "aviso" : "erro", mensagem:
-      `DC/AC ratio muito elevado (${pct}%): risco de clipping severo e possíveis danos no inversor. ` +
-      `Impacto: perdas de produção acentuadas em horas de pico; valide sempre contra a potência DC/PV máxima do datasheet. ` +
-      `Sugestões: usar inversor de maior potência ou reduzir o número de painéis.` });
-  } else if (dcAcRatio < 0.8) {
-    alertas.push({ tipo: "aviso", mensagem:
-      `DC/AC ratio baixo (${pct}%): inversor sobredimensionado face aos painéis. ` +
-      `Impacto: menor eficiência em carga parcial; maior custo relativo do inversor; sistema funcional mas pouco optimizado. ` +
-      `Sugestões: usar inversor menor, adicionar mais painéis, usar múltiplos MPPTs ou dividir em múltiplos inversores.` });
-  } else if (dcAcRatio > 1.4) {
-    alertas.push({ tipo: "aviso", mensagem:
-      `DC/AC ratio elevado (${pct}%): oversizing significativo — possível clipping nas horas de maior radiação. ` +
-      `Impacto: perdas de produção estimadas de 2–8% nos meses de verão; inversor próximo do limite. ` +
-      `Sugestões: aumentar potência AC do inversor, reduzir painéis ou dividir em múltiplos inversores.` });
-  } else if (dcAcRatio < 0.9) {
-    alertas.push({ tipo: "aviso", mensagem:
-      `DC/AC ratio aceitável mas ligeiramente baixo (${pct}%): inversor com margem face aos painéis. ` +
-      `Não prejudica o funcionamento; verifique se está prevista expansão futura do sistema.` });
-  } else if (dcAcRatio > 1.3) {
-    alertas.push({ tipo: "aviso", mensagem:
-      `DC/AC ratio com ligeiro oversizing (${pct}%): pequeno clipping esperado em condições de pico. ` +
-      `Impacto: perdas inferiores a 3% na produção anual; geralmente vantajoso economicamente.` });
-  } else {
-    alertas.push({ tipo: "ok", mensagem:
-      `DC/AC ratio excelente (${pct}%): dimensionamento optimizado entre painéis e inversor.` });
-  }
-
-  // Total strings vs inverter capacity
-  if (numStrings > inv.numMppt * inv.stringsPorMppt) {
-    alertas.push({ tipo: "erro", mensagem: `Número de strings (${numStrings}) excede capacidade do inversor (${inv.numMppt} MPPTs × ${inv.stringsPorMppt} strings)` });
-  }
-
-  // Mixed panel counts per MPPT
-  if (isMixed) {
-    mpptConfig.forEach((strings, mi) => {
-      const counts = [...new Set(strings)];
-      if (counts.length > 1) {
-        alertas.push({ tipo: "aviso", mensagem: `MPPT ${mi + 1} tem strings assimétricas (${strings.join(", ")} módulos) — mismatching de tensão reduz ligeiramente a produção` });
-      }
-    });
-  }
-
-  // Total panels divergence from auto (only in manual mode)
-  if (numPaineisAuto !== null && totalPaineis !== numPaineisAuto) {
-    if (totalPaineis > numPaineisAuto) {
-      alertas.push({ tipo: "aviso", mensagem: `Total de painéis (${totalPaineis}) superior ao dimensionamento automático (${numPaineisAuto})` });
-    } else {
-      alertas.push({ tipo: "aviso", mensagem: `Total de painéis (${totalPaineis}) inferior ao dimensionamento automático (${numPaineisAuto})` });
-    }
-  }
-
-  return alertas;
+export function maxPaineisPerString(panel: PanelElec, inv: InverterElec): number {
+  return electricalLimits(panel, inv).maxPerStr;
 }
 
-// ── Helper: find closest viable panel counts ───────────────────────────────
-
-function temSolucaoViavel(
-  n: number,
-  vocFrio1: number,
-  vmpQuente1: number,
-  vdcMax: number,
-  mpptMin: number,
-  minPerStr: number,
-  maxPerStr: number,
-  maxStringsTotal: number,
-): boolean {
-  for (let s = 1; s <= Math.min(maxStringsTotal, n); s++) {
-    const b = Math.floor(n / s);
-    const e = n % s;
-    const h = e > 0 ? b + 1 : b;
-    if (b < minPerStr || h > maxPerStr) continue;
-    if (vocFrio1 * h > vdcMax) continue;
-    if (vmpQuente1 * b < mpptMin) continue;
-    return true;
+function configWorks(n: number, minPerStr: number, maxPerStr: number, maxStrings: number): boolean {
+  for (let count = 1; count <= Math.min(maxStrings, n); count++) {
+    const low = Math.floor(n / count);
+    const high = Math.ceil(n / count);
+    if (low >= minPerStr && high <= maxPerStr) return true;
   }
   return false;
 }
 
-function encontrarRangeViavel(
-  vocFrio1: number,
-  vmpQuente1: number,
-  vdcMax: number,
-  mpptMin: number,
+function nearestCounts(
+  target: number,
   minPerStr: number,
   maxPerStr: number,
-  maxStringsTotal: number,
-  numPaineisAlvo: number,
+  maxStrings: number,
 ): SemSolucaoInfo {
   let abaixo = 0;
-  let acima  = 0;
-  for (let n = numPaineisAlvo - 1; n >= Math.max(1, numPaineisAlvo - 40); n--) {
-    if (temSolucaoViavel(n, vocFrio1, vmpQuente1, vdcMax, mpptMin, minPerStr, maxPerStr, maxStringsTotal)) {
-      abaixo = n; break;
+  let acima = 0;
+  for (let n = target - 1; n >= Math.max(1, target - 40); n--) {
+    if (configWorks(n, minPerStr, maxPerStr, maxStrings)) {
+      abaixo = n;
+      break;
     }
   }
-  for (let n = numPaineisAlvo + 1; n <= numPaineisAlvo + 40; n++) {
-    if (temSolucaoViavel(n, vocFrio1, vmpQuente1, vdcMax, mpptMin, minPerStr, maxPerStr, maxStringsTotal)) {
-      acima = n; break;
+  for (let n = target + 1; n <= target + 40; n++) {
+    if (configWorks(n, minPerStr, maxPerStr, maxStrings)) {
+      acima = n;
+      break;
     }
   }
   return { abaixo, acima, minPerStr, maxPerStr };
 }
 
-// ── Main auto-sizing: PANEL COUNT IS FIXED ────────────────────────────────────
-/**
- * Calculate the best string configuration for EXACTLY `numPaineis` panels.
- *
- * Algorithm:
- *  1. Compute electrical min/max panels per string from MPPT window + Vdc max.
- *  2. For each possible string count (1..maxStrings): distribute panels as
- *     evenly as possible (floor/ceil) and check all electrical constraints.
- *  3. Rank valid configs: prefer uniform strings, then closest to MPPT centre,
- *     then fewest strings.
- *  4. If no valid config exists, return semSolucao=true with nearest viable counts.
- *
- * NEVER modifies numPaineis. totalPaineis in the result always equals numPaineis.
- */
+function distributeStrings(total: number, mppts: number): number[] {
+  const base = Math.floor(total / mppts);
+  const extra = total % mppts;
+  return Array.from({ length: mppts }, (_, index) => base + (index < extra ? 1 : 0));
+}
+
+function buildAlerts(
+  panel: PanelElec,
+  inv: InverterElec,
+  config: MpptConfig,
+  totalPaineis: number,
+  numPaineisAuto: number | null,
+): StringAlert[] {
+  const limits = electricalLimits(panel, inv);
+  const counts = config.flat().filter(value => value > 0);
+  const alerts: StringAlert[] = [];
+
+  if (counts.length === 0) {
+    return [{ tipo: "erro", mensagem: "Adicione pelo menos uma string com paineis." }];
+  }
+
+  const maxPanels = Math.max(...counts);
+  const minPanels = Math.min(...counts);
+  const vocCold = limits.vocFrio1 * maxPanels;
+  const vmpCold = limits.vmpFrio1 * maxPanels;
+  const vmpHot = limits.vmpQuente1 * minPanels;
+
+  if (vocCold > limits.vdcMax) {
+    alerts.push({ tipo: "erro", mensagem: `Voc em frio (${vocCold.toFixed(0)} V) excede o limite DC (${limits.vdcMax.toFixed(0)} V).` });
+  } else {
+    alerts.push({ tipo: "ok", mensagem: `Voc em frio (${vocCold.toFixed(0)} V) dentro do limite DC (${limits.vdcMax.toFixed(0)} V).` });
+  }
+
+  if (vmpHot < inv.mpptMin || vmpCold > inv.mpptMax) {
+    alerts.push({
+      tipo: "erro",
+      mensagem: `A string sai da janela MPPT: ${vmpHot.toFixed(0)} V em calor / ${vmpCold.toFixed(0)} V em frio; limite ${inv.mpptMin}-${inv.mpptMax} V.`,
+    });
+  } else {
+    alerts.push({
+      tipo: "ok",
+      mensagem: `Vmpp em operacao (${vmpHot.toFixed(0)}-${vmpCold.toFixed(0)} V) dentro da janela ${inv.mpptMin}-${inv.mpptMax} V.`,
+    });
+  }
+
+  config.forEach((strings, index) => {
+    if (strings.length === 0) return;
+    const imp = panel.imp * strings.length;
+    const isc = panel.isc * strings.length;
+    const impTolerance = currentLimitWithTolerance(inv.corrMaxMppt);
+    const iscTolerance = currentLimitWithTolerance(limits.iscLimit);
+
+    if (imp > impTolerance) {
+      alerts.push({ tipo: "erro", mensagem: `MPPT ${index + 1}: Imp total ${imp.toFixed(1)} A excede ${inv.corrMaxMppt} A.` });
+    } else if (imp > inv.corrMaxMppt) {
+      alerts.push({ tipo: "aviso", mensagem: `MPPT ${index + 1}: Imp ${imp.toFixed(1)} A ligeiramente acima do valor nominal ${inv.corrMaxMppt} A; confirme a ficha tecnica.` });
+    }
+
+    if (isc > iscTolerance) {
+      alerts.push({ tipo: "erro", mensagem: `MPPT ${index + 1}: Isc total ${isc.toFixed(1)} A excede o limite de curto-circuito ${limits.iscLimit} A.` });
+    } else if (isc > limits.iscLimit) {
+      alerts.push({ tipo: "aviso", mensagem: `MPPT ${index + 1}: Isc ${isc.toFixed(1)} A ligeiramente acima de ${limits.iscLimit} A; confirme a ficha tecnica.` });
+    } else if (imp <= inv.corrMaxMppt) {
+      alerts.push({ tipo: "ok", mensagem: `MPPT ${index + 1}: Imp/Isc ${imp.toFixed(1)}/${isc.toFixed(1)} A dentro dos limites.` });
+    }
+
+    if (strings.length > inv.stringsPorMppt) {
+      alerts.push({ tipo: "erro", mensagem: `MPPT ${index + 1}: ${strings.length} strings excedem as ${inv.stringsPorMppt} entradas disponiveis.` });
+    }
+    if (new Set(strings).size > 1) {
+      alerts.push({ tipo: "erro", mensagem: `MPPT ${index + 1}: strings em paralelo devem ter o mesmo numero de paineis. Use MPPTs separados para strings assimetricas.` });
+    }
+  });
+
+  if (config.length > inv.numMppt || config.slice(inv.numMppt).some(strings => strings.length > 0)) {
+    alerts.push({ tipo: "erro", mensagem: `A configuracao usa mais de ${inv.numMppt} MPPTs.` });
+  }
+
+  const dcKwp = totalPaineis * panel.potencia / 1000;
+  const dcAcRatio = inv.potenciaAc > 0 ? dcKwp / inv.potenciaAc : 0;
+  if (inv.potenciaDcMax > 0 && dcKwp > inv.potenciaDcMax * 1.05) {
+    alerts.push({ tipo: "erro", mensagem: `Potencia FV ${dcKwp.toFixed(2)} kWp excede o limite do inversor ${inv.potenciaDcMax.toFixed(2)} kW.` });
+  } else if (inv.potenciaDcMax > 0 && dcKwp > inv.potenciaDcMax) {
+    alerts.push({ tipo: "aviso", mensagem: `Potencia FV ${dcKwp.toFixed(2)} kWp ligeiramente acima do limite nominal ${inv.potenciaDcMax.toFixed(2)} kW; confirme a tolerancia do fabricante.` });
+  } else if (inv.potenciaDcMax > 0) {
+    alerts.push({ tipo: "ok", mensagem: `Potencia FV ${dcKwp.toFixed(2)} kWp dentro do limite ${inv.potenciaDcMax.toFixed(2)} kW.` });
+  }
+
+  if (dcAcRatio < 0.6 || dcAcRatio > 1.7) {
+    alerts.push({ tipo: "erro", mensagem: `Relacao DC/AC ${(dcAcRatio * 100).toFixed(0)}% fora do intervalo tecnico recomendado.` });
+  } else if (dcAcRatio < 0.8 || dcAcRatio > 1.4) {
+    alerts.push({ tipo: "aviso", mensagem: `Relacao DC/AC ${(dcAcRatio * 100).toFixed(0)}%; reveja o equilibrio entre paineis e inversor.` });
+  } else {
+    alerts.push({ tipo: "ok", mensagem: `Relacao DC/AC ${(dcAcRatio * 100).toFixed(0)}% adequada.` });
+  }
+
+  if (numPaineisAuto != null && totalPaineis !== numPaineisAuto) {
+    alerts.push({ tipo: "aviso", mensagem: `A configuracao manual usa ${totalPaineis} paineis; o dimensionamento indicava ${numPaineisAuto}.` });
+  }
+
+  return alerts;
+}
+
+function resultFromConfig(
+  panel: PanelElec,
+  inv: InverterElec,
+  mpptConfig: MpptConfig,
+  numPaineisAuto: number | null,
+): StringSizingResult {
+  const limits = electricalLimits(panel, inv);
+  const counts = mpptConfig.flat().filter(value => value > 0);
+  const maxPanels = counts.length ? Math.max(...counts) : 0;
+  const minPanels = counts.length ? Math.min(...counts) : 0;
+  const totalPaineis = counts.reduce((sum, value) => sum + value, 0);
+  const potenciaDCTotal = totalPaineis * panel.potencia;
+  const dcAcRatio = inv.potenciaAc > 0 ? potenciaDCTotal / 1000 / inv.potenciaAc : 0;
+  const alerts = buildAlerts(panel, inv, mpptConfig, totalPaineis, numPaineisAuto);
+
+  return {
+    config: {
+      mpptConfig,
+      paineisPerString: maxPanels,
+      numStrings: counts.length,
+      stringsPorMppt: mpptConfig.map(strings => strings.length),
+      totalPaineis,
+      isMixed: mpptConfig.some(strings => new Set(strings).size > 1),
+      vocFrio: limits.vocFrio1 * maxPanels,
+      vmpQuente: limits.vmpQuente1 * minPanels,
+      vocSTC: panel.voc * maxPanels,
+      vmpSTC: panel.vmp * maxPanels,
+      iscString: panel.isc,
+      impString: panel.imp,
+      dcAcRatio,
+      potenciaDCTotal,
+    },
+    alertas: alerts,
+    tMinPortugal: T_MIN_PT,
+    tMaxCelula: limits.tMaxCelula,
+    vdcMaxUsado: limits.vdcMax,
+    semSolucao: false,
+  };
+}
+
 export function calcStringSizing(
   panel: PanelElec,
   inv: InverterElec,
   numPaineis: number,
 ): StringSizingResult {
-  const coefVoc    = resolveCoefVoc(panel);
-  const vdcMax     = resolveVdcMax(inv);
-  const { tMaxCelula } = calcStringTemps(panel);
+  const limits = electricalLimits(panel, inv);
+  const targetVoltage = inv.mpptMin + (inv.mpptMax - inv.mpptMin) * 0.5;
+  const targetPanels = Math.max(
+    limits.minPerStr,
+    Math.min(limits.maxPerStr, Math.round(targetVoltage / panel.vmp)),
+  );
+  const candidates: Array<{ config: MpptConfig; score: number }> = [];
 
-  const vocFrio1   = calcVocAtTemp(panel.voc, coefVoc, T_MIN_PT);
-  const vmpQuente1 = calcVmpAtTemp(panel.vmp, coefVoc, tMaxCelula);
+  for (let stringCount = 1; stringCount <= Math.min(limits.maxStringsTotal, numPaineis); stringCount++) {
+    const low = Math.floor(numPaineis / stringCount);
+    const high = Math.ceil(numPaineis / stringCount);
+    if (low < limits.minPerStr || high > limits.maxPerStr) continue;
 
-  // Hard electrical limits for any single string
-  const maxPerStr      = Math.max(1, Math.floor(vdcMax / vocFrio1));
-  const minPerStr      = Math.max(1, Math.ceil(inv.mpptMin / vmpQuente1));
-  const maxStringsTotal = inv.numMppt * inv.stringsPorMppt;
+    const stringsPerMppt = distributeStrings(stringCount, inv.numMppt);
+    let extras = numPaineis % stringCount;
+    const config = stringsPerMppt.map(count => Array.from({ length: count }, () => {
+      const panels = extras > 0 ? high : low;
+      extras = Math.max(0, extras - 1);
+      return panels;
+    }));
 
-  // Target panels per string: aim for ~45% between MPPT min and max
-  const targetVmp         = (inv.mpptMin + inv.mpptMax) * 0.45;
-  const optimalPerString  = Math.max(minPerStr, Math.min(maxPerStr, Math.round(targetVmp / panel.vmp)));
-
-  // ── Candidate search ──────────────────────────────────────────────────────
-  type Candidate = {
-    numStrings: number;
-    base: number;          // panels in (numStrings - extra) strings
-    extra: number;         // strings that get (base+1) panels
-    vocFrioMax: number;
-    vmpQuenteMin: number;
-    isUniform: boolean;
-    distFromOptimal: number;
-  };
-
-  const candidates: Candidate[] = [];
-
-  for (let s = 1; s <= Math.min(maxStringsTotal, numPaineis); s++) {
-    const base  = Math.floor(numPaineis / s);
-    const extra = numPaineis % s;           // extra strings get (base+1)
-    const high  = extra > 0 ? base + 1 : base;
-
-    // Electrical range check: shortest string must reach MPPT min, longest must not exceed Vdc max
-    if (base < minPerStr) continue;
-    if (high > maxPerStr) continue;
-
-    const vocFrioMax   = vocFrio1   * high;
-    const vmpQuenteMin = vmpQuente1 * base;
-
-    if (vocFrioMax   > vdcMax)      continue;
-    if (vmpQuenteMin < inv.mpptMin) continue;
-
-    const mid = extra > 0 ? base + 0.5 : base;
-    candidates.push({
-      numStrings: s,
-      base,
-      extra,
-      vocFrioMax,
-      vmpQuenteMin,
-      isUniform: extra === 0,
-      distFromOptimal: Math.abs(mid - optimalPerString),
-    });
+    // Parallel strings on one MPPT must be equal. Asymmetry is valid across MPPTs.
+    if (config.some(strings => new Set(strings).size > 1)) continue;
+    const uniformPenalty = numPaineis % stringCount === 0 ? 0 : 2;
+    const average = numPaineis / stringCount;
+    candidates.push({ config, score: uniformPenalty + Math.abs(average - targetPanels) + stringCount * 0.01 });
   }
 
-  // ── No solution ────────────────────────────────────────────────────────────
-  if (candidates.length === 0) {
-    const sugestoes = encontrarRangeViavel(
-      vocFrio1, vmpQuente1, vdcMax, inv.mpptMin, minPerStr, maxPerStr, maxStringsTotal, numPaineis,
-    );
-    const emptyConfig: MpptConfig = Array.from({ length: inv.numMppt }, () => []);
+  if (!candidates.length) {
+    const empty = Array.from({ length: inv.numMppt }, () => [] as number[]);
+    const sugestoes = nearestCounts(numPaineis, limits.minPerStr, limits.maxPerStr, limits.maxStringsTotal);
+    const base = resultFromConfig(panel, inv, empty, null);
     return {
-      config: {
-        mpptConfig:       emptyConfig,
-        paineisPerString: 0,
-        numStrings:       0,
-        stringsPorMppt:   emptyConfig.map(() => 0),
-        totalPaineis:     numPaineis,   // keep original even on failure
-        isMixed:          false,
-        vocFrio:          0,
-        vmpQuente:        0,
-        vocSTC:           0,
-        vmpSTC:           0,
-        iscString:        panel.isc,
-        dcAcRatio:        0,
-        potenciaDCTotal:  numPaineis * panel.potencia,
-      },
+      ...base,
+      config: { ...base.config, totalPaineis: numPaineis, potenciaDCTotal: numPaineis * panel.potencia },
       alertas: [{
-        tipo:     "erro",
-        mensagem: `Não existe configuração elétrica válida para ${numPaineis} painéis com este inversor. ` +
-          `Janela MPPT: ${inv.mpptMin}–${inv.mpptMax}V · Vdc máx: ${vdcMax.toFixed(0)}V → ` +
-          `Painéis/string permitidos: ${minPerStr}–${maxPerStr}.`,
+        tipo: "erro",
+        mensagem: `Sem configuracao valida para ${numPaineis} paineis. Cada string admite ${limits.minPerStr}-${limits.maxPerStr} paineis e existem ${limits.maxStringsTotal} strings eletricamente utilizaveis.`,
       }],
-      tMinPortugal: T_MIN_PT,
-      tMaxCelula,
-      vdcMaxUsado: vdcMax,
       semSolucao: true,
       sugestoes,
     };
   }
 
-  // ── Pick best candidate ────────────────────────────────────────────────────
-  // Priority: 1) uniform strings  2) closest to optimal  3) fewest strings
-  candidates.sort((a, b) => {
-    if (a.isUniform !== b.isUniform) return a.isUniform ? -1 : 1;
-    if (a.distFromOptimal !== b.distFromOptimal) return a.distFromOptimal - b.distFromOptimal;
-    return a.numStrings - b.numStrings;
-  });
-
-  const best = candidates[0];
-  const stringsPerMppt = distributeStrings(best.numStrings, inv.numMppt);
-
-  // Assign panels: first `extra` strings get (base+1), rest get base
-  let extraLeft = best.extra;
-  const mpptConfig: MpptConfig = stringsPerMppt.map(n => {
-    const arr: number[] = [];
-    for (let i = 0; i < n; i++) {
-      arr.push(extraLeft > 0 ? best.base + 1 : best.base);
-      if (extraLeft > 0) extraLeft--;
-    }
-    return arr;
-  });
-
-  const isMixed   = best.extra > 0;
-  const highPanel = isMixed ? best.base + 1 : best.base;
-  const vocSTC    = panel.voc * highPanel;
-  const vmpSTC    = panel.vmp * highPanel;
-  const iscString = panel.isc;
-  // potenciaDCTotal in W; inv.potenciaAc in kW → ratio is dimensionless
-  const potenciaDCTotal = numPaineis * panel.potencia;
-  const dcAcRatio = inv.potenciaAc > 0 ? (potenciaDCTotal / 1000) / inv.potenciaAc : 0;
-
-  const alertas = buildAlerts(
-    panel, inv, mpptConfig,
-    best.vocFrioMax, best.vmpQuenteMin, vocSTC, vmpSTC,
-    iscString, dcAcRatio, best.numStrings, vdcMax,
-    T_MIN_PT, isMixed, null, numPaineis,
-  );
-
-  return {
-    config: {
-      mpptConfig,
-      paineisPerString: highPanel,
-      numStrings:       best.numStrings,
-      stringsPorMppt:   stringsPerMppt,
-      totalPaineis:     numPaineis,   // ALWAYS equals input numPaineis
-      isMixed,
-      vocFrio:    best.vocFrioMax,
-      vmpQuente:  best.vmpQuenteMin,
-      vocSTC,
-      vmpSTC,
-      iscString,
-      dcAcRatio,
-      potenciaDCTotal,
-    },
-    alertas,
-    tMinPortugal: T_MIN_PT,
-    tMaxCelula,
-    vdcMaxUsado: vdcMax,
-    semSolucao: false,
-  };
+  candidates.sort((a, b) => a.score - b.score);
+  return resultFromConfig(panel, inv, candidates[0].config, null);
 }
 
-function distributeStrings(total: number, numMppt: number): number[] {
-  const base  = Math.floor(total / numMppt);
-  const extra = total % numMppt;
-  return Array.from({ length: numMppt }, (_, i) => base + (i < extra ? 1 : 0));
-}
-
-/**
- * Compute a StringSizingResult from a user-supplied per-string configuration.
- * mpptConfig[mpptIdx][stringIdx] = number of panels in that string.
- * numPaineisAuto: the auto-calculated panel count, used to detect divergence (pass null to suppress).
- */
 export function calcStringSizingManual(
   panel: PanelElec,
   inv: InverterElec,
   mpptConfig: MpptConfig,
   numPaineisAuto: number | null = null,
 ): StringSizingResult {
-  const coefVoc = resolveCoefVoc(panel);
-  const vdcMax  = resolveVdcMax(inv);
-  const { tMaxCelula } = calcStringTemps(panel);
-
-  const vocFrio1   = calcVocAtTemp(panel.voc, coefVoc, T_MIN_PT);
-  const vmpQuente1 = calcVmpAtTemp(panel.vmp, coefVoc, tMaxCelula);
-
-  // Flatten all panel counts
-  const allCounts = mpptConfig.flat().filter(n => n > 0);
-  const maxPanels = allCounts.length > 0 ? Math.max(...allCounts) : 1;
-  const minPanels = allCounts.length > 0 ? Math.min(...allCounts) : 1;
-
-  // Worst-case voltages
-  const vocFrioMax   = vocFrio1   * maxPanels;
-  const vmpQuenteMin = vmpQuente1 * minPanels;
-  const vocSTC = panel.voc * maxPanels;
-  const vmpSTC = panel.vmp * maxPanels;
-
-  const iscString     = panel.isc;
-  const stringsPorMppt = mpptConfig.map(s => s.length);
-  const numStrings    = stringsPorMppt.reduce((a, b) => a + b, 0);
-  const totalPaineis  = allCounts.reduce((a, b) => a + b, 0);
-  // potenciaDCTotal in W; inv.potenciaAc in kW → ratio is dimensionless
-  const potenciaDCTotal = totalPaineis * panel.potencia;
-  const dcAcRatio     = inv.potenciaAc > 0 ? (potenciaDCTotal / 1000) / inv.potenciaAc : 0;
-
-  // Check if any MPPT has mixed panel counts
-  const isMixed = mpptConfig.some(strings => new Set(strings).size > 1);
-
-  const alertas = buildAlerts(
-    panel, inv, mpptConfig,
-    vocFrioMax, vmpQuenteMin, vocSTC, vmpSTC,
-    iscString, dcAcRatio, numStrings, vdcMax,
-    T_MIN_PT, isMixed, numPaineisAuto, totalPaineis,
-  );
-
-  return {
-    config: {
-      mpptConfig,
-      paineisPerString: maxPanels,
-      numStrings,
-      stringsPorMppt,
-      totalPaineis,
-      isMixed,
-      vocFrio:    vocFrioMax,
-      vmpQuente:  vmpQuenteMin,
-      vocSTC,
-      vmpSTC,
-      iscString,
-      dcAcRatio,
-      potenciaDCTotal,
-    },
-    alertas,
-    tMinPortugal: T_MIN_PT,
-    tMaxCelula,
-    vdcMaxUsado: vdcMax,
-    semSolucao: false,
-  };
+  return resultFromConfig(panel, inv, mpptConfig, numPaineisAuto);
 }
