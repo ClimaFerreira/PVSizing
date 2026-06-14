@@ -12,27 +12,12 @@ import {
   DeleteInverterParams,
 } from "@workspace/api-zod";
 import { getCompanyId } from "../lib/auth";
+import {
+  inferInverterNetworkType,
+  inverterNetworkColumnsForWrite,
+} from "../lib/inverter-network";
 
 const router: IRouter = Router();
-type TipoRedeInverter = "monofasico" | "trifasico" | "desconhecido";
-
-function normalizeText(value: unknown): string {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-function inferTipoRede(row: { nome?: unknown; fabricante?: unknown; tipoRede?: unknown; tensaoAcNominal?: unknown; faixaTensaoAc?: unknown; ligacaoRede?: unknown }): TipoRedeInverter {
-  const tecnico = normalizeText(`${row.tipoRede ??""} ${row.tensaoAcNominal ??""} ${row.faixaTensaoAc ??""} ${row.ligacaoRede ??""}`);
-  if (/\b(3l|3p|3f)\s*\+?\s*n?\s*\+?\s*pe\b|3l\+n\+pe|3p\+n\+pe|trifas|three phase|\b380\s*\/\s*400\b|\b400\s*v\b/.test(tecnico)) return "trifasico";
-  if (/\bl\s*\+\s*n\s*\+\s*pe\b|\b(1f|1p)\s*\+?\s*n?\s*\+?\s*pe\b|monofas|single phase|\b220\s*\/\s*230\b|\b230\s*v\b/.test(tecnico)) return "monofasico";
-
-  const text = normalizeText(`${row.fabricante ??""} ${row.nome ??""}`);
-  if (/\bsg05lp1\b|\blp1\b|\beu-am2\b/.test(text)) return "monofasico";
-  if (/\bsg04lp3\b|\blp3\b|\b3p\b|\b3l\b|trifas/.test(text)) return "trifasico";
-  return "desconhecido";
-}
 
 router.get("/inverters", async (req, res): Promise<void> => {
   const cid = getCompanyId(req);
@@ -45,6 +30,7 @@ router.post("/inverters", async (req, res): Promise<void> => {
   const parsed = CreateInverterBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const d = parsed.data;
+  const network = inverterNetworkColumnsForWrite(d);
   const [inverter] = await db
     .insert(invertersTable)
     .values({
@@ -59,6 +45,7 @@ router.post("/inverters", async (req, res): Promise<void> => {
       numMppt: d.numMppt,
       stringsPorMppt: d.stringsPorMppt,
       vdcMax: d.vdcMax != null ? String(d.vdcMax) : null,
+      ...network,
     })
     .returning();
   res.status(201).json(GetInverterResponse.parse(toInverterResponse(inverter)));
@@ -91,6 +78,11 @@ router.patch("/inverters/:id", async (req, res): Promise<void> => {
   if (d.numMppt !== undefined) updateValues.numMppt = d.numMppt;
   if (d.stringsPorMppt !== undefined) updateValues.stringsPorMppt = d.stringsPorMppt;
   if (d.vdcMax !== undefined) updateValues.vdcMax = d.vdcMax != null ? String(d.vdcMax) : null;
+  const network = inverterNetworkColumnsForWrite(d);
+  if (d.tipoRede !== undefined) updateValues.tipoRede = network.tipoRede;
+  if (d.tensaoAcNominal !== undefined) updateValues.tensaoAcNominal = network.tensaoAcNominal;
+  if (d.faixaTensaoAc !== undefined) updateValues.faixaTensaoAc = network.faixaTensaoAc;
+  if (d.ligacaoRede !== undefined) updateValues.ligacaoRede = network.ligacaoRede;
   const [inverter] = await db
     .update(invertersTable)
     .set(updateValues)
@@ -134,10 +126,10 @@ function toInverterResponse(row: typeof invertersTable.$inferSelect) {
     mpptMax: Number(row.mpptMax),
     corrMaxMppt: Number(row.corrMaxMppt),
     vdcMax: row.vdcMax != null ? Number(row.vdcMax) : null,
-    tipoRede: inferTipoRede(extra),
-    tensaoAcNominal: extraText(extra, "tensaoAcNominal"),
-    faixaTensaoAc: extraText(extra, "faixaTensaoAc"),
-    ligacaoRede: extraText(extra, "ligacaoRede"),
+    tipoRede: inferInverterNetworkType(row),
+    tensaoAcNominal: row.tensaoAcNominal ?? "",
+    faixaTensaoAc: row.faixaTensaoAc ?? "",
+    ligacaoRede: row.ligacaoRede ?? "",
     frequenciaAc: extraText(extra, "frequenciaAc"),
     potenciaAparenteAc: extraNumber(extra, "potenciaAparenteAc"),
     correnteNominalAc: extraNumber(extra, "correnteNominalAc"),

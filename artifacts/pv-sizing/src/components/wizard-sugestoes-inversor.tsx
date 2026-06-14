@@ -10,6 +10,7 @@ import {
   Zap, CheckCircle2, Info, Sun, BarChart3, AlertTriangle, X, SlidersHorizontal,
 } from "lucide-react";
 import { criarUnidade, type InverterUnit } from "@/lib/multi-inverter";
+import { inferInverterNetworkType } from "@/lib/inverter-network";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ type InverterItem = {
   potenciaAc: number | string;
   tipoRede?: "monofasico" | "trifasico" | "desconhecido";
   tensaoAcNominal?: string;
+  faixaTensaoAc?: string;
   ligacaoRede?: string;
 };
 
@@ -81,22 +83,9 @@ function normalizarKW(val: number): number {
 const HYBRID_RE = /HYB|HYBRID|GEN24|X-HYB|RHI|LP[12]|-EH|-ET|SH-\d|MULTI|STOREDGE|-H\d|\.HV\d/i;
 const isHybridInverter = (nome: string) => HYBRID_RE.test(nome);
 
-function normalizarTexto(value: unknown): string {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-function inferirFaseInversor(inv: InverterItem, potAc: number): "mono" | "tri" | "desconhecido" {
-  const tecnico = normalizarTexto(`${inv.tipoRede ??""} ${inv.ligacaoRede ??""} ${inv.tensaoAcNominal ??""}`);
-  if (/\b(3l|3p|3f)\s*\+?\s*n?\s*\+?\s*pe\b|3l\+n\+pe|3p\+n\+pe|trifas|three phase|\b380\s*\/\s*400\b|\b400\s*v\b/.test(tecnico)) return "tri";
-  if (/\bl\s*\+\s*n\s*\+\s*pe\b|\b(1f|1p)\s*\+?\s*n?\s*\+?\s*pe\b|monofas|single phase|\b220\s*\/\s*230\b|\b230\s*v\b/.test(tecnico)) return "mono";
-
-  const modelo = normalizarTexto(`${inv.fabricante} ${inv.nome}`);
-  if (/\bsg05lp1\b|\blp1\b|\beu-am2\b/.test(modelo)) return "mono";
-  if (/\bsg04lp3\b|\blp3\b/.test(modelo)) return "tri";
-  return potAc <= 6 ? "mono" : "desconhecido";
+function inferirFaseInversor(inv: InverterItem): "mono" | "tri" | "desconhecido" {
+  const tipoRede = inferInverterNetworkType(inv);
+  return tipoRede === "monofasico" ? "mono" : tipoRede === "trifasico" ? "tri" : "desconhecido";
 }
 
 // ── Tag classification ─────────────────────────────────────────────────────────
@@ -163,7 +152,7 @@ function gerarCombinacoes(
     const potAc = normalizarKW(Number(inv.potenciaAc));
     if (!potAc || potAc <= 0) continue;
 
-    const fase = inferirFaseInversor(inv, potAc);
+    const fase = inferirFaseInversor(inv);
     const isHybrid = isHybridInverter(inv.nome);
 
     for (const units of unitCounts) {

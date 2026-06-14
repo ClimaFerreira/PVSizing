@@ -41,6 +41,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DatasheetImport } from "@/components/datasheet-import";
+import {
+  inferInverterNetworkType,
+  normalizeInverterNetworkFields,
+  type InverterNetworkType,
+} from "@/lib/inverter-network";
 
 const inverterSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
@@ -83,10 +88,10 @@ type InverterFormValues = z.infer<typeof inverterSchema>;
 type InverterPayload = Pick<
   InverterFormValues,
   "nome" | "fabricante" | "potenciaAc" | "potenciaDcMax" | "mpptMin" | "mpptMax" | "corrMaxMppt" | "numMppt" | "stringsPorMppt" | "vdcMax"
+  | "tipoRede" | "tensaoAcNominal" | "faixaTensaoAc" | "ligacaoRede"
 >;
 
 const normalizarKW = (value: number) => value > 500 ? value / 1000 : value;
-type TipoRedeInverter = "monofasico" | "trifasico" | "desconhecido";
 
 function normalizarTexto(value: unknown): string {
   return String(value ?? "")
@@ -95,20 +100,9 @@ function normalizarTexto(value: unknown): string {
     .toLowerCase();
 }
 
-function inferirTipoRede(dados: Record<string, unknown>): TipoRedeInverter {
-  const tecnico = normalizarTexto(`${dados.tipoRede ??""} ${dados.ligacaoRede ??""} ${dados.tensaoAcNominal ??""} ${dados.tensaoAcSaida ??""} ${dados.formaLigacaoRede ??""}`);
-  if (/\b(3l|3p|3f)\s*\+?\s*n?\s*\+?\s*pe\b|3l\+n\+pe|3p\+n\+pe|trifas|three phase|\b380\s*\/\s*400\b|\b400\s*v\b/.test(tecnico)) return "trifasico";
-  if (/\bl\s*\+\s*n\s*\+\s*pe\b|\b(1f|1p)\s*\+?\s*n?\s*\+?\s*pe\b|monofas|single phase|\b220\s*\/\s*230\b|\b230\s*v\b/.test(tecnico)) return "monofasico";
-
-  const modelo = normalizarTexto(`${dados.fabricante ??""} ${dados.nome ??""}`);
-  if (/\bsg05lp1\b|\blp1\b|\beu-am2\b/.test(modelo)) return "monofasico";
-  if (/\bsg04lp3\b|\blp3\b/.test(modelo)) return "trifasico";
-  return "desconhecido";
-}
-
-function tipoRedeLabel(tipo: TipoRedeInverter | undefined): string {
-  if (tipo === "monofasico") return "Monofasico";
-  if (tipo === "trifasico") return "Trifasico";
+function tipoRedeLabel(tipo: InverterNetworkType | undefined): string {
+  if (tipo === "monofasico") return "Monofásico";
+  if (tipo === "trifasico") return "Trifásico";
   return "Por confirmar";
 }
 
@@ -123,11 +117,12 @@ function textoOpcional(value: unknown, fallback = ""): string {
 }
 
 function camposAvancadosFromDados(dados: Record<string, unknown>, cur: Partial<InverterFormValues> = {}): Partial<InverterFormValues> {
+  const network = normalizeInverterNetworkFields(dados);
   return {
-    tipoRede: inferirTipoRede(dados),
-    tensaoAcNominal: textoOpcional(dados.tensaoAcNominal ?? dados.tensaoAcSaida, cur.tensaoAcNominal),
-    faixaTensaoAc: textoOpcional(dados.faixaTensaoAc ?? dados.rangeTensaoAc, cur.faixaTensaoAc),
-    ligacaoRede: textoOpcional(dados.ligacaoRede ?? dados.formaLigacaoRede, cur.ligacaoRede),
+    tipoRede: network.tipoRede,
+    tensaoAcNominal: network.tensaoAcNominal || cur.tensaoAcNominal,
+    faixaTensaoAc: network.faixaTensaoAc || cur.faixaTensaoAc,
+    ligacaoRede: network.ligacaoRede || cur.ligacaoRede,
     frequenciaAc: textoOpcional(dados.frequenciaAc, cur.frequenciaAc),
     potenciaAparenteAc: numeroOpcional(dados.potenciaAparenteAc, cur.potenciaAparenteAc),
     correnteNominalAc: numeroOpcional(dados.correnteNominalAc, cur.correnteNominalAc),
@@ -198,7 +193,8 @@ function missingBasicPayloadError(payload: InverterPayload): string | null {
 function buildInverterPayload(dados: Record<string, unknown>, cur: Partial<InverterFormValues> = {}): InverterPayload {
   const fabricante = textoOpcional(firstValue(dados, ["fabricante", "marca"]), cur.fabricante);
   const nome = textoOpcional(firstValue(dados, ["nome", "modelo", "referencia"]), cur.nome);
-  const payload = {
+  const network = normalizeInverterNetworkFields(dados);
+  const payload: InverterPayload = {
     fabricante,
     nome,
     potenciaAc: parsePowerWatts(firstValue(dados, ["potenciaAc", "potenciaAcNominal", "potenciaNominalAc"]), cur.potenciaAc ?? 0),
@@ -209,6 +205,10 @@ function buildInverterPayload(dados: Record<string, unknown>, cur: Partial<Inver
     numMppt: parsePositiveInteger(firstValue(dados, ["numMppt", "numeroMppt", "mppts"]), cur.numMppt ?? 1),
     stringsPorMppt: parsePositiveInteger(firstValue(dados, ["stringsPorMppt", "stringsMppt", "cadeiasPorMppt", "strings"]), cur.stringsPorMppt ?? 1),
     vdcMax: numeroOpcional(firstValue(dados, ["vdcMax", "tensaoDcMax", "tensaoMaximaDc", "tensaoMaximaFv"]), cur.vdcMax),
+    tipoRede: network.tipoRede,
+    tensaoAcNominal: network.tensaoAcNominal || cur.tensaoAcNominal || "",
+    faixaTensaoAc: network.faixaTensaoAc || cur.faixaTensaoAc || "",
+    ligacaoRede: network.ligacaoRede || cur.ligacaoRede || "",
   };
   const missing = missingBasicPayloadError(payload);
   if (missing) {
@@ -278,7 +278,10 @@ export default function Inverters() {
   const onSubmit = (data: InverterFormValues) => {
     let payload: ReturnType<typeof buildInverterPayload>;
     try {
-      payload = buildInverterPayload(data as unknown as Record<string, unknown>);
+      payload = {
+        ...buildInverterPayload(data as unknown as Record<string, unknown>),
+        tipoRede: data.tipoRede ?? "desconhecido",
+      };
     } catch (err) {
       toast({
         title: "Dados do inversor incompletos",
@@ -357,8 +360,9 @@ export default function Inverters() {
       numMppt: inv.numMppt,
       stringsPorMppt: inv.stringsPorMppt,
       vdcMax: inv.vdcMax ?? null,
-      tipoRede: invExtra.tipoRede ?? inferirTipoRede(invExtra as unknown as Record<string, unknown>),
+      tipoRede: invExtra.tipoRede ?? inferInverterNetworkType(invExtra),
       tensaoAcNominal: invExtra.tensaoAcNominal ?? "",
+      faixaTensaoAc: invExtra.faixaTensaoAc ?? "",
       ligacaoRede: invExtra.ligacaoRede ?? "",
     });
   };
@@ -477,18 +481,21 @@ export default function Inverters() {
                       <FormControl>
                         <select {...field} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                           <option value="desconhecido">Por confirmar</option>
-                          <option value="monofasico">Monofasico</option>
-                          <option value="trifasico">Trifasico</option>
+                          <option value="monofasico">Monofásico</option>
+                          <option value="trifasico">Trifásico</option>
                         </select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="tensaoAcNominal" render={({ field }) => (
-                    <FormItem><FormLabel>Tensao AC nominal</FormLabel><FormControl><Input placeholder="220/230 V" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Tensão AC nominal</FormLabel><FormControl><Input placeholder="220/230 V" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="ligacaoRede" render={({ field }) => (
-                    <FormItem><FormLabel>Ligacao a rede</FormLabel><FormControl><Input placeholder="L+N+PE" {...field} /></FormControl><FormMessage /></FormItem>
+                    <FormItem><FormLabel>Ligação à rede</FormLabel><FormControl><Input placeholder="L+N+PE" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="faixaTensaoAc" render={({ field }) => (
+                    <FormItem><FormLabel>Faixa de tensão AC</FormLabel><FormControl><Input placeholder="0.85Un-1.1Un" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
                 </div>
                 <div className="flex justify-end">
@@ -549,14 +556,21 @@ export default function Inverters() {
             ) : (
               filtered?.map((inv) => {
                 const invExtra = inv as Inverter & Partial<InverterFormValues>;
-                const tipoRede = invExtra.tipoRede ?? inferirTipoRede(invExtra as unknown as Record<string, unknown>);
+                const tipoRede = invExtra.tipoRede ?? inferInverterNetworkType(invExtra);
                 return (
                 <TableRow key={inv.id}>
                   <TableCell className="font-medium">{inv.fabricante}</TableCell>
                   <TableCell>{inv.nome}</TableCell>
                   <TableCell>{normalizarKW(Number(inv.potenciaAc)).toFixed(1)} kW</TableCell>
                   <TableCell>{inv.numMppt} (x{inv.stringsPorMppt} strings)</TableCell>
-                  <TableCell>{tipoRedeLabel(tipoRede)}</TableCell>
+                  <TableCell>
+                    <div>{tipoRedeLabel(tipoRede)}</div>
+                    {(invExtra.tensaoAcNominal || invExtra.ligacaoRede) && (
+                      <div className="text-xs text-muted-foreground">
+                        {[invExtra.tensaoAcNominal, invExtra.ligacaoRede].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>{inv.mpptMin}V - {inv.mpptMax}V</TableCell>
                   <TableCell className="text-right">
                     <Dialog open={editingInverter?.id === inv.id} onOpenChange={(open) => {
@@ -611,18 +625,21 @@ export default function Inverters() {
                                   <FormControl>
                                     <select {...field} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                                       <option value="desconhecido">Por confirmar</option>
-                                      <option value="monofasico">Monofasico</option>
-                                      <option value="trifasico">Trifasico</option>
+                                      <option value="monofasico">Monofásico</option>
+                                      <option value="trifasico">Trifásico</option>
                                     </select>
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
                               )} />
                               <FormField control={form.control} name="tensaoAcNominal" render={({ field }) => (
-                                <FormItem><FormLabel>Tensao AC nominal</FormLabel><FormControl><Input placeholder="220/230 V" {...field} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Tensão AC nominal</FormLabel><FormControl><Input placeholder="220/230 V" {...field} /></FormControl><FormMessage /></FormItem>
                               )} />
                               <FormField control={form.control} name="ligacaoRede" render={({ field }) => (
-                                <FormItem><FormLabel>Ligacao a rede</FormLabel><FormControl><Input placeholder="L+N+PE" {...field} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Ligação à rede</FormLabel><FormControl><Input placeholder="L+N+PE" {...field} /></FormControl><FormMessage /></FormItem>
+                              )} />
+                              <FormField control={form.control} name="faixaTensaoAc" render={({ field }) => (
+                                <FormItem><FormLabel>Faixa de tensão AC</FormLabel><FormControl><Input placeholder="0.85Un-1.1Un" {...field} /></FormControl><FormMessage /></FormItem>
                               )} />
                             </div>
                             <div className="flex justify-end">

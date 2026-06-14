@@ -5,6 +5,7 @@ import { z } from "zod";
 import { anthropic as defaultAnthropic } from "@workspace/integrations-anthropic-ai";
 import { pvgisGet, pvgisSet } from "../lib/pvgis-cache";
 import { logger } from "../lib/logger";
+import { normalizeImportedInverterNetwork } from "../lib/inverter-network";
 
 const router: IRouter = Router();
 
@@ -961,7 +962,8 @@ Devolve APENAS este JSON:
 }
 
 Regras:
-- Para inversores, classifica tipoRede pela ficha: L+N+PE, 1F+N+PE, single phase, monofasico, 220/230 V => monofasico; 3L+N+PE, 3P+N+PE, three phase, trifasico, 380/400 V ou 400 V => trifasico. Nunca assumas trifasico apenas pela potencia.
+- Para inversores, classifica tipoRede por esta prioridade: forma de ligacao explicita > tensao AC > titulo/texto/modelo. L+N+PE, 1F+N+PE, SG05LP1, single phase, monofasico ou 220/230 V => monofasico. 3L+N+PE, 3P+N+PE, SG05LP3, three phase, trifasico, 220/380 V, 230/400 V, 380/400 V ou 400 V => trifasico. Nunca uses a potencia para inferir fases.
+- Em tabelas comparativas, copia os campos AC comuns (tensaoAcNominal, faixaTensaoAc e ligacaoRede) para TODOS os modelos abrangidos pelo mesmo cabecalho/linha.
 - Para inversores, extrai tambem tensao AC nominal/range, ligacao a rede, frequencia, correntes AC, fator de potencia, THDi, tensoes/correntes DC/FV, compatibilidade de bateria, protecao, comunicacao e observacoes quando existirem.
 - Usa unidades normalizadas: W, V, A, kWh e mm.
 - Para inversores, potenciaAc/potenciaDcMax em Watts.
@@ -985,9 +987,12 @@ ${texto}`,
         confianca?: number;
         notas?: string | null;
       };
-      const modelos = Array.isArray(result.modelos) && result.modelos.length > 0
+      const modelosRaw = Array.isArray(result.modelos) && result.modelos.length > 0
         ? result.modelos
         : [];
+      const modelos = tipoEquipamento === "inversor"
+        ? modelosRaw.map(modelo => normalizeImportedInverterNetwork(modelo))
+        : modelosRaw;
       res.json({
         tipoEquipamento,
         modelos,
@@ -1074,7 +1079,8 @@ Devolve um objeto JSON com EXATAMENTE esta estrutura:
 }
 
 Instruções importantes:
-- Para inversores, classifica tipoRede pela ficha: L+N+PE, 1F+N+PE, single phase, monofasico, 220/230 V => monofasico; 3L+N+PE, 3P+N+PE, three phase, trifasico, 380/400 V ou 400 V => trifasico. Nunca assumas trifasico apenas pela potencia.
+- Para inversores, classifica tipoRede por esta prioridade: forma de ligacao explicita > tensao AC > titulo/texto/modelo. L+N+PE, 1F+N+PE, SG05LP1, single phase, monofasico ou 220/230 V => monofasico. 3L+N+PE, 3P+N+PE, SG05LP3, three phase, trifasico, 220/380 V, 230/400 V, 380/400 V ou 400 V => trifasico. Nunca uses a potencia para inferir fases.
+- Em tabelas comparativas, copia os campos AC comuns (tensaoAcNominal, faixaTensaoAc e ligacaoRede) para TODOS os modelos abrangidos pelo mesmo cabecalho/linha.
 - Para inversores, extrai tambem tensao AC nominal/range, ligacao a rede, frequencia, correntes AC, fator de potencia, THDi, tensoes/correntes DC/FV, compatibilidade de bateria, protecao, comunicacao e observacoes quando existirem.
 - Se a tabela tiver colunas por modelo (ex: SUN-14K, SUN-15K, SUN-16K...), cria um registo separado para cada coluna.
 - Associa cada valor ao modelo correto — não mistures dados entre modelos.
@@ -1107,10 +1113,13 @@ Responde APENAS com o JSON pedido, sem texto adicional, sem markdown.`,
         notas?: string | null;
       };
 
-      const modelos: Record<string, unknown>[] =
+      const modelosRaw: Record<string, unknown>[] =
         Array.isArray(parsed.modelos) && parsed.modelos.length > 0
           ? parsed.modelos
           : [parsed as Record<string, unknown>];
+      const modelos = tipoEquipamento === "inversor"
+        ? modelosRaw.map(modelo => normalizeImportedInverterNetwork(modelo))
+        : modelosRaw;
 
       res.json({
         tipoEquipamento,

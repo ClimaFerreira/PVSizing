@@ -15,6 +15,10 @@ export const invertersTable = pgTable("inverters", {
   numMppt: integer("num_mppt").notNull(),
   stringsPorMppt: integer("strings_por_mppt").notNull(),
   vdcMax: numeric("vdc_max", { precision: 8, scale: 2 }),
+  tipoRede: text("tipo_rede"),
+  tensaoAcNominal: text("tensao_ac_nominal"),
+  faixaTensaoAc: text("faixa_tensao_ac"),
+  ligacaoRede: text("ligacao_rede"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
